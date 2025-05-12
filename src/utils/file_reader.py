@@ -57,7 +57,7 @@ def read_text_file(file_path: str) -> Optional[str]:
 
 def read_pdf_file(file_path: str) -> Optional[str]:
     """
-    Extract text content from a PDF file.
+    Extract text content from a PDF file using pypdf.
     
     Args:
         file_path: Path to the PDF file
@@ -66,42 +66,23 @@ def read_pdf_file(file_path: str) -> Optional[str]:
         str or None: Extracted text content, or None on error
     """
     try:
-        # First try using PyMuPDF (fitz) which is already a dependency
-        import fitz
+        # Using pypdf as the exclusive PDF reading library
+        import pypdf
         text_content = []
         
-        with fitz.open(file_path) as pdf:
-            for page_num in range(len(pdf)):
-                page = pdf[page_num]
-                text_content.append(page.get_text())
+        with open(file_path, 'rb') as file:
+            pdf_reader = pypdf.PdfReader(file)
+            for page_num in range(len(pdf_reader.pages)):
+                page = pdf_reader.pages[page_num]
+                text_content.append(page.extract_text())
                 
         return "\n\n".join(text_content)
-        
+            
     except ImportError:
-        logger.warning("PyMuPDF not available, trying pypdf as fallback")
-        
-        try:
-            # Fallback to pypdf if available
-            import pypdf
-            text_content = []
-            
-            with open(file_path, 'rb') as file:
-                pdf_reader = pypdf.PdfReader(file)
-                for page_num in range(len(pdf_reader.pages)):
-                    page = pdf_reader.pages[page_num]
-                    text_content.append(page.extract_text())
-                    
-            return "\n\n".join(text_content)
-            
-        except ImportError:
-            logger.error("No PDF reading library available. Install PyMuPDF or pypdf.")
-            return None
-        except Exception as e:
-            logger.exception(f"Error reading PDF file with pypdf {file_path}: {e}")
-            return None
-            
+        logger.error("pypdf library not available. Install pypdf to read PDF files.")
+        return None
     except Exception as e:
-        logger.exception(f"Error reading PDF file {file_path}: {e}")
+        logger.exception(f"Error reading PDF file with pypdf {file_path}: {e}")
         return None
 
 def extract_context_from_files(file_paths: List[str]) -> str:
