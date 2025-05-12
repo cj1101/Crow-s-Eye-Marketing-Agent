@@ -71,7 +71,8 @@ class AuthHandler:
         """
         # Check if we have required environment variables
         if not key_manager.has_required_env_variables():
-            logger.warning("Missing required API keys in environment variables")
+            # Commenting out the warning to stop the log spam
+            # logger.warning("Missing required API keys in environment variables")
             return False
         
         # Check if we can validate the access token

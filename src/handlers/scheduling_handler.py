@@ -23,6 +23,7 @@ class SchedulingSignals(QObject):
     schedule_updated = Signal()  # Schedule was updated
     post_scheduled = Signal(dict)  # New post was scheduled
     post_published = Signal(dict)  # Post was published
+    posts_scheduled = Signal(int)  # Number of posts scheduled
 
 class PostScheduler:
     """Handles scheduling and publishing of posts."""
@@ -191,14 +192,27 @@ class PostScheduler:
             return False
             
     def schedule_posts(self) -> None:
-        """Schedule posts based on the defined schedules."""
+        """Schedule posts based on defined schedules."""
         try:
-            # Load schedules
-            self.schedules = self._load_schedules()
+            # Load schedules from presets file
+            schedules = self._load_schedules()
             
             # Process each schedule
-            for schedule in self.schedules:
+            processed_count = 0
+            for schedule in schedules:
+                # Only process active schedules
+                if not schedule.get("active", False):
+                    self.logger.info(f"Schedule '{schedule.get('name', 'Unnamed')}' is inactive - skipping")
+                    continue
+                    
                 self._process_schedule(schedule)
+                processed_count += 1
+                
+            # Log the number of processed schedules
+            if processed_count > 0:
+                self.logger.info(f"Processed {processed_count} active schedule(s)")
+            else:
+                self.logger.info("No active schedules to process")
                 
         except Exception as e:
             self.logger.error(f"Error scheduling posts: {e}")
@@ -208,7 +222,7 @@ class PostScheduler:
         """Process a single schedule and add posts to the schedule."""
         schedule_id = schedule.get("id", "")
         schedule_name = schedule.get("name", "Unnamed Schedule")
-        posts_per_week = schedule.get("posts_per_week", 3)
+        posts_per_day = schedule.get("posts_per_day", 3)
         
         # Parse start and end dates
         start_date_str = schedule.get("start_date", "")
@@ -232,7 +246,7 @@ class PostScheduler:
             schedule_end = min(end_date, datetime.now() + timedelta(days=7))
             
             # Get available posting times
-            posting_times = self._get_posting_times(schedule, datetime.now(), schedule_end, posts_per_week)
+            posting_times = self._get_posting_times(schedule, datetime.now(), schedule_end, posts_per_day * 7)
             
             if not posting_times:
                 self.logger.warning(f"No valid posting times found for schedule '{schedule_name}'")
@@ -286,7 +300,7 @@ class PostScheduler:
             self.logger.error(f"Error processing schedule '{schedule_name}': {e}")
             self.signals.error.emit("Schedule Error", f"Failed to process schedule '{schedule_name}': {str(e)}")
             
-    def _get_posting_times(self, schedule: Dict[str, Any], start_date: datetime, end_date: datetime, posts_per_week: int) -> List[datetime]:
+    def _get_posting_times(self, schedule: Dict[str, Any], start_date: datetime, end_date: datetime, total_posts: int) -> List[datetime]:
         """
         Calculate posting times based on schedule and date range.
         
@@ -294,15 +308,59 @@ class PostScheduler:
             schedule: Schedule data
             start_date: Start date
             end_date: End date
-            posts_per_week: Number of posts per week
+            total_posts: Total number of posts to schedule
             
         Returns:
             List[datetime]: List of posting times
         """
-        # This is a simplified implementation
+        # Check if we have specific posting times from the schedule
+        mode = schedule.get("mode", "").lower()
         posting_times = []
-        current_date = start_date
         
+        if mode == "basic":
+            # Get selected days
+            days = schedule.get("days", [])
+            # Get posting times - this could be a list now for multiple posts per day
+            time_list = schedule.get("posting_times", [])
+            
+            if days and time_list:
+                # Map day names to integers (0 = Monday, 6 = Sunday)
+                day_map = {"Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3, 
+                          "Friday": 4, "Saturday": 5, "Sunday": 6}
+                
+                # For each day in the range
+                current_date = start_date
+                while current_date <= end_date:
+                    # Check if this day of the week is in the selected days
+                    day_name = list(day_map.keys())[current_date.weekday()]
+                    if day_name in days:
+                        # Add a posting time for each time in the list
+                        for time_str in time_list:
+                            try:
+                                # Parse time
+                                hours, minutes = map(int, time_str.split(":"))
+                                # Create posting time
+                                posting_time = current_date.replace(
+                                    hour=hours, minute=minutes, second=0, microsecond=0
+                                )
+                                # Add if in the future
+                                if posting_time > datetime.now():
+                                    posting_times.append(posting_time)
+                            except (ValueError, IndexError):
+                                # Skip invalid times
+                                pass
+                    
+                    # Move to next day
+                    current_date += timedelta(days=1)
+                    
+                    # Limit to total_posts
+                    if len(posting_times) >= total_posts:
+                        break
+            
+            return posting_times
+        
+        # If no specific scheduling or in advanced mode, use the default random times
+        current_date = start_date
         while current_date <= end_date:
             # Get hour as a random value between 9 AM and 5 PM
             hour = random.randint(9, 17)
@@ -317,8 +375,8 @@ class PostScheduler:
             # Move to next day
             current_date += timedelta(days=1)
             
-            # Limit to posts_per_week
-            if len(posting_times) >= posts_per_week:
+            # Limit to total_posts
+            if len(posting_times) >= total_posts:
                 break
                 
         return posting_times

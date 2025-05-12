@@ -8,7 +8,8 @@ from typing import Optional, Dict, Any, List
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QComboBox, QMessageBox, QFrame, QStackedWidget, QTextEdit,
-    QLineEdit, QFormLayout, QGroupBox, QRadioButton, QButtonGroup
+    QLineEdit, QFormLayout, QGroupBox, QRadioButton, QButtonGroup,
+    QWidget
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon, QFont

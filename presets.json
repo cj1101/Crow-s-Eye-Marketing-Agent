@@ -1,30 +1,48 @@
 {
-  "presets": {
-    "Breadsmith1 Preset": {
-      "instructions": "20% sale off everything all week\nAct a little goofy but keep it cool because it's Easter with your tone and content",
-      "context_files": [
-        "C:/Users/charl/Downloads/Breadsmith Social Media Guidlines 8_2024.pdf",
-        "C:/Users/charl/Downloads/Breadsmith_Brand_Identity_Guidelines.pdf"
-      ],
-      "created": "2025-04-19T19:12:18.680288"
+    "presets": {
+        "Breadsmith1 Preset": {
+            "instructions": "20% sale off everything all week\nAct a little goofy but keep it cool because it's Easter with your tone and content",
+            "context_files": [
+                "C:/Users/charl/Downloads/Breadsmith Social Media Guidlines 8_2024.pdf",
+                "C:/Users/charl/Downloads/Breadsmith_Brand_Identity_Guidelines.pdf"
+            ],
+            "created": "2025-04-19T19:12:18.680288"
+        },
+        "withEdits": {
+            "instructions": "Be super excited for warm weather because it's almost May",
+            "context_files": [
+                "C:/Users/charl/Downloads/Breadsmith Social Media Guidlines 8_2024.pdf",
+                "C:/Users/charl/Downloads/Breadsmith_Brand_Identity_Guidelines.pdf"
+            ],
+            "created": "2025-04-21T20:31:13.835669",
+            "photo_edit_instructions": "Make it 50% brighter\t"
+        },
+        "preset1": {
+            "instructions": "Be funny",
+            "photo_editing": "",
+            "context_files": [
+                "C:/Users/charl/Downloads/Breadsmith Social Media Guidlines 8_2024.pdf"
+            ],
+            "created": "2025-05-11T22:48:09.729186"
+        }
     },
-    "withEdits": {
-      "instructions": "Be super excited for warm weather because it's almost May",
-      "context_files": [
-        "C:/Users/charl/Downloads/Breadsmith Social Media Guidlines 8_2024.pdf",
-        "C:/Users/charl/Downloads/Breadsmith_Brand_Identity_Guidelines.pdf"
-      ],
-      "created": "2025-04-21T20:31:13.835669",
-      "photo_edit_instructions": "Make it 50% brighter\t"
-    },
-    "preset1": {
-      "instructions": "Be funny",
-      "photo_editing": "",
-      "context_files": [
-        "C:/Users/charl/Downloads/Breadsmith Social Media Guidlines 8_2024.pdf"
-      ],
-      "created": "2025-05-11T22:48:09.729186"
-    }
-  },
-  "last_updated": "2025-05-11T22:48:15.653399"
+    "last_updated": "2025-05-11T22:48:15.653399",
+    "schedules": [
+        {
+            "id": "92a470ff-32b9-4eff-9623-575f79f1c83c",
+            "name": "stupid",
+            "mode": "basic",
+            "posts_per_week": 3,
+            "start_date": "2025-05-19",
+            "end_date": "2025-05-22",
+            "days": [
+                "Monday",
+                "Tuesday",
+                "Thursday",
+                "Saturday"
+            ],
+            "time": "09:33",
+            "active": false
+        }
+    ]
 }
