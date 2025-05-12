@@ -1,0 +1,91 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# --- Virtual Environment ---
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+# --- IDE ---
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# --- Logs ---
+*.log
+logs/
+log/
+
+# --- Project Specific ---
+# Credentials
+meta_credentials.json
+cloud_storage_config.json
+
+# Media & Cache
+media_library/*
+!media_library/.gitkeep
+library/images/*
+!library/images/.gitkeep
+.cache/
+.pytest_cache/
+
+# --- OS ---
+.DS_Store
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# --- Misc ---
+.coverage
+htmlcov/
+.tox/
+.nox/
+.hypothesis/
+.pytest_cache/
+.coverage.*
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+.python-version
+
+# Distribution / packaging
+*.exe
+*.spec
+*.zip
+distribution_package/
+
+# Application specific
+app.log
+app_log.log
+media_status.json
+
+# Output directory
+output/ 
