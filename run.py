@@ -1,12 +1,11 @@
 #!/usr/bin/env python
 """
-Run the Breadsmith Marketing Tool application with scheduling enabled
+Run Breadsmith Marketing Tool application without scheduling.
 """
 import sys
-import os
 import logging
 
-# Configure logging
+# Set up logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
@@ -16,18 +15,18 @@ logging.basicConfig(
     ]
 )
 logger = logging.getLogger("run")
-logger.info("Starting Breadsmith Marketing Tool with scheduling enabled")
 
-# Make sure src is in the path
-src_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-# Make sure the current directory is in the path
-if os.getcwd() not in sys.path:
-    sys.path.insert(0, os.getcwd())
+def main():
+    """Run the application without scheduling."""
+    logger.info("Starting Breadsmith Marketing Tool with scheduling enabled")
+    
+    # Import from src
+    from src.main import main as src_main
+    
+    # Run with scheduling enabled
+    return src_main(enable_scheduling=True)
 
 if __name__ == "__main__":
-    # Always run with scheduling enabled
-    from src.main import main
-    sys.exit(main(enable_scheduling=True)) 
+    # Remove any language parameters from sys.argv
+    sys.argv = [arg for arg in sys.argv if not arg.startswith("--lang=")]
+    sys.exit(main()) 

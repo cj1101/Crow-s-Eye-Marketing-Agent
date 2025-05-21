@@ -10,9 +10,9 @@ from typing import Dict, Any, Optional, List
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, 
-    QSplitter, QMessageBox, QFileDialog, QDialog, QInputDialog, QLineEdit
+    QSplitter, QMessageBox, QFileDialog, QDialog, QInputDialog, QLineEdit, QPushButton, QStackedWidget, QScrollArea, QLabel, QApplication
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, Slot, QTranslator, QEvent, QLibraryInfo, QLocale
 from PySide6.QtGui import QCloseEvent, QIcon
 
 from ..config import constants as const
@@ -61,6 +61,7 @@ class MainWindow(QMainWindow):
         self.media_handler = media_handler
         self.library_manager = library_manager
         self.scheduler = scheduler
+        self.translator = QTranslator(self)
         
         # Set up logger
         self.logger = logging.getLogger(self.__class__.__name__)
@@ -77,11 +78,19 @@ class MainWindow(QMainWindow):
         # Initialize AI handler
         self.ai_handler = AIHandler(app_state)
         
+        # Store current formatting options
+        self.current_formatting_options = {
+            "vertical_optimization": False,
+            "caption_overlay": False,
+            "caption_position": "bottom",
+            "caption_font_size": "medium"
+        }
+        
         # Library window (will be initialized on demand)
         self.library_window = None
+        self._current_image_for_overlay_base = None # Initialize here
         
         # Setup window properties
-        self.setWindowTitle("Breadsmith Marketing Tool")
         self.setMinimumSize(1000, 700)
         
         # Build UI
@@ -117,6 +126,14 @@ class MainWindow(QMainWindow):
         self.header_section = HeaderSection()
         main_layout.addWidget(self.header_section)
         
+        # Add tabs for different features
+        self.tab_widget = QSplitter(Qt.Orientation.Vertical)
+        
+        # Original content area with splitter
+        self.original_content = QWidget()
+        original_layout = QVBoxLayout(self.original_content)
+        original_layout.setContentsMargins(0, 0, 0, 0)
+        
         # Content area with splitter
         splitter = QSplitter(Qt.Orientation.Horizontal)
         
@@ -131,24 +148,98 @@ class MainWindow(QMainWindow):
         # Set initial splitter sizes (40:60)
         splitter.setSizes([400, 600])
         
-        # Add splitter to main layout
-        main_layout.addWidget(splitter, 1)  # 1 = stretch factor
+        # Add splitter to original content layout
+        original_layout.addWidget(splitter, 1)  # 1 = stretch factor
         
         # Button section
         self.button_section = ButtonSection()
-        main_layout.addWidget(self.button_section)
+        original_layout.addWidget(self.button_section)
+        
+        # Create tab widget for switching between features
+        self.feature_tabs = QWidget()
+        self.feature_tabs_layout = QVBoxLayout(self.feature_tabs)
+        self.feature_tabs_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.tab_container = QWidget()
+        self.tab_layout = QHBoxLayout(self.tab_container)
+        self.tab_layout.setContentsMargins(10, 5, 10, 0)
+        
+        # Add tab buttons
+        # self.caption_tab_button = QPushButton("Caption Generator") # Removed
+        # self.caption_tab_button.setCheckable(True) # Removed
+        # self.caption_tab_button.setChecked(True) # Removed
+        # self.caption_tab_button.clicked.connect(lambda: self._switch_tab(0)) # Removed
+        
+        # self.tab_layout.addWidget(self.caption_tab_button) # Removed
+        self.tab_layout.addStretch(1)
+        
+        self.feature_tabs_layout.addWidget(self.tab_container)
+        
+        # Tab content container
+        self.tab_content = QWidget()
+        self.tab_content_layout = QVBoxLayout(self.tab_content)
+        self.tab_content_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Add original content to tab content
+        self.tab_content_layout.addWidget(self.original_content)
+        
+        self.feature_tabs_layout.addWidget(self.tab_content)
+        
+        # Add tabs to main layout
+        main_layout.addWidget(self.feature_tabs, 1)
         
         # Status bar
         self.status_bar = StatusBarWidget()
         self.setStatusBar(self.status_bar)
         
+        # Style the tab buttons
+        self._style_tab_buttons()
+        
+    def _style_tab_buttons(self):
+        """Apply styles to tab buttons."""
+        base_style = """
+            QPushButton {
+                padding: 8px 16px;
+                border: none;
+                border-bottom: 2px solid transparent;
+                background-color: transparent;
+                font-weight: normal;
+            }
+            QPushButton:hover {
+                background-color: rgba(0, 0, 0, 0.05);
+            }
+            QPushButton:checked {
+                border-bottom: 2px solid #6d28d9;
+                font-weight: bold;
+            }
+        """
+        
+        # self.caption_tab_button.setStyleSheet(base_style) # Removed
+    
+    def _switch_tab(self, tab_index):
+        """Switch between tabs."""
+        # Update button states
+        # self.caption_tab_button.setChecked(tab_index == 0) # Removed
+        
+        # Show/hide content
+        self.original_content.setVisible(True) # Always visible as it's the only content now
+        
+        # Log the tab switch
+        # tab_name = "Caption Generator" # Removed
+        # self.logger.info(f"Switched to {tab_name} tab") # Removed
+        self.logger.info("Main content area is active") # Updated log
+        
+        # Rest of the implementation...
+        # ... existing code ...
+        
     def _connect_signals(self):
         """Connect UI signals to handlers."""
         # Header section signals
         self.header_section.library_clicked.connect(self._on_open_library)
-        self.header_section.knowledge_clicked.connect(self._on_open_knowledge)
+        # self.header_section.knowledge_clicked.connect(self._on_open_knowledge) # This line should be removed or remain commented
         self.header_section.schedule_clicked.connect(self._on_open_schedule)
         self.header_section.login_clicked.connect(self._on_login)
+        self.header_section.language_changed.connect(self._on_language_selected) # Ensure this is present
         
         # Preset signals
         self.header_section.preset_selected.connect(self._on_preset_selected)
@@ -157,7 +248,7 @@ class MainWindow(QMainWindow):
         
         # Button section signals
         self.button_section.library_clicked.connect(self._on_open_library)
-        self.button_section.knowledge_clicked.connect(self._on_open_knowledge)
+        self.button_section.knowledge_clicked.connect(self._on_open_knowledge) # Ensure this line is NOT commented
         self.button_section.generate_clicked.connect(self._on_generate)
         self.button_section.cancel_clicked.connect(self._on_cancel)
         self.button_section.add_to_library_clicked.connect(self._on_add_to_library)
@@ -165,6 +256,7 @@ class MainWindow(QMainWindow):
         # Media section signals
         self.media_section.media_selected.connect(self._on_media_selected)
         self.media_section.toggle_view.connect(self._on_toggle_image_view)
+        self.media_section.post_format_changed.connect(self._on_post_format_changed)
         
         # Text sections signals
         self.text_sections.context_files_changed.connect(self._on_context_files_changed)
@@ -242,8 +334,8 @@ class MainWindow(QMainWindow):
             # Ask for preset name
             preset_name, ok = QInputDialog.getText(
                 self,
-                "Save Preset",
-                "Enter a name for this preset:",
+                self.tr("Save Preset"),
+                self.tr("Enter a name for this preset:"),
                 QLineEdit.EchoMode.Normal
             )
             
@@ -255,8 +347,8 @@ class MainWindow(QMainWindow):
                     # Ask for confirmation to overwrite
                     reply = QMessageBox.question(
                         self,
-                        "Overwrite Preset",
-                        f"A preset named '{preset_name}' already exists. Do you want to overwrite it?",
+                        self.tr("Overwrite Preset"),
+                        self.tr("A preset named '{preset_name}' already exists. Do you want to overwrite it?").format(preset_name=preset_name),
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                         QMessageBox.StandardButton.No
                     )
@@ -270,13 +362,13 @@ class MainWindow(QMainWindow):
                     self._load_presets()
                     
                     # Show success message
-                    self.status_bar.showMessage(f"Preset '{preset_name}' saved successfully")
+                    self.status_bar.showMessage(self.tr("Preset '{preset_name}' saved successfully").format(preset_name=preset_name))
                 else:
-                    self._show_error("Preset Error", f"Failed to save preset: {preset_name}")
+                    self._show_error(self.tr("Preset Error"), self.tr("Failed to save preset: {preset_name}").format(preset_name=preset_name))
             
         except Exception as e:
             self.logger.exception(f"Error saving preset: {e}")
-            self._show_error("Preset Error", f"Could not save preset: {str(e)}")
+            self._show_error(self.tr("Preset Error"), self.tr("Could not save preset: {error_message}").format(error_message=str(e)))
             
     def _on_delete_preset(self):
         """Handle delete preset button click."""
@@ -286,7 +378,7 @@ class MainWindow(QMainWindow):
             
             # Check if a real preset is selected (index 0 is the placeholder)
             if index <= 0:
-                self._show_warning("Delete Preset", "Please select a preset to delete")
+                self._show_warning(self.tr("Delete Preset"), self.tr("Please select a preset to delete"))
                 return
                 
             # Get the preset name
@@ -295,8 +387,8 @@ class MainWindow(QMainWindow):
             # Ask for confirmation
             reply = QMessageBox.question(
                 self,
-                "Delete Preset",
-                f"Are you sure you want to delete the preset '{preset_name}'?",
+                self.tr("Delete Preset"),
+                self.tr("Are you sure you want to delete the preset '{preset_name}'?").format(preset_name=preset_name),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -308,13 +400,13 @@ class MainWindow(QMainWindow):
                     self._load_presets()
                     
                     # Show success message
-                    self.status_bar.showMessage(f"Preset '{preset_name}' deleted successfully")
+                    self.status_bar.showMessage(self.tr("Preset '{preset_name}' deleted successfully").format(preset_name=preset_name))
                 else:
-                    self._show_error("Preset Error", f"Failed to delete preset: {preset_name}")
+                    self._show_error(self.tr("Preset Error"), self.tr("Failed to delete preset: {preset_name}").format(preset_name=preset_name))
                     
         except Exception as e:
             self.logger.exception(f"Error deleting preset: {e}")
-            self._show_error("Preset Error", f"Could not delete preset: {str(e)}")
+            self._show_error(self.tr("Preset Error"), self.tr("Could not delete preset: {error_message}").format(error_message=str(e)))
             
     def _update_preset_button_state(self, enabled: bool):
         """Update the save preset button enabled state."""
@@ -332,25 +424,25 @@ class MainWindow(QMainWindow):
                 account = auth_handler.get_selected_account()
                 if account:
                     # Update login button with account name
-                    self.header_section.update_login_button(True, account.get('name', 'Logged In'))
+                    self.header_section.update_login_button(True, account.get('name', self.tr('Logged In')))
                 else:
                     # We're authenticated but no account is selected
-                    self.header_section.update_login_button(True, "Logged In")
+                    self.header_section.update_login_button(True, self.tr("Logged In"))
                 
-                self.status_bar.showMessage("Authenticated with Meta API")
+                self.status_bar.showMessage(self.tr("Authenticated with Meta API"))
             else:
                 self.header_section.update_login_button(False)
                 
                 # Check if we have the required API keys
                 if not key_manager.has_required_env_variables():
-                    self.status_bar.showMessage("Meta API keys not set - login required")
+                    self.status_bar.showMessage(self.tr("Meta API keys not set - login required"))
                 else:
-                    self.status_bar.showMessage("Not authenticated with Meta API")
+                    self.status_bar.showMessage(self.tr("Not authenticated with Meta API"))
                 
         except Exception as e:
             self.logger.exception(f"Error checking authentication status: {e}")
             self.header_section.update_login_button(False)
-            self.status_bar.showMessage("Error checking authentication status")
+            self.status_bar.showMessage(self.tr("Error checking authentication status"))
             
     def _on_login(self):
         """Handle login button click."""
@@ -360,8 +452,8 @@ class MainWindow(QMainWindow):
                 # Show confirmation dialog for logout
                 reply = QMessageBox.question(
                     self, 
-                    "Logout Confirmation",
-                    "You are already logged in. Do you want to log out?",
+                    self.tr("Logout Confirmation"),
+                    self.tr("You are already logged in. Do you want to log out?"),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No
                 )
@@ -370,13 +462,15 @@ class MainWindow(QMainWindow):
                     # Log out
                     auth_handler.logout()
                     self.header_section.update_login_button(False)
-                    self.status_bar.showMessage("Logged out successfully")
+                    self.status_bar.showMessage(self.tr("Logged out successfully"))
                     
                 return
             
             # Create and show login dialog
             dialog = LoginDialog(self)
             dialog.login_successful.connect(self._on_login_successful)
+            
+            # The dialog will handle its own translation in __init__
             
             if dialog.exec():
                 self.logger.info("Login dialog accepted")
@@ -388,14 +482,14 @@ class MainWindow(QMainWindow):
                 
         except Exception as e:
             self.logger.exception(f"Error during login: {e}")
-            self._show_error("Login Error", f"An error occurred during login: {str(e)}")
+            self._show_error(self.tr("Login Error"), self.tr("An error occurred during login: {error_message}").format(error_message=str(e)))
     
     def _on_login_successful(self, account_data):
         """Handle successful login."""
         try:
-            account_name = account_data.get('name', 'Business Account')
+            account_name = account_data.get('name', self.tr('Business Account'))
             self.header_section.update_login_button(True, account_name)
-            self.status_bar.showMessage(f"Logged in as {account_name}")
+            self.status_bar.showMessage(self.tr("Logged in as {account_name}").format(account_name=account_name))
             
             # Update the app state with credentials
             if hasattr(self.app_state, 'meta_credentials'):
@@ -405,15 +499,15 @@ class MainWindow(QMainWindow):
                 
         except Exception as e:
             self.logger.exception(f"Error handling login success: {e}")
-            self._show_error("Login Error", f"An error occurred after login: {str(e)}")
+            self._show_error(self.tr("Login Error"), self.tr("An error occurred after login: {error_message}").format(error_message=str(e)))
     
     def _on_open_library(self):
-        """Open the library window."""
+        """Open the library window with media and Crow's Eye functionality."""
         try:
             if not self.library_window:
                 self.library_window = LibraryWindow(
                     library_manager_instance=self.library_manager,
-                    parent=self,
+                    parent=self,  # Pass self as parent so library window can access app_state and media_handler
                     scheduler=self.scheduler
                 )
                 
@@ -424,30 +518,29 @@ class MainWindow(QMainWindow):
             
         except Exception as e:
             self.logger.exception(f"Error opening library window: {e}")
-            self._show_error("Library Error", f"Could not open library: {str(e)}")
+            self._show_error(self.tr("Library Error"), self.tr("Could not open library window: {error_message}").format(error_message=e))
             
     def _on_open_schedule(self):
         """Open the scheduling panel."""
         try:
             if not self.scheduler:
-                self._show_warning("Scheduling", "Scheduling is not available in this version.")
-                return
+                # Create the scheduler instance if it doesn't exist yet
+                from src.handlers.schedule_handler import Scheduler
+                self.scheduler = Scheduler()
                 
-            # Create scheduling panel dialog
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Post Scheduling")
-            dialog.setMinimumSize(800, 600)
+            # Create a scheduling dialog
+            from src.ui.scheduling_dialog import ScheduleDialog
+            dialog = ScheduleDialog(parent=self)
             
-            layout = QVBoxLayout(dialog)
-            scheduling_panel = SchedulingPanel(self.app_state, dialog)
-            layout.addWidget(scheduling_panel)
+            # Connect signals
+            dialog.schedule_saved.connect(self.scheduler.add_or_update_schedule)
             
             # Show the dialog
             dialog.exec()
             
         except Exception as e:
             self.logger.exception(f"Error opening scheduling panel: {e}")
-            self._show_error("Schedule Error", f"Could not open scheduling panel: {str(e)}")
+            self._show_error(self.tr("Schedule Error"), self.tr("Could not open scheduling panel: {error_message}").format(error_message=str(e)))
             
     def _on_open_knowledge(self):
         """Open the knowledge management dialog."""
@@ -469,8 +562,23 @@ class MainWindow(QMainWindow):
         """Handle media selection."""
         if media_path and os.path.exists(media_path):
             self.app_state.selected_media = media_path
+            self._current_image_for_overlay_base = media_path # Set base for overlay
             self.ui_handler.load_media(media_path)
             self.status_bar.showMessage(f"Media selected: {os.path.basename(media_path)}")
+            # Reset formatting options when new media is selected
+            self.current_formatting_options = {
+                "vertical_optimization": False, 
+                "caption_overlay": False,
+                "caption_position": "bottom",
+                "caption_font_size": "medium"
+            }
+            # Potentially reset UI elements in MediaSection to their defaults here
+            if hasattr(self.media_section, 'post_type_combo'): # Example, adapt to actual UI elements
+                 # self.media_section.vertical_optimization_checkbox.setChecked(False)
+                 # self.media_section.caption_overlay_checkbox.setChecked(False)
+                 # self.media_section.caption_position_combo.setCurrentText("Bottom")
+                 # self.media_section.font_size_combo.setCurrentText("Medium")
+                 pass # Add actual UI reset if MediaSection doesn't handle it
         
     def _on_context_files_changed(self, file_paths):
         """Handle context files list changes."""
@@ -481,72 +589,135 @@ class MainWindow(QMainWindow):
         
     def _on_generate(self):
         """Handle generate button click."""
-        try:
-            # Get the values from the text sections
-            instructions = self.text_sections.get_text("instructions")
-            photo_editing = self.text_sections.get_text("photo_editing")
-            
-            # Get context files
-            context_files = self.text_sections.get_context_files()
-            
-            # Check if we need to keep the existing caption
-            keep_caption = self.text_sections.should_keep_caption()
-            
-            # Check if we need to apply photo editing
-            if photo_editing.strip():
-                # Apply photo editing first if instructions are provided
-                self.status_bar.showMessage("Applying photo edits...")
-                
-                if self.app_state.selected_media:
-                    success, edited_path, message = self.image_edit_handler.edit_image_with_gemini(
-                        self.app_state.selected_media, photo_editing
-                    )
-                    
-                    if success and edited_path and os.path.exists(edited_path):
-                        # Store the edited image path in app state
-                        self.app_state.edited_media = edited_path
-                        
-                        # Save a reference to the currently showing media
-                        self.app_state.current_display_media = edited_path
-                        
-                        # Update the app state flag
-                        self.app_state.showing_edited = True
-                        
-                        # Update the media section with the edited image
-                        self.media_section.set_edited_media(edited_path)
-                        
-                        self.logger.info(f"Image successfully edited and saved to: {edited_path}")
-                    else:
-                        self.logger.warning(f"Image edit failed: {message}")
-            
-            # Update status for caption generation
-            self.status_bar.showMessage("Generating caption...")
-            self.button_section.set_generating(True)
-            
-            # Generate the caption using the AI handler
-            caption = self.ai_handler.generate_caption(
-                instructions=instructions,
-                photo_editing=photo_editing,
-                context_files=context_files,
-                keep_existing_caption=keep_caption
+        self.logger.info("Generate button clicked")
+        self.status_bar.showMessage(self.tr("Processing request..."))
+
+        # Get all inputs
+        instructions = self.text_sections.get_instructions()
+        photo_editing = self.text_sections.get_photo_editing_instructions()
+        context_files = self.app_state.context_files
+        keep_caption = self.text_sections.get_keep_caption_state()
+        current_image_path_for_processing = self.app_state.selected_media
+
+        # Get current language code from app_state, default to 'en'
+        current_language = getattr(self.app_state, 'current_language_code', 'en')
+        if not current_language: # Handle case where it might be None or empty
+            current_language = 'en'
+        self.logger.info(f"Current language for generation: {current_language}")
+
+        # Reset to original before potential edits
+        self._current_image_for_overlay_base = self.app_state.selected_media
+
+        self.button_section.set_generating(True)
+
+        # Determine the caption to use
+        caption_to_use = ""
+        if self.app_state.selected_media or context_files: # Only generate if there's media or context
+            self.logger.info("Calling AI handler to generate caption.")
+            # Pass the current language to the caption generator
+            caption_to_use = self.ai_handler.generate_caption(
+                instructions, 
+                photo_editing, 
+                context_files,
+                keep_caption, # Pass the keep_caption state
+                language_code=current_language # Pass the language code
             )
+            self.logger.info(f"Caption generated: {caption_to_use[:50]}...")
+        elif keep_caption and self.app_state.current_caption: # If keeping caption and one exists
+            caption_to_use = self.app_state.current_caption
+            self.logger.info(f"Keeping existing caption: {caption_to_use[:50]}...")
+
+        # Check if we need to apply photo editing
+        if photo_editing.strip():
+            # Apply photo editing first if instructions are provided
+            self.status_bar.showMessage(self.tr("Applying photo edits..."))
             
-            # Update the caption text field if we're not keeping the existing one
-            if not keep_caption or not self.app_state.current_caption:
-                self.text_sections.set_text("caption", caption)
+            if self.app_state.selected_media:
+                success, edited_path, message = self.image_edit_handler.edit_image_with_gemini(
+                    self.app_state.selected_media, photo_editing
+                )
+                
+                if success and edited_path and os.path.exists(edited_path):
+                    # Store the edited image path in app state
+                    self.app_state.edited_media = edited_path
+                    
+                    # Save a reference to the currently showing media
+                    self.app_state.current_display_media = edited_path
+                    
+                    # Update the app state flag
+                    self.app_state.showing_edited = True
+                    
+                    # Update the media section with the edited image
+                    self.media_section.set_edited_media(edited_path)
+                    
+                    current_image_path_for_processing = edited_path # Update path for subsequent steps
+                    self._current_image_for_overlay_base = edited_path # Update base for overlay
+                    self.logger.info(f"Image successfully edited and saved to: {edited_path}")
+                else:
+                    self.logger.warning(f"Image edit failed: {message}")
+        
+        # Update status for caption generation
+        self.status_bar.showMessage(self.tr("Generating caption..."))
+        self.button_section.set_generating(True)
+        
+        # Apply post-caption generation formatting options
+        final_image_path = current_image_path_for_processing
+
+        if self.current_formatting_options.get("vertical_optimization"):
+            self.status_bar.showMessage(self.tr("Applying vertical optimization..."))
+            self.logger.info(f"Applying vertical optimization to: {final_image_path}")
+            success, optimized_path, msg = self.image_edit_handler.optimize_for_story(final_image_path)
+            if success and optimized_path and os.path.exists(optimized_path):
+                final_image_path = optimized_path
+                self.logger.info(f"Vertical optimization successful: {final_image_path}")
+            else:
+                self.logger.warning(f"Vertical optimization failed: {msg}")
+                self._show_warning(self.tr("Optimization Error"), self.tr("Could not apply vertical optimization: {error_message}").format(error_message=msg))
+
+        if self.current_formatting_options.get("caption_overlay") and caption_to_use:
+            self.status_bar.showMessage(self.tr("Applying caption overlay..."))
+            caption_pos = self.current_formatting_options.get("caption_position", "bottom")
+            font_size_str = self.current_formatting_options.get("caption_font_size", "medium")
             
-            # Update status
-            self.status_bar.showMessage("Caption generated successfully")
-            self.button_section.set_generating(False)
-            
-            # Enable save preset button after generation
-            self._update_preset_button_state(True)
-            
-        except Exception as e:
-            self.logger.exception(f"Error during generation: {e}")
-            self._show_error("Generation Error", str(e))
-            self.button_section.set_generating(False)
-            
+            # Map string size to pixel value (approximate)
+            # These can be tuned for better visual results
+            font_size_map = {
+                "small": int(self.media_section.media_preview.height() / 40) if self.media_section.media_preview.height() > 0 else 12,
+                "medium": int(self.media_section.media_preview.height() / 25) if self.media_section.media_preview.height() > 0 else 20,
+                "large": int(self.media_section.media_preview.height() / 15) if self.media_section.media_preview.height() > 0 else 32,
+                "extra large": int(self.media_section.media_preview.height() / 10) if self.media_section.media_preview.height() > 0 else 44
+            }
+            font_size_px = font_size_map.get(font_size_str, font_size_map["medium"]) # Default to medium if string unknown
+            font_size_px = max(10, font_size_px) # Ensure a minimum font size
+
+            self.logger.info(f"Applying caption overlay to: {final_image_path} at position: {caption_pos}, font size: {font_size_str} ({font_size_px}px)")
+            success, overlay_path, msg = self.image_edit_handler.add_caption_overlay(
+                final_image_path, 
+                caption_to_use, # Use the determined caption
+                position=caption_pos,
+                font_size_px=font_size_px # Pass pixel font size
+            )
+            if success and overlay_path and os.path.exists(overlay_path):
+                final_image_path = overlay_path
+                self.logger.info(f"Caption overlay successful: {final_image_path}")
+            else:
+                self.logger.warning(f"Caption overlay failed: {msg}")
+                self._show_warning(self.tr("Overlay Error"), self.tr("Could not apply caption overlay: {error_message}").format(error_message=msg))
+        
+        # Update app_state and media_section with the final image
+        if final_image_path != current_image_path_for_processing: # If any additional processing happened
+            self.app_state.edited_media = final_image_path
+            self.app_state.current_display_media = final_image_path
+            self.app_state.showing_edited = True
+            self.media_section.set_edited_media(final_image_path) # This will refresh the preview
+
+        # Update status
+        self.status_bar.showMessage(self.tr("Caption generated successfully"))
+        self.button_section.set_generating(False)
+        
+        # Enable save preset button after generation
+        self._update_preset_button_state(True)
+        
     def _on_cancel(self):
         """Handle cancel button click."""
         # Implement cancel logic
@@ -557,13 +728,13 @@ class MainWindow(QMainWindow):
         self.status_bar.showMessage(message)
         
     def _on_add_to_library(self):
-        """Handle add to library button click."""
+        """Handle finish post button click (formerly add to library)."""
         try:
             # Get the currently displayed media path (could be original or edited)
             media_path = self.media_section.get_current_display_path()
             
             if not media_path:
-                self._show_warning("Library", "No media selected to add to library")
+                self._show_warning(self.tr("Finish Post"), self.tr("No media selected to finish"))
                 return
                 
             # Get the caption
@@ -572,8 +743,8 @@ class MainWindow(QMainWindow):
             if not caption:
                 reply = QMessageBox.question(
                     self,
-                    "Missing Caption",
-                    "There is no caption for this media. Do you want to add it to the library anyway?",
+                    self.tr("Missing Caption"),
+                    self.tr("There is no caption for this media. Do you want to finish the post anyway?"),
                     QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                     QMessageBox.StandardButton.No
                 )
@@ -598,17 +769,20 @@ class MainWindow(QMainWindow):
             
             if result:
                 # Show success message
-                self._show_info("Library", f"Media added to library with ID: {result['id']}")
+                self._show_info(self.tr("Post Finished"), self.tr("Post has been finalized and saved as: {filename}").format(filename=os.path.basename(media_path)))
                 
                 # Update last updated timestamp
                 if hasattr(self.app_state, 'library_last_updated'):
                     self.app_state.library_last_updated = datetime.datetime.now()
+                    
+                # Switch to the Crow's Eye Marketing tab to see the finished post
+                # self._switch_tab(1) # Remove this line - perhaps switch to library or stay on current tab
             else:
-                self._show_error("Library Error", "Failed to add media to library")
+                self._show_error(self.tr("Finish Post Error"), self.tr("Failed to finish post"))
                 
         except Exception as e:
-            self.logger.exception(f"Error adding to library: {e}")
-            self._show_error("Library Error", f"Could not add to library: {str(e)}")
+            self.logger.exception(f"Error finishing post: {e}")
+            self._show_error(self.tr("Finish Post Error"), self.tr("Could not finish post: {error_message}").format(error_message=str(e)))
             
     def _show_error(self, title: str, message: str):
         """Show an error message dialog."""
@@ -644,12 +818,84 @@ class MainWindow(QMainWindow):
             
             # Update UI
             if showing_edited:
-                self.status_bar.showMessage("Showing edited image")
+                self.status_bar.showMessage(self.tr("Showing edited image"))
                 self.logger.info("Toggled to edited image view")
             else:
-                self.status_bar.showMessage("Showing original image")
+                self.status_bar.showMessage(self.tr("Showing original image"))
                 self.logger.info("Toggled to original image view")
                 
         except Exception as e:
             self.logger.exception(f"Error toggling image view: {e}")
-            self.status_bar.showMessage("Error toggling image view") 
+            self.status_bar.showMessage(self.tr("Error toggling image view"))
+
+    @Slot()
+    def open_library_window(self):
+        """Opens the media library window."""
+        try:
+            if not hasattr(self, 'library_window_instance') or not self.library_window_instance.isVisible():
+                # Pass library_manager_instance to LibraryWindow
+                self.library_window_instance = LibraryWindow(library_manager_instance=self.library_manager, parent=self, scheduler=self.scheduler)
+                self.logger.info("Showing LibraryWindow.")
+                self.library_window_instance.show()
+            else:
+                self.library_window_instance.activateWindow()
+                self.logger.info("LibraryWindow already visible, activating.")
+        except Exception as e:
+            self.logger.exception(f"Error opening library window: {e}")
+            QMessageBox.critical(self, self.tr("Error"), self.tr("Could not open library window: {error_message}").format(error_message=e))
+
+    @Slot()
+    def show_crowseye_tab(self):
+        # This method might now be obsolete or needs to be re-evaluated
+        # For now, let's comment it out or remove it if it's no longer used.
+        # self.logger.info("Attempting to show Crow's Eye tab (now removed).")
+        # self._switch_tab(0) # Or handle appropriately
+        pass # Placeholder, to be reviewed if this slot is still connected 
+
+    def _on_post_format_changed(self, formatting_details: dict):
+        """Handle changes in post formatting options from MediaSection."""
+        self.current_formatting_options = formatting_details
+        self.logger.info(f"Main window received formatting options: {self.current_formatting_options}")
+        
+        # All preview logic removed. Generate button will handle final application.
+        
+        # Rest of the method remains unchanged (which is nothing in this simplified version) 
+
+    def _on_language_selected(self, lang_code: str):
+        """Handle language selection change (Currently disabled)"""
+        self.logger.info(f"Language selection received: {lang_code} (functionality disabled)")
+        # All language switching functionality has been disabled
+        # Language dropdown is kept in the UI for future implementation
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Handle events, specifically LanguageChange for re-translation."""
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        """Retranslate all UI elements in MainWindow and its direct custom components."""
+        self.setWindowTitle(self.tr("Crow's Eye"))
+        
+        # Retranslate custom child components
+        if hasattr(self, 'header_section') and self.header_section:
+            self.header_section.retranslateUi()
+        if hasattr(self, 'media_section') and self.media_section:
+            self.media_section.retranslateUi()
+        if hasattr(self, 'text_sections') and self.text_sections:
+            self.text_sections.retranslateUi()
+        if hasattr(self, 'button_section') and self.button_section:
+            self.button_section.retranslateUi()
+        if hasattr(self, 'status_bar') and self.status_bar:
+            self.status_bar.retranslateUi()
+            
+        # Retranslate any dynamically created dialogs if they are stored and accessible
+        # For example, if self.library_window exists and is visible:
+        if self.library_window and self.library_window.isVisible():
+            self.library_window.retranslateUi() # Assuming LibraryWindow has retranslateUi
+        
+        # Add any other direct text updates for MainWindow itself here
+        # Example: self.some_main_window_label.setText(self.tr("Main Window Specific Text"))
+
+        # Note: Messages shown via QMessageBox, QInputDialog, QFileDialog are typically
+        # translated at the point they are shown, using self.tr() there.

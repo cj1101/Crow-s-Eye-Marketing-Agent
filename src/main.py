@@ -6,6 +6,7 @@ import sys
 import logging
 import platform
 from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import QTranslator, QLibraryInfo, QLocale, Qt
 
 # Set up logging
 logging.basicConfig(
@@ -26,7 +27,8 @@ def create_required_directories():
         "knowledge_base",
         "library",
         "library/images",
-        "library/data"
+        "library/data",
+        "media_gallery"
     ]
     
     for directory in directories:
@@ -36,6 +38,22 @@ def create_required_directories():
             os.makedirs(dir_path, exist_ok=True)
         else:
             logger.debug(f"Directory already exists: {directory}")
+
+def load_translations(app, lang_code: str):
+    """
+    Load translations functionality (Currently disabled).
+    
+    Args:
+        app: The QApplication instance
+        lang_code: The language code (e.g. 'en', 'fr')
+    
+    Returns:
+        bool: Always returns True since functionality is disabled
+    """
+    # Translations functionality has been disabled
+    # Only keeping the function for future implementation
+    logger.info(f"Translation loading for {lang_code} is disabled")
+    return True
 
 def main(enable_scheduling=False):
     """
@@ -49,66 +67,50 @@ def main(enable_scheduling=False):
     """
     # Log startup information
     logger.info("Logging initialized")
-    logger.info(f"Starting application v5.0.0 {'with scheduling' if enable_scheduling else ''}")
     logger.info(f"Python version: {platform.python_version()}")
     logger.info(f"System: {platform.system()} {platform.release()}")
     
     # Create required directories
     create_required_directories()
     
-    # Create and run the application
+    # Create application
     app = QApplication(sys.argv)
-    
-    # Set application properties
-    app.setApplicationName("Social Media Caption Generator")
+    app.setApplicationName("Crow's Eye")
     app.setApplicationVersion("5.0.0")
-    app.setOrganizationName("Breadsmith Marketing")
     
-    # Load stylesheet if exists
-    if os.path.exists("styles.qss"):
-        with open("styles.qss", "r") as f:
-            app.setStyleSheet(f.read())
+    # Ensure proper scaling on high DPI screens
+    QApplication.setAttribute(Qt.AA_EnableHighDpiScaling, True)
+    QApplication.setAttribute(Qt.AA_UseHighDpiPixmaps, True)
     
-    # Import here to avoid circular imports
+    # Default language is English, ignoring command line args for language
+    app.setProperty("current_language", "en")
+    app.setProperty("json_translations", {})  # Empty dict for default language
+    
+    # Create application state
     from .models.app_state import AppState
     from .handlers.media_handler import MediaHandler
     from .handlers.library_handler import LibraryManager
     from .ui.main_window import MainWindow
     
-    # Initialize components
     app_state = AppState()
+    
+    # Create media handler
     media_handler = MediaHandler(app_state)
+    
+    # Create library manager
     library_manager = LibraryManager()
     
-    if enable_scheduling:
-        # Import scheduling components
-        from .handlers.scheduling_handler import PostScheduler, SchedulingSignals
-        
-        # Initialize scheduler
-        scheduling_signals = SchedulingSignals()
-        scheduler = PostScheduler(app_state, scheduling_signals)
-        
-        # Create main window with scheduler
-        window = MainWindow(
-            app_state=app_state,
-            media_handler=media_handler,
-            library_manager=library_manager,
-            scheduler=scheduler
-        )
-        
-        # Start scheduler
-        scheduler.start()
-    else:
-        # Create main window without scheduler
-        window = MainWindow(
-            app_state=app_state,
-            media_handler=media_handler,
-            library_manager=library_manager
-        )
+    # Create main window
+    window = MainWindow(
+        app_state=app_state,
+        media_handler=media_handler,
+        library_manager=library_manager
+    )
     
     window.show()
     
-    return app.exec()
+    # Run application
+    return app.exec_()
 
 if __name__ == "__main__":
     # Run without scheduling by default
