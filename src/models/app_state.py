@@ -28,6 +28,9 @@ class AppState:
     # Generation status tracking
     generation_requests: Dict[str, Dict[str, Any]] = field(default_factory=dict)
     
+    # Media generation status tracking
+    media_generation_status: Dict[str, Any] = field(default_factory=dict)
+    
     # Scheduling data
     schedules: List[Dict[str, Any]] = field(default_factory=list)
     scheduled_posts: List[Dict[str, Any]] = field(default_factory=list)
@@ -97,6 +100,9 @@ class AppState:
         # Scheduling data
         self.schedules = []
         self.scheduled_posts = []
+        
+        # Media generation status
+        self.media_generation_status = {}
         
     def reset(self):
         """Reset application state to defaults."""

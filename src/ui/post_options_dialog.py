@@ -4,10 +4,12 @@ Dialog for post scheduling options
 import logging
 from typing import Dict, Any, Optional
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QDialog, QVBoxLayout, QHBoxLayout, QLabel, # QPushButton, # Removed
     QRadioButton, QButtonGroup, QGroupBox, QCheckBox, QFrame, QMessageBox
 )
-from PySide6.QtCore import Qt, Signal
+from PySide6.QtCore import Qt, Signal, QEvent # Added QEvent
+
+from .components.adjustable_button import AdjustableButton # Corrected import path
 
 class PostOptionsDialog(QDialog):
     """Dialog for post scheduling and publishing options."""
@@ -23,9 +25,16 @@ class PostOptionsDialog(QDialog):
         self.post_data = post_data or {}
         self.logger = logging.getLogger(self.__class__.__name__)
         
-        self.setWindowTitle("Post Options")
+        # Store references to buttons that need text updates
+        self.post_now_btn: Optional[AdjustableButton] = None
+        self.queue_btn: Optional[AdjustableButton] = None
+        self.edit_btn: Optional[AdjustableButton] = None
+        self.delete_btn: Optional[AdjustableButton] = None
+        self.cancel_btn: Optional[AdjustableButton] = None
+
+        self.setWindowTitle(self.tr("Post Options"))
         self.setMinimumWidth(500)
-        self.setMaximumHeight(600)
+        self.setMaximumHeight(600) # Adjusted for more content potentially
         self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
         
         self.setStyleSheet("""
@@ -42,7 +51,7 @@ class PostOptionsDialog(QDialog):
             QGroupBox {
                 border: 1px solid #555555;
                 border-radius: 8px;
-                margin-top: 15px;
+                margin-top: 15px; /* Provides space for the title */
                 font-weight: bold;
                 color: white;
             }
@@ -51,7 +60,7 @@ class PostOptionsDialog(QDialog):
                 left: 10px;
                 padding: 0 5px 0 5px;
             }
-            QPushButton {
+            AdjustableButton { /* Changed from QPushButton */
                 background-color: #444444;
                 color: white;
                 border: none;
@@ -59,55 +68,58 @@ class PostOptionsDialog(QDialog):
                 padding: 8px 15px;
                 font-size: 14px;
             }
-            QPushButton:hover {
+            AdjustableButton:hover { /* Changed from QPushButton */
                 background-color: #555555;
             }
-            #postNowButton {
-                background-color: #4CAF50;
+            AdjustableButton#postNowButton { /* Changed from QPushButton */
+                background-color: #4CAF50; /* Green */
             }
-            #postNowButton:hover {
+            AdjustableButton#postNowButton:hover { /* Changed from QPushButton */
                 background-color: #45a049;
             }
-            #queueButton {
-                background-color: #3949AB;
+            AdjustableButton#queueButton { /* Changed from QPushButton */
+                background-color: #3949AB; /* Indigo */
             }
-            #queueButton:hover {
+            AdjustableButton#queueButton:hover { /* Changed from QPushButton */
                 background-color: #303F9F;
             }
-            #editButton {
-                background-color: #FF9800;
+            AdjustableButton#editButton { /* Changed from QPushButton */
+                background-color: #FF9800; /* Orange */
             }
-            #editButton:hover {
+            AdjustableButton#editButton:hover { /* Changed from QPushButton */
                 background-color: #F57C00;
             }
-            #deleteButton {
-                background-color: #e74c3c;
+            AdjustableButton#deleteButton { /* Changed from QPushButton */
+                background-color: #e74c3c; /* Red */
             }
-            #deleteButton:hover {
+            AdjustableButton#deleteButton:hover { /* Changed from QPushButton */
                 background-color: #c0392b;
             }
         """)
         
         self._init_ui()
+        self.retranslateUi() # Initial translation
         
     def _init_ui(self):
         """Initialize the UI components."""
         layout = QVBoxLayout(self)
-        layout.setSpacing(15)
+        layout.setSpacing(15) # Increased spacing
         
         # Header with item info
-        header = QLabel("Post Options")
+        header = QLabel() # Text set in retranslateUi
+        header.setObjectName("dialogHeader")
         header.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
         header.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(header)
         
-        # Display post info
+        # Display post info (e.g., filename)
         info_frame = QFrame()
+        info_frame.setObjectName("infoFrame")
         info_frame.setStyleSheet("background-color: #333333; border-radius: 8px; padding: 10px;")
         info_layout = QVBoxLayout(info_frame)
         
-        item_name = self.post_data.get("media_path", "").split("/")[-1] if self.post_data.get("media_path") else "Unknown"
-        self.info_label = QLabel(f"<b>Item:</b> {item_name}")
+        item_name = self.post_data.get("media_path", "").split("/")[-1] if self.post_data.get("media_path") else self.tr("Unknown Item")
+        self.info_label = QLabel(f"<b>{self.tr('Item')}:</b> {item_name}")
         self.info_label.setWordWrap(True)
         self.info_label.setStyleSheet("color: #EEEEEE;")
         info_layout.addWidget(self.info_label)
@@ -115,65 +127,69 @@ class PostOptionsDialog(QDialog):
         layout.addWidget(info_frame)
         
         # Post Now Section
-        post_now_group = QGroupBox("Post Now")
-        post_now_layout = QVBoxLayout(post_now_group)
+        self.post_now_group = QGroupBox() # Title set in retranslateUi
+        post_now_layout = QVBoxLayout(self.post_now_group)
         
         # Social media platforms checkboxes
-        self.fb_checkbox = QCheckBox("Post to Facebook")
+        self.fb_checkbox = QCheckBox() # Text set in retranslateUi
         self.fb_checkbox.setChecked(True)
         post_now_layout.addWidget(self.fb_checkbox)
         
-        self.ig_checkbox = QCheckBox("Post to Instagram")
+        self.ig_checkbox = QCheckBox() # Text set in retranslateUi
         self.ig_checkbox.setChecked(True)
         post_now_layout.addWidget(self.ig_checkbox)
         
-        post_now_button = QPushButton("Post Now")
-        post_now_button.setObjectName("postNowButton")
-        post_now_button.clicked.connect(self._on_post_now)
-        post_now_layout.addWidget(post_now_button)
+        self.post_now_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
+        self.post_now_btn.setObjectName("postNowButton")
+        self.post_now_btn.clicked.connect(self._on_post_now)
+        post_now_layout.addWidget(self.post_now_btn)
         
-        layout.addWidget(post_now_group)
+        layout.addWidget(self.post_now_group)
         
         # Queue Section
-        queue_group = QGroupBox("Add to Queue")
-        queue_layout = QVBoxLayout(queue_group)
+        self.queue_group = QGroupBox() # Title set in retranslateUi
+        queue_layout = QVBoxLayout(self.queue_group)
         
-        queue_info = QLabel("Add this post to the next available slot in the queue")
-        queue_info.setWordWrap(True)
-        queue_layout.addWidget(queue_info)
+        self.queue_info_label = QLabel() # Text set in retranslateUi
+        self.queue_info_label.setWordWrap(True)
+        queue_layout.addWidget(self.queue_info_label)
         
-        queue_button = QPushButton("Add to Queue")
-        queue_button.setObjectName("queueButton")
-        queue_button.clicked.connect(self._on_add_to_queue)
-        queue_layout.addWidget(queue_button)
+        self.queue_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
+        self.queue_btn.setObjectName("queueButton")
+        self.queue_btn.clicked.connect(self._on_add_to_queue)
+        queue_layout.addWidget(self.queue_btn)
         
-        layout.addWidget(queue_group)
+        layout.addWidget(self.queue_group)
         
-        # Edit/Delete section
-        action_group = QGroupBox("Other Actions")
-        action_layout = QHBoxLayout(action_group)
+        # Edit/Delete section (conditionally shown)
+        self.action_group = QGroupBox() # Title set in retranslateUi
+        action_layout = QHBoxLayout(self.action_group)
         
-        edit_button = QPushButton("Edit Post")
-        edit_button.setObjectName("editButton")
-        edit_button.clicked.connect(self._on_edit_post)
-        action_layout.addWidget(edit_button)
+        self.edit_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
+        self.edit_btn.setObjectName("editButton")
+        self.edit_btn.clicked.connect(self._on_edit_post)
+        action_layout.addWidget(self.edit_btn)
         
-        delete_button = QPushButton("Delete Post")
-        delete_button.setObjectName("deleteButton")
-        delete_button.clicked.connect(self._on_delete_post)
-        action_layout.addWidget(delete_button)
+        self.delete_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
+        self.delete_btn.setObjectName("deleteButton")
+        self.delete_btn.clicked.connect(self._on_delete_post)
+        action_layout.addWidget(self.delete_btn)
         
-        layout.addWidget(action_group)
+        layout.addWidget(self.action_group)
         
+        if not (self.post_data.get("is_draft") or self.post_data.get("is_scheduled")):
+            self.action_group.setVisible(False)
+
         # Cancel button
-        cancel_button = QPushButton("Cancel")
-        cancel_button.clicked.connect(self.reject)
-        layout.addWidget(cancel_button)
+        self.cancel_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
+        self.cancel_btn.setObjectName("cancelButtonDialog") # Unique name if needed
+        self.cancel_btn.clicked.connect(self.reject)
+        layout.addWidget(self.cancel_btn, 0, Qt.AlignmentFlag.AlignRight) # Align right
         
     def _on_post_now(self):
         """Handle post now button click."""
         if not self.fb_checkbox.isChecked() and not self.ig_checkbox.isChecked():
-            QMessageBox.warning(self, "Post Error", "Please select at least one platform to post to.")
+            QMessageBox.warning(self, self.tr("Post Error"), self.tr("Please select at least one platform to post to."))
             return
             
         platforms = []
@@ -183,7 +199,7 @@ class PostOptionsDialog(QDialog):
             platforms.append("instagram")
             
         # Add platforms to post data
-        post_data = self.post_data.copy()
+        post_data = self.post_data.copy() # Ensure we don't modify original dict directly if passed around
         post_data["platforms"] = platforms
         
         # Emit signal
@@ -206,12 +222,55 @@ class PostOptionsDialog(QDialog):
         """Handle delete post button click."""
         result = QMessageBox.question(
             self,
-            "Confirm Delete",
-            "Are you sure you want to delete this post?",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+            self.tr("Confirm Delete"),
+            self.tr("Are you sure you want to delete this post? This action cannot be undone."),
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No # Default to No
         )
         
         if result == QMessageBox.StandardButton.Yes:
             # Emit signal
             self.delete_post.emit(self.post_data)
-            self.accept() 
+            self.accept()
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        self.setWindowTitle(self.tr("Post Options"))
+        if hasattr(self, 'dialogHeader') and self.dialogHeader: # Check if dialogHeader exists
+             self.dialogHeader.setText(self.tr("Post Options"))
+        
+        item_name = self.post_data.get("media_path", "").split("/")[-1] if self.post_data.get("media_path") else self.tr("Unknown Item")
+        if hasattr(self, 'info_label') and self.info_label: # Check if info_label exists
+            self.info_label.setText(f"<b>{self.tr('Item')}:</b> {item_name}")
+
+        if hasattr(self, 'post_now_group') and self.post_now_group: # Check if post_now_group exists
+            self.post_now_group.setTitle(self.tr("Post Now"))
+        if hasattr(self, 'fb_checkbox') and self.fb_checkbox: # Check if fb_checkbox exists
+            self.fb_checkbox.setText(self.tr("Post to Facebook"))
+        if hasattr(self, 'ig_checkbox') and self.ig_checkbox: # Check if ig_checkbox exists
+            self.ig_checkbox.setText(self.tr("Post to Instagram"))
+        if self.post_now_btn: # Check if post_now_btn exists
+            self.post_now_btn.setText(self.tr("Post Now"))
+
+        if hasattr(self, 'queue_group') and self.queue_group: # Check if queue_group exists
+            self.queue_group.setTitle(self.tr("Add to Queue"))
+        if hasattr(self, 'queue_info_label') and self.queue_info_label: # Check if queue_info_label exists
+            self.queue_info_label.setText(self.tr("Add this post to the next available slot in the queue."))
+        if self.queue_btn: # Check if queue_btn exists
+            self.queue_btn.setText(self.tr("Add to Queue"))
+        
+        if hasattr(self, 'action_group') and self.action_group: # Check if action_group exists
+            self.action_group.setTitle(self.tr("Other Actions"))
+        if self.edit_btn: # Check if edit_btn exists
+            self.edit_btn.setText(self.tr("Edit Post"))
+        if self.delete_btn: # Check if delete_btn exists
+            self.delete_btn.setText(self.tr("Delete Post"))
+
+        if self.cancel_btn: # Check if cancel_btn exists
+            self.cancel_btn.setText(self.tr("Cancel"))
+
+# Removed </rewritten_file> 

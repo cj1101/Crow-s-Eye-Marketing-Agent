@@ -69,7 +69,17 @@ class AuthHandler:
         Returns:
             bool: True if authenticated, False otherwise
         """
-        # Check if we have required environment variables
+        # First check if OAuth authentication exists
+        try:
+            from .oauth_handler import oauth_handler
+            oauth_status = oauth_handler.get_auth_status()
+            if oauth_status['is_authenticated'] and oauth_status['selected_account']:
+                logger.info("OAuth authentication detected and valid")
+                return True
+        except Exception as e:
+            logger.debug(f"OAuth check failed: {e}")
+        
+        # Fall back to legacy environment variable check
         if not key_manager.has_required_env_variables():
             # Commenting out the warning to stop the log spam
             # logger.warning("Missing required API keys in environment variables")
@@ -235,11 +245,28 @@ class AuthHandler:
     
     def get_selected_account(self) -> Optional[Dict[str, Any]]:
         """Get the currently selected business account."""
+        # First check OAuth
+        try:
+            from .oauth_handler import oauth_handler
+            oauth_account = oauth_handler.selected_account
+            if oauth_account:
+                return oauth_account
+        except Exception as e:
+            logger.debug(f"OAuth account check failed: {e}")
+        
+        # Fall back to legacy selected account
         return self.selected_account
     
     def logout(self) -> None:
         """Log out the current user."""
-        # Clear selected account
+        # Clear OAuth session if it exists
+        try:
+            from .oauth_handler import oauth_handler
+            oauth_handler.logout()
+        except Exception as e:
+            logger.debug(f"OAuth logout failed: {e}")
+        
+        # Clear legacy selected account
         self.selected_account = None
         self.business_accounts = []
         

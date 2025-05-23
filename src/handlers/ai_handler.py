@@ -42,7 +42,8 @@ class AIHandler:
     
     def generate_caption(self, instructions: str, photo_editing: str, 
                          context_files: List[str] = None,
-                         keep_existing_caption: bool = False) -> str:
+                         keep_existing_caption: bool = False,
+                         language_code: str = "en") -> str:
         """
         Generate a caption based on instructions, photo editing, and context files.
         
@@ -51,12 +52,13 @@ class AIHandler:
             photo_editing: Photo editing instructions
             context_files: List of context file paths
             keep_existing_caption: Whether to keep existing caption (if available)
+            language_code: Language code for the generated caption (e.g., "en", "fr")
             
         Returns:
             str: Generated caption
         """
         try:
-            self.logger.info(f"Generating caption with instructions: {instructions[:50]}...")
+            self.logger.info(f"Generating caption with instructions: {instructions[:50]}... in language: {language_code}")
             
             # If "keep_existing_caption" is True and we have a current caption, return it
             if keep_existing_caption and hasattr(self.app_state, 'current_caption') and self.app_state.current_caption:
@@ -99,7 +101,8 @@ class AIHandler:
                 photo_editing, 
                 context_content,
                 image_analysis,
-                content_analysis
+                content_analysis,
+                language_code
             )
             
             # Save the generated caption to app state
@@ -328,7 +331,8 @@ class AIHandler:
     def _generate_caption_with_gemini(self, instructions: str, photo_editing: str, 
                                context_content: str = "", 
                                image_analysis: Dict[str, Any] = None,
-                               content_analysis: Dict[str, Any] = None) -> str:
+                               content_analysis: Dict[str, Any] = None,
+                               language_code: str = "en") -> str:
         """
         Generate a caption using Gemini based on instructions, context, and image content.
         
@@ -338,6 +342,7 @@ class AIHandler:
             context_content: Content extracted from context files
             image_analysis: Technical analysis of the image
             content_analysis: Content analysis of the image from Gemini
+            language_code: Language code for the generated caption
             
         Returns:
             str: Generated caption
@@ -378,51 +383,77 @@ class AIHandler:
             # Configure Gemini model - using updated model name
             model = genai.GenerativeModel(GEMINI_TEXT_MODEL)
             
+            # Language instruction
+            language_instruction = ""
+            if language_code.lower() != "en":
+                # Attempt to map code to full language name for a more natural prompt
+                language_map = {
+                    "fr": "French", "es": "Spanish", "de": "German", 
+                    "nl": "Dutch", "pt": "Portuguese", "it": "Italian",
+                    "zh": "Mandarin Chinese", "ja": "Japanese", "ko": "Korean", "ru": "Russian"
+                    # Add other mappings as needed based on your spec
+                }
+                language_name = language_map.get(language_code.lower(), language_code) # Fallback to code if name not found
+                language_instruction = f"IMPORTANT: Generate the caption in {language_name}.\\n"
+
             # Format the prompt with all available information
-            prompt = f"""
-            Generate a social media caption for an image based on the following information:
-            
+            prompt = f"""{language_instruction}Generate a social media caption for an image based on the following information:
+
             IMAGE CONTENT:
             {content_analysis.get('content_description', 'Not available')}
-            
+
             Main subject: {content_analysis.get('main_subject', 'Not specified')}
             Setting: {content_analysis.get('setting', 'Not specified')}
             Activities: {content_analysis.get('activities', 'Not specified')}
             Mood: {content_analysis.get('mood', 'Not specified')}
             Themes: {', '.join(content_analysis.get('themes', ['Not specified']))}
             Distinctive elements: {', '.join(content_analysis.get('distinctive_elements', ['Not specified']))}
-            
+
             GENERAL INSTRUCTIONS:
             {instructions}
-            
+
             PHOTO EDITING NOTES:
             {photo_editing}
-            
+
             CONTEXT FROM FILES:
             {context_content}
-            
+
             TECHNICAL IMAGE DETAILS:
             - Brightness: {image_analysis.get('brightness', 'Not specified')}
             - Colors: {', '.join(image_analysis.get('colors', ['Not specified']))}
             - Composition: {image_analysis.get('composition', 'Not specified')}
             - Attributes: {', '.join(image_analysis.get('attributes', ['Not specified']))}
-            
+
             Create an engaging caption that:
             1. Connects the IMAGE CONTENT (not its technical aspects) to the CONTEXT from files
             2. Aligns with the GENERAL INSTRUCTIONS
             3. Includes 3-5 relevant hashtags
             4. Is conversational, engaging, and social media-ready
             5. Is between 1-3 sentences plus hashtags
-            
+
             Do not describe the technical aspects of the image or how it was edited.
             Focus on the content, theme, and subject of the image itself.
             """
             
             # Get response from Gemini
-            response = model.generate_content(prompt)
+            request_params = {
+                "contents": [prompt]
+            }
+
+            self.logger.debug(f"Sending request to Gemini: {request_params}")
+            response = model.generate_content(**request_params)
+            self.logger.debug(f"Received response: {response}")
+
             caption = response.text.strip()
             
-            self.logger.info(f"Generated caption with Gemini: {caption[:50]}...")
+            # Log the caption safely
+            safe_caption_for_log = caption[:100].encode('ascii', 'replace').decode('ascii')
+            self.logger.info(f"Generated caption with Gemini: {safe_caption_for_log}...")
+
+            # Store the full caption in app_state
+            if hasattr(self.app_state, 'current_caption'):
+                self.app_state.current_caption = caption
+            
             return caption
             
         except Exception as e:

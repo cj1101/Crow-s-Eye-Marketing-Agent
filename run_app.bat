@@ -1,6 +1,6 @@
 @echo off
-REM Run the application with scheduling
-echo Starting Breadsmith Marketing Tool with scheduling...
+echo Starting Crow's Eye Marketing Assistant...
+python -m src.main
 
 REM Check if a Python environment is activated
 if defined VIRTUAL_ENV (

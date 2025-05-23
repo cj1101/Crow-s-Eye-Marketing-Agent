@@ -1,3 +1,4 @@
+#!/usr/bin/env python
 """
 Knowledge Base Management Dialog
 For adding and managing files in the knowledge base
@@ -17,7 +18,10 @@ from PySide6.QtCore import Qt, QSize, Signal
 from PySide6.QtGui import QFont, QIcon
 
 # Import our pending messages tab
-from .components.pending_messages_tab import PendingMessagesTab
+from .pending_messages import PendingMessagesTab
+
+# Comment out the insights tab import temporarily
+# from insights_tab import InsightsTab
 
 # Initialize logger
 logger = logging.getLogger(__name__)
@@ -65,6 +69,10 @@ class KnowledgeManagementDialog(QDialog):
         # Pending Messages tab
         self.pending_messages_tab = PendingMessagesTab()
         self.tab_widget.addTab(self.pending_messages_tab, "Pending Messages")
+        
+        # Comment out the Insights tab temporarily
+        # self.insights_tab = InsightsTab()
+        # self.tab_widget.addTab(self.insights_tab, "Insights")
         
         main_layout.addWidget(self.tab_widget)
         
@@ -192,138 +200,137 @@ class KnowledgeManagementDialog(QDialog):
                 
                 # Check if file already exists
                 if os.path.exists(destination):
-                    response = QMessageBox.question(
+                    result = QMessageBox.question(
                         self,
                         "File Already Exists",
-                        f"The file '{filename}' already exists in the knowledge base. Do you want to replace it?",
+                        f"The file '{filename}' already exists in the knowledge base. Replace it?",
                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
                     )
                     
-                    if response == QMessageBox.StandardButton.No:
+                    if result != QMessageBox.StandardButton.Yes:
                         skipped_count += 1
                         continue
                 
-                # Copy file to knowledge base directory
+                # Copy the file
                 shutil.copy2(file_path, destination)
                 copied_count += 1
-                
-                # Add to list widget if not already there
-                existing_items = [self.file_list.item(i).text() for i in range(self.file_list.count())]
-                if filename not in existing_items:
-                    item = QListWidgetItem(filename)
-                    item.setData(Qt.ItemDataRole.UserRole, destination)
-                    self.file_list.addItem(item)
-                    self.knowledge_files.append(destination)
+                logger.info(f"Copied file to knowledge base: {filename}")
                 
             except Exception as e:
                 logger.exception(f"Error copying file {file_path}: {e}")
                 QMessageBox.warning(
                     self,
-                    "Error",
-                    f"Could not copy file {os.path.basename(file_path)}: {str(e)}"
+                    "Error Copying File",
+                    f"Could not copy file '{os.path.basename(file_path)}': {str(e)}"
                 )
         
-        # Update status
-        if copied_count > 0 or skipped_count > 0:
-            status = f"Added {copied_count} file(s) to the knowledge base."
+        # Reload file list
+        self._load_existing_files()
+        
+        # Show summary
+        if copied_count > 0:
             if skipped_count > 0:
-                status += f" Skipped {skipped_count} file(s)."
-            
-            self.status_label.setText(status)
-            logger.info(status)
+                self.status_label.setText(f"Added {copied_count} file(s), skipped {skipped_count} file(s).")
+            else:
+                self.status_label.setText(f"Added {copied_count} file(s) to knowledge base.")
+        elif skipped_count > 0:
+            self.status_label.setText(f"No files added, skipped {skipped_count} file(s).")
+        else:
+            self.status_label.setText("No files selected.")
             
     def _remove_files(self):
         """Remove selected files from the knowledge base."""
         selected_items = self.file_list.selectedItems()
         
         if not selected_items:
+            self.status_label.setText("No files selected for removal.")
             return
             
         # Confirm deletion
-        count = len(selected_items)
-        message = f"Are you sure you want to remove {count} file(s) from the knowledge base?"
-        
-        response = QMessageBox.question(
+        result = QMessageBox.question(
             self,
             "Confirm Removal",
-            message,
+            f"Are you sure you want to remove {len(selected_items)} file(s) from the knowledge base?",
             QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
         )
         
-        if response == QMessageBox.StandardButton.No:
+        if result != QMessageBox.StandardButton.Yes:
             return
             
         # Remove files
         removed_count = 0
+        error_count = 0
         
         for item in selected_items:
+            file_path = item.data(Qt.ItemDataRole.UserRole)
+            
             try:
-                file_path = item.data(Qt.ItemDataRole.UserRole)
-                
-                # Remove file from filesystem
-                if os.path.exists(file_path):
-                    os.remove(file_path)
-                    
-                # Remove from list widget
-                row = self.file_list.row(item)
-                self.file_list.takeItem(row)
-                
-                # Remove from knowledge files list
-                if file_path in self.knowledge_files:
-                    self.knowledge_files.remove(file_path)
-                    
+                os.remove(file_path)
                 removed_count += 1
+                logger.info(f"Removed file from knowledge base: {os.path.basename(file_path)}")
                 
             except Exception as e:
                 logger.exception(f"Error removing file {file_path}: {e}")
-                QMessageBox.warning(
-                    self,
-                    "Error",
-                    f"Could not remove file {os.path.basename(file_path)}: {str(e)}"
-                )
+                error_count += 1
+                
+        # Reload file list
+        self._load_existing_files()
         
-        # Update status
+        # Show summary
         if removed_count > 0:
-            self.status_label.setText(f"Removed {removed_count} file(s) from the knowledge base.")
-            logger.info(f"Removed {removed_count} files from knowledge base")
+            if error_count > 0:
+                self.status_label.setText(f"Removed {removed_count} file(s), {error_count} error(s).")
+            else:
+                self.status_label.setText(f"Removed {removed_count} file(s) from knowledge base.")
+        else:
+            self.status_label.setText(f"No files removed, {error_count} error(s).")
             
     def _on_selection_changed(self):
-        """Handle selection change in the file list."""
+        """Handle file selection change."""
         selected_items = self.file_list.selectedItems()
         
-        if len(selected_items) == 1:
-            # Show preview for the selected file
-            file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
-            self._show_file_preview(file_path)
-        else:
-            # Clear preview if multiple files or no files are selected
+        if not selected_items:
+            # Clear preview
             self.preview_text.clear()
+            return
+            
+        # Show first selected file
+        file_path = selected_items[0].data(Qt.ItemDataRole.UserRole)
+        self._show_file_preview(file_path)
             
     def _show_file_preview(self, file_path: str):
-        """Show a preview of the file contents."""
+        """Show preview of selected file."""
         try:
-            if not os.path.exists(file_path):
-                self.preview_text.setPlainText("File not found.")
-                return
-                
-            # Check file extension
+            # Basic file type detection
             if file_path.endswith((".txt", ".md")):
-                # Read text file
-                with open(file_path, 'r', encoding='utf-8') as f:
+                # Text file
+                with open(file_path, "r", encoding="utf-8") as f:
                     content = f.read()
-                    
-                # Show content in preview
                 self.preview_text.setPlainText(content)
                 
             elif file_path.endswith(".pdf"):
+                # PDF file - show message that preview is not available
                 self.preview_text.setPlainText("PDF preview not available.")
+                
             else:
+                # Unsupported file type
                 self.preview_text.setPlainText("Preview not available for this file type.")
                 
         except Exception as e:
-            logger.exception(f"Error showing file preview: {e}")
-            self.preview_text.setPlainText(f"Error: {str(e)}")
+            logger.exception(f"Error previewing file {file_path}: {e}")
+            self.preview_text.setPlainText(f"Error loading file: {str(e)}")
             
     def accept(self):
         """Handle dialog acceptance."""
-        super().accept() 
+        super().accept()
+        
+        # Additional cleanup if needed
+        self.preview_text.clear()
+
+
+# For testing purposes
+if __name__ == "__main__":
+    app = QApplication(sys.argv)
+    dialog = KnowledgeManagementDialog()
+    dialog.show()
+    sys.exit(app.exec()) 

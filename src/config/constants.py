@@ -10,18 +10,21 @@ from pathlib import Path
 APP_VERSION = "5.0.0"
 
 # Directories
-MEDIA_LIBRARY_DIR = "media_library"
-OUTPUT_DIR = "output"
-KNOWLEDGE_BASE_DIR = "knowledge_base"
-LIBRARY_DIR = "library"
-LIBRARY_IMAGES_DIR = os.path.join(LIBRARY_DIR, "images")
-LIBRARY_DATA_DIR = os.path.join(LIBRARY_DIR, "data")
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+MEDIA_LIBRARY_DIR = os.path.join(ROOT_DIR, 'media_library')
+OUTPUT_DIR = os.path.join(ROOT_DIR, 'output')
+KNOWLEDGE_BASE_DIR = os.path.join(ROOT_DIR, 'knowledge_base')
+LIBRARY_DIR = os.path.join(ROOT_DIR, 'library')
+LIBRARY_IMAGES_DIR = os.path.join(LIBRARY_DIR, 'images')
+LIBRARY_DATA_DIR = os.path.join(LIBRARY_DIR, 'data')
+MEDIA_GALLERY_DIR = os.path.join(ROOT_DIR, 'media_gallery')
 
 # Files
-PRESETS_FILE = "presets.json"
-META_CREDENTIALS_FILE = "meta_credentials.json"
-META_CREDENTIALS_TEMPLATE = "meta_credentials_template.json"
-MEDIA_STATUS_FILE = "media_status.json"
+PRESETS_FILE = os.path.join(ROOT_DIR, 'presets.json')
+META_CREDENTIALS_FILE = os.path.join(ROOT_DIR, 'meta_credentials.json')
+META_CREDENTIALS_TEMPLATE_FILE = os.path.join(ROOT_DIR, 'meta_credentials_template.json')
+MEDIA_STATUS_FILE = os.path.join(ROOT_DIR, 'media_status.json')
+CLOUD_STORAGE_CONFIG_FILE = os.path.join(ROOT_DIR, 'cloud_storage_config.json')
 
 # Logging
 LOG_LEVEL = logging.INFO
@@ -58,14 +61,12 @@ MAX_KNOWLEDGE_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 MAX_LIBRARY_ITEMS = 10000
 
 # --- Application Paths ---
-ROOT_DIR = Path(__file__).parent.parent.parent
 MEDIA_LIBRARY_DIR = os.path.join(ROOT_DIR, "media_library")
 LIBRARY_DIR = os.path.join(ROOT_DIR, "library")
 OUTPUT_DIR = os.path.join(ROOT_DIR, "output")
 DOCS_DIR = os.path.join(ROOT_DIR, "docs")
 
 # --- File Paths ---
-META_CREDENTIALS_FILE = os.path.join(ROOT_DIR, "meta_credentials.json")
 MEDIA_STATUS_FILE = os.path.join(ROOT_DIR, "media_status.json")
 PRESETS_FILE = os.path.join(ROOT_DIR, "presets.json")
 CLOUD_CONFIG_FILE = os.path.join(ROOT_DIR, "cloud_storage_config.json")
@@ -81,9 +82,14 @@ MAX_PREVIEW_SIZE = (1200, 800)
 MAX_UPLOAD_SIZE = 100 * 1024 * 1024  # 100MB
 
 # --- Status Constants ---
-STATUS_KEY_GENERATION = "generation_status"
+STATUS_KEY_GENERATION = "generation"
 STATUS_KEY_POSTED_IG = "posted_to_instagram"
 STATUS_KEY_POSTED_IG_TS = "posted_to_instagram_timestamp"
+STATUS_KEY_POSTED_FB = "posted_to_facebook"
+STATUS_KEY_POSTED_FB_TS = "posted_to_facebook_timestamp"
+STATUS_KEY_SCHEDULED = "scheduled"
+STATUS_KEY_SCHEDULED_TIME = "scheduled_time"
+STATUS_KEY_SCHEDULED_PLATFORM = "scheduled_platform"
 STATUS_KEY_ERROR = "error_message"
 STATUS_KEY_METADATA = "metadata"
 
@@ -97,6 +103,11 @@ DEFAULT_MEDIA_STATUS_ENTRY = {
     STATUS_KEY_GENERATION: STATUS_VAL_OK,
     STATUS_KEY_POSTED_IG: False,
     STATUS_KEY_POSTED_IG_TS: None,
+    STATUS_KEY_POSTED_FB: False,
+    STATUS_KEY_POSTED_FB_TS: None,
+    STATUS_KEY_SCHEDULED: False,
+    STATUS_KEY_SCHEDULED_TIME: None,
+    STATUS_KEY_SCHEDULED_PLATFORM: None,
     STATUS_KEY_ERROR: None,
     STATUS_KEY_METADATA: {}
 }
@@ -241,4 +252,23 @@ ERROR_NO_FILE_SELECTED = "No file selected"
 ERROR_FILE_NOT_FOUND = "File not found"
 ERROR_INVALID_FILE_TYPE = "Invalid file type"
 ERROR_API_CONNECTION = "Could not connect to API"
-ERROR_PROCESSING = "Error processing request" 
+ERROR_PROCESSING = "Error processing request"
+
+# Crow's Eye settings
+CROWSEYE_SETTINGS = {
+    'auto_enhance': True,
+    'max_gallery_items': 10,
+}
+
+# --- Default font path ---
+DEFAULT_FONT_PATH = os.path.join(os.path.dirname(__file__), 'fonts', 'opensans.ttf')
+
+# --- API Settings ---
+MAX_API_RETRIES = 3
+API_RETRY_SLEEP = 1
+
+# --- UI Settings ---
+DEFAULT_UI_SETTINGS = {
+    'theme': 'light',
+    'font_size': 'medium',
+} 

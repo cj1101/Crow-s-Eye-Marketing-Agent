@@ -6,11 +6,11 @@ import uuid
 import os
 import json
 from typing import Dict, Any, Optional, List
-from PySide6.QtCore import Qt, Signal, QObject
+from PySide6.QtCore import Qt, Signal, QObject, QEvent
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QListWidget, QListWidgetItem, QMessageBox, QMenu,
-    QFrame, QSizePolicy, QDialog
+    QFrame, QSizePolicy, QDialog, QApplication
 )
 from PySide6.QtGui import QPixmap
 
@@ -21,29 +21,54 @@ from .scheduling_dialog import ScheduleDialog
 class SchedulingPanel(QWidget):
     """Panel for managing post schedules in the main window."""
     
-    schedule_updated = Signal()  # Emitted when schedules are updated
+    schedule_updated = Signal()  # Emitted when a schedule is updated/added/deleted
     
     def __init__(self, app_state: AppState, parent=None):
         super().__init__(parent)
         self.app_state = app_state
         self.logger = logging.getLogger(self.__class__.__name__)
         
+        # Initialize key UI elements so they're available for retranslation
+        self.title_label = QLabel()
+        self.instruction_label = QLabel()
+        self.schedules_list = QListWidget()
+        self.empty_container = QWidget()
+        self.empty_icon = QLabel()
+        self.empty_text = QLabel()
+        self.empty_button = QPushButton()
+        self.add_button = QPushButton()
+        self.buttons_container = QWidget()
+        self.edit_button = QPushButton()
+        self.delete_button = QPushButton()
+        self.activate_button = QPushButton()
+        self.view_posts_button = QPushButton()
+        self.status_label = QLabel()
+        
         self._init_ui()
+        self._connect_signals()
         self._load_schedules()
+        
+        # Check for application translator and current language
+        app = QApplication.instance()
+        if app:
+            # Get the current language from application property
+            current_language = app.property("current_language")
+            if current_language:
+                self.logger.info(f"SchedulingPanel created with current language: {current_language}")
+                
+            # Apply translations to this panel
+            self.retranslateUi()
         
     def _init_ui(self) -> None:
         """Initialize the UI components."""
         layout = QVBoxLayout(self)
+        layout.setSpacing(15)
         
-        # Header
+        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #333333;")
+        layout.addWidget(self.title_label)
+        
         header_layout = QHBoxLayout()
-        title_label = QLabel("Schedule Posts")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #333333;")
-        header_layout.addWidget(title_label)
-        
-        # Add Schedule button with icon and styling
-        add_button = QPushButton("Add Schedule")
-        add_button.setStyleSheet("""
+        self.add_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -59,48 +84,33 @@ class SchedulingPanel(QWidget):
                 background-color: #3d8b40;
             }
         """)
-        add_button.setMinimumWidth(120)
-        add_button.clicked.connect(self._add_schedule)
-        header_layout.addWidget(add_button)
-        
+        self.add_button.setMinimumWidth(120)
+        self.add_button.clicked.connect(self._add_schedule)
+        header_layout.addStretch()
+        header_layout.addWidget(self.add_button)
         layout.addLayout(header_layout)
         
-        # Instruction label
-        self.instruction_label = QLabel(
-            "Create and manage schedules to automatically post to Instagram and Facebook."
-            "\nYou can set up multiple schedules with different posting frequencies and time slots."
-        )
         self.instruction_label.setStyleSheet("color: #555555; margin: 10px 0;")
         self.instruction_label.setWordWrap(True)
         layout.addWidget(self.instruction_label)
         
-        # Empty state widget (shown when no schedules exist)
-        self.empty_state = QWidget()
-        empty_layout = QVBoxLayout(self.empty_state)
+        empty_layout = QVBoxLayout(self.empty_container)
         
-        # Calendar icon or placeholder
-        empty_icon = QLabel()
         calendar_icon_path = "icons/calendar.png"
         if os.path.exists(calendar_icon_path):
-            empty_icon.setPixmap(QPixmap(calendar_icon_path).scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio))
+            self.empty_icon.setPixmap(QPixmap(calendar_icon_path).scaled(64, 64, Qt.AspectRatioMode.KeepAspectRatio))
         else:
-            # Create text-based icon if image doesn't exist
-            empty_icon.setText("📅")
-            empty_icon.setStyleSheet("font-size: 48px; color: #4CAF50;")
-        empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            self.empty_icon.setText("📅")
+            self.empty_icon.setStyleSheet("font-size: 48px; color: #4CAF50;")
+        self.empty_icon.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(self.empty_icon)
         
-        empty_text = QLabel(
-            "No schedules yet!\n"
-            "Click 'Add Schedule' to create your first posting schedule."
-            "\n\nYou can set up automatic posting on specific days and times,"
-            "\nor create a queue to publish your posts in a specific order."
-        )
-        empty_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        empty_text.setWordWrap(True)
-        empty_text.setStyleSheet("color: #777777; font-size: 14px; margin: 20px;")
+        self.empty_text.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.empty_text.setWordWrap(True)
+        self.empty_text.setStyleSheet("color: #777777; font-size: 14px; margin: 20px;")
+        empty_layout.addWidget(self.empty_text)
         
-        empty_button = QPushButton("Create First Schedule")
-        empty_button.setStyleSheet("""
+        self.empty_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -114,19 +124,13 @@ class SchedulingPanel(QWidget):
                 background-color: #45a049;
             }
         """)
-        empty_button.setFixedWidth(200)
-        empty_button.clicked.connect(self._add_schedule)
-        
+        self.empty_button.setFixedWidth(200)
+        self.empty_button.clicked.connect(self._add_schedule)
         empty_layout.addStretch()
-        empty_layout.addWidget(empty_icon)
-        empty_layout.addWidget(empty_text)
-        empty_layout.addWidget(empty_button, 0, Qt.AlignmentFlag.AlignCenter)
+        empty_layout.addWidget(self.empty_button, 0, Qt.AlignmentFlag.AlignCenter)
         empty_layout.addStretch()
+        layout.addWidget(self.empty_container)
         
-        layout.addWidget(self.empty_state)
-        
-        # Schedules list
-        self.schedules_list = QListWidget()
         self.schedules_list.setStyleSheet("""
             QListWidget {
                 border: 1px solid #cccccc;
@@ -148,12 +152,8 @@ class SchedulingPanel(QWidget):
         self.schedules_list.itemClicked.connect(self._on_schedule_selected)
         layout.addWidget(self.schedules_list)
         
-        # Action buttons for the selected schedule
-        self.buttons_container = QWidget()
         buttons_layout = QHBoxLayout(self.buttons_container)
         
-        # Edit button
-        self.edit_button = QPushButton("Edit")
         self.edit_button.setStyleSheet("""
             QPushButton {
                 background-color: #2196F3;
@@ -174,8 +174,6 @@ class SchedulingPanel(QWidget):
         """)
         self.edit_button.clicked.connect(self._edit_selected_schedule)
         
-        # Delete button
-        self.delete_button = QPushButton("Delete")
         self.delete_button.setStyleSheet("""
             QPushButton {
                 background-color: #F44336;
@@ -196,8 +194,6 @@ class SchedulingPanel(QWidget):
         """)
         self.delete_button.clicked.connect(self._delete_selected_schedule)
         
-        # Activate/Deactivate button
-        self.activate_button = QPushButton("Activate")
         self.activate_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -218,21 +214,48 @@ class SchedulingPanel(QWidget):
         """)
         self.activate_button.clicked.connect(self._toggle_schedule_activation)
         
+        self.view_posts_button.setStyleSheet("""
+            QPushButton {
+                background-color: #4CAF50;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                font-weight: bold;
+                border-radius: 4px;
+                min-width: 120px;
+            }
+            QPushButton:hover {
+                background-color: #45a049;
+            }
+        """)
+        self.view_posts_button.clicked.connect(self._view_scheduled_posts)
+        
         buttons_layout.addWidget(self.edit_button)
         buttons_layout.addWidget(self.delete_button)
-        buttons_layout.addStretch()
         buttons_layout.addWidget(self.activate_button)
+        buttons_layout.addWidget(self.view_posts_button)
         
         layout.addWidget(self.buttons_container)
         
-        # Initially disable all buttons until a schedule is selected
-        self._update_button_states(None)
+        self._update_button_states()
         
         # Status
-        self.status_label = QLabel()
         self.status_label.setWordWrap(True)
         self.status_label.setStyleSheet("color: #555555; font-style: italic; margin-top: 5px;")
         layout.addWidget(self.status_label)
+        
+    def _connect_signals(self):
+        """Connect UI signals to slots."""
+        # Connect buttons
+        self.add_button.clicked.connect(self._on_add_schedule)
+        self.edit_button.clicked.connect(self._on_edit_schedule)
+        self.delete_button.clicked.connect(self._on_delete_schedule)
+        self.view_posts_button.clicked.connect(self._on_view_posts)
+        self.empty_button.clicked.connect(self._on_add_schedule)
+        
+        # Connect list widget
+        self.schedules_list.itemSelectionChanged.connect(self._on_selection_changed)
+        self.schedules_list.itemDoubleClicked.connect(self._on_edit_schedule)
         
     def _load_schedules(self) -> None:
         """Load schedules from the app state."""
@@ -243,7 +266,7 @@ class SchedulingPanel(QWidget):
             schedules = self._get_schedules()
             
             # Show/hide empty state
-            self.empty_state.setVisible(not schedules)
+            self.empty_container.setVisible(not schedules)
             self.schedules_list.setVisible(bool(schedules))
             
             if not schedules:
@@ -345,11 +368,12 @@ class SchedulingPanel(QWidget):
     def _add_schedule(self) -> None:
         """Add a new schedule."""
         try:
-            # Create new schedule dialog
             dialog = ScheduleDialog(self)
-            
-            # Connect signals
             dialog.schedule_saved.connect(lambda data: self.logger.info(f"Schedule saved signal received: {data.get('name', 'Unknown')}"))
+            
+            # Remove the event posting, call retranslateUi directly
+            # QApplication.instance().postEvent(dialog, QEvent(QEvent.Type.LanguageChange))
+            dialog.retranslateUi() # Directly translate the dialog UI
             
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 # Get schedule data
@@ -420,8 +444,8 @@ class SchedulingPanel(QWidget):
             self.logger.exception(f"Error adding schedule: {e}")
             QMessageBox.critical(
                 self,
-                "Add Error",
-                f"Failed to add schedule: {str(e)}"
+                self.tr("Add Error"),
+                self.tr("Failed to add schedule: {error_message}").format(error_message=str(e))
             )
             
     def _edit_schedule(self, item: QListWidgetItem) -> None:
@@ -434,6 +458,11 @@ class SchedulingPanel(QWidget):
                 
             # Create edit dialog
             dialog = ScheduleDialog(self, schedule_data)
+            
+            # Remove the event posting, call retranslateUi directly
+            # QApplication.instance().postEvent(dialog, QEvent(QEvent.Type.LanguageChange))
+            dialog.retranslateUi() # Directly translate the dialog UI
+            
             if dialog.exec() == QDialog.DialogCode.Accepted:
                 # Get updated schedule data
                 updated_data = dialog.schedule_data
@@ -461,8 +490,8 @@ class SchedulingPanel(QWidget):
             self.logger.exception(f"Error editing schedule: {e}")
             QMessageBox.critical(
                 self,
-                "Edit Error",
-                f"Failed to edit schedule: {str(e)}"
+                self.tr("Edit Error"),
+                self.tr("Failed to edit schedule: {error_message}").format(error_message=str(e))
             )
             
     def _delete_schedule(self, item: QListWidgetItem) -> None:
@@ -477,8 +506,8 @@ class SchedulingPanel(QWidget):
             name = schedule_data.get("name", "Unnamed Schedule")
             reply = QMessageBox.question(
                 self,
-                "Delete Schedule",
-                f"Are you sure you want to delete the schedule '{name}'?",
+                self.tr("Delete Schedule"),
+                self.tr("Are you sure you want to delete the schedule '{schedule_name}'?").format(schedule_name=name),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
                 QMessageBox.StandardButton.No
             )
@@ -504,8 +533,8 @@ class SchedulingPanel(QWidget):
             self.logger.exception(f"Error deleting schedule: {e}")
             QMessageBox.critical(
                 self,
-                "Delete Error",
-                f"Failed to delete schedule: {str(e)}"
+                self.tr("Delete Error"),
+                self.tr("Failed to delete schedule: {error_message}").format(error_message=str(e))
             )
             
     def _show_context_menu(self, pos) -> None:
@@ -519,8 +548,8 @@ class SchedulingPanel(QWidget):
             # Create menu
             menu = QMenu(self)
             
-            edit_action = menu.addAction("Edit Schedule")
-            delete_action = menu.addAction("Delete Schedule")
+            edit_action = menu.addAction(self.tr("Edit Schedule"))
+            delete_action = menu.addAction(self.tr("Delete Schedule"))
             
             # Show menu
             action = menu.exec(self.schedules_list.mapToGlobal(pos))
@@ -543,6 +572,7 @@ class SchedulingPanel(QWidget):
         
         self.edit_button.setEnabled(has_selection)
         self.delete_button.setEnabled(has_selection)
+        self.view_posts_button.setEnabled(has_selection)
         
         if has_selection:
             # Get the schedule data
@@ -551,7 +581,7 @@ class SchedulingPanel(QWidget):
             
             # Update the activate button text based on current state
             if is_active:
-                self.activate_button.setText("Deactivate")
+                self.activate_button.setText(self.tr("Deactivate"))
                 self.activate_button.setStyleSheet("""
                     QPushButton {
                         background-color: #FF9800;
@@ -567,7 +597,7 @@ class SchedulingPanel(QWidget):
                     }
                 """)
             else:
-                self.activate_button.setText("Activate")
+                self.activate_button.setText(self.tr("Activate"))
                 self.activate_button.setStyleSheet("""
                     QPushButton {
                         background-color: #4CAF50;
@@ -585,7 +615,7 @@ class SchedulingPanel(QWidget):
             
             self.activate_button.setEnabled(True)
         else:
-            self.activate_button.setText("Activate")
+            self.activate_button.setText(self.tr("Activate"))
             self.activate_button.setEnabled(False)
             
         # Show/hide the buttons container
@@ -639,3 +669,162 @@ class SchedulingPanel(QWidget):
         
         # Reload the schedules list
         self._load_schedules() 
+
+    def _load_schedules_from_file(self) -> List[Dict[str, Any]]:
+        """Load schedules from the JSON file."""
+        # Ensure this method exists or is correctly named
+        if not os.path.exists(const.SCHEDULES_FILE):
+            return []
+        try:
+            with open(const.SCHEDULES_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+        except (IOError, json.JSONDecodeError) as e:
+            self.logger.error(f"Error loading schedules: {e}")
+            return []
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        """Retranslate all UI elements in SchedulingPanel."""
+        self.title_label.setText(self.tr("Manage Posting Schedules"))
+        self.instruction_label.setText(self.tr(
+            "Create and manage schedules to automatically post to Instagram and Facebook."
+            "\nYou can set up multiple schedules with different posting frequencies and time slots."
+        ))
+        self.empty_text.setText(self.tr(
+            "No schedules yet!\n"
+            "Click 'Add Schedule' to create your first posting schedule."
+            "\n\nYou can set up automatic posting on specific days and times,"
+            "\nor create a queue to publish your posts in a specific order."
+        ))
+        self.empty_button.setText(self.tr("Create First Schedule"))
+        self.add_button.setText(self.tr("Add Schedule"))
+        
+        # Buttons in self.buttons_container
+        self.edit_button.setText(self.tr("Edit"))
+        self.delete_button.setText(self.tr("Delete"))
+        self.view_posts_button.setText(self.tr("View Scheduled Posts"))
+
+        # Reload schedules to update list items if their text construction involves self.tr()
+        self._load_schedules() 
+        # Ensure dependent methods like _update_button_states are called if needed after retranslation
+        self._update_button_states(self.schedules_list.currentItem())
+
+    def _update_list_item_text(self, item: QListWidgetItem, schedule_data: Dict[str, Any]) -> None:
+        """Update the display text of a list item."""
+        name = schedule_data.get("name", self.tr("Unnamed Schedule"))
+        mode = schedule_data.get("mode", "N/A") # Mode itself might need translation if keys are like "basic", "advanced"
+        mode_display = self.tr(mode.capitalize()) if mode else self.tr("N/A") # Translate the mode for display
+        status = self.tr("Active") if schedule_data.get("active") else self.tr("Inactive")
+        item_text = f"{name} ({mode_display}) - {status}"
+        item.setText(item_text)
+        item.setData(Qt.ItemDataRole.UserRole, schedule_data)
+
+    def _view_scheduled_posts(self) -> None:
+        """Show a dialog with posts generated for the active schedule (placeholder)."""
+        active_schedule = None
+        schedules = self._get_schedules()
+        for schedule in schedules:
+            if schedule.get("active"):
+                active_schedule = schedule
+                break
+        
+        if active_schedule:
+            QMessageBox.information(
+                self, 
+                self.tr("View Posts"), 
+                self.tr("Showing posts for schedule: {schedule_name}\n(This is a placeholder feature.)").format(schedule_name=active_schedule.get("name", self.tr("Unnamed Schedule")))
+            )
+        else:
+            QMessageBox.warning(self, self.tr("View Posts"), self.tr("No active schedule selected to view posts."))
+
+    def _on_add_schedule(self):
+        """Handle add schedule button click."""
+        try:
+            from .scheduling_dialog import ScheduleDialog
+            dialog = ScheduleDialog(self)
+            if dialog.exec() == QDialog.DialogCode.Accepted and dialog.schedule_data:
+                self._add_schedule(dialog.schedule_data)
+        except Exception as e:
+            self.logger.exception(f"Failed to add schedule: {e}")
+            QMessageBox.critical(self, self.tr("Add Error"), self.tr(f"Failed to add schedule: {e}"))
+
+    def _on_edit_schedule(self):
+        """Handle edit schedule button click."""
+        try:
+            selected_items = self.schedules_list.selectedItems()
+            if not selected_items:
+                return
+                
+            selected_item = selected_items[0]
+            schedule_id = selected_item.data(Qt.ItemDataRole.UserRole)
+            if not schedule_id:
+                return
+                
+            schedule_data = self.app_state.get_schedule(schedule_id)
+            if schedule_data:
+                from .scheduling_dialog import ScheduleDialog
+                dialog = ScheduleDialog(self, schedule_data)
+                if dialog.exec() == QDialog.DialogCode.Accepted and dialog.schedule_data:
+                    self._update_schedule(schedule_id, dialog.schedule_data)
+        except Exception as e:
+            self.logger.exception(f"Failed to edit schedule: {e}")
+            QMessageBox.critical(self, self.tr("Edit Error"), self.tr(f"Failed to edit schedule: {e}"))
+
+    def _on_delete_schedule(self):
+        """Handle delete schedule button click."""
+        try:
+            selected_items = self.schedules_list.selectedItems()
+            if not selected_items:
+                return
+                
+            selected_item = selected_items[0]
+            schedule_id = selected_item.data(Qt.ItemDataRole.UserRole)
+            schedule_name = selected_item.text().strip()
+            
+            # Confirm deletion
+            confirm = QMessageBox.question(
+                self,
+                self.tr("Delete Schedule"),
+                self.tr(f"Are you sure you want to delete the schedule '{schedule_name}'?"),
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if confirm == QMessageBox.StandardButton.Yes:
+                self._delete_schedule(schedule_id)
+        except Exception as e:
+            self.logger.exception(f"Failed to delete schedule: {e}")
+            QMessageBox.critical(self, self.tr("Delete Error"), self.tr(f"Failed to delete schedule: {e}"))
+    
+    def _on_view_posts(self):
+        """Handle view posts button click."""
+        try:
+            selected_items = self.schedules_list.selectedItems()
+            if not selected_items:
+                return
+                
+            selected_item = selected_items[0]
+            schedule_id = selected_item.data(Qt.ItemDataRole.UserRole)
+            schedule_name = selected_item.text().strip()
+            
+            # This is just a placeholder for now
+            QMessageBox.information(
+                self,
+                self.tr("View Posts"),
+                self.tr(f"Showing posts for schedule: {schedule_name}\n(This is a placeholder feature.)")
+            )
+        except Exception as e:
+            self.logger.exception(f"Failed to view posts: {e}")
+            
+    def _on_selection_changed(self):
+        """Handle selection change in the schedules list."""
+        selected_items = self.schedules_list.selectedItems()
+        enable_buttons = len(selected_items) > 0
+        
+        self.edit_button.setEnabled(enable_buttons)
+        self.delete_button.setEnabled(enable_buttons)
+        self.view_posts_button.setEnabled(enable_buttons) 

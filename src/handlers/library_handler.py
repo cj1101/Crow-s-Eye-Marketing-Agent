@@ -13,6 +13,22 @@ from pathlib import Path
 
 from PIL import Image
 
+from src.config import constants # Added import
+from src.handlers.media_handler import MediaHandler  # Add MediaHandler import
+from src.models.app_state import AppState  # Import AppState
+
+# Define a minimal mock AppState for MediaHandler
+class MockAppState:
+    """Minimal AppState for MediaHandler to use in LibraryManager."""
+    def __init__(self):
+        self.media_generation_status = {}
+        self.selected_media = None
+        self.edited_media = None
+        self.current_display_media = None
+        self.showing_edited = False
+        self.current_caption = ""
+        self.context_files = []
+        
 class LibraryManager:
     """Manages the media library functionality."""
     
@@ -32,6 +48,10 @@ class LibraryManager:
         
         # Load library data
         self.library_data = self._load_library_data()
+        
+        # Create a media handler instance with a mock AppState
+        mock_app_state = MockAppState()
+        self.media_handler = MediaHandler(mock_app_state)
         
     def _load_library_data(self) -> Dict[str, Any]:
         """Load library data from the JSON file."""
@@ -69,7 +89,8 @@ class LibraryManager:
             return False
             
     def add_item_from_path(self, file_path: str, caption: str = "", 
-                         date_added: str = None, metadata: dict = None) -> Optional[Dict[str, Any]]:
+                         date_added: str = None, metadata: dict = None, 
+                         is_post_ready: bool = False) -> Optional[Dict[str, Any]]:
         """
         Add an item to the library from a file path.
         
@@ -78,111 +99,134 @@ class LibraryManager:
             caption: Caption text for the image
             date_added: ISO format date string (defaults to now)
             metadata: Additional metadata for the item
+            is_post_ready: Flag to mark item as post-ready (photo or video)
             
         Returns:
             dict: Item data of the added item, or None on failure
         """
         try:
-            # Open the image to get its data
-            with Image.open(file_path) as img:
-                # Generate unique ID
+            # Determine base item type (photo or video)
+            base_item_type = "unknown"
+            file_ext = os.path.splitext(file_path)[1].lower()
+
+            if file_ext in constants.SUPPORTED_IMAGE_FORMATS:
+                base_item_type = "photo"
+            elif file_ext in constants.SUPPORTED_VIDEO_FORMATS:
+                base_item_type = "video"
+            else:
+                self.logger.warning(f"Unsupported file type for {file_path}: {file_ext}")
+                return None
+
+            # Determine final item_type based on is_post_ready
+            item_type = "unknown"
+            if is_post_ready:
+                if base_item_type == "photo":
+                    item_type = "post_ready_photo"
+                elif base_item_type == "video":
+                    item_type = "post_ready_video"
+                if not caption:
+                    self.logger.warning(f"Adding post-ready item {file_path} without a caption.")
+            else:
+                if base_item_type == "photo":
+                    item_type = "raw_photo"
+                elif base_item_type == "video":
+                    item_type = "raw_video"
+            
+            if item_type == "unknown": # Should not happen if base_item_type is photo/video
+                self.logger.error(f"Could not determine item type for {file_path}")
+                return None
+
+            # Process based on base type (photo or video)
+            if base_item_type == "photo":
+                with Image.open(file_path) as img:
+                    item_id = str(uuid.uuid4())
+                    filename = f"{item_id}{file_ext}" 
+                    dest_path = self.images_dir / filename
+                    shutil.copy2(file_path, dest_path)
+                    width, height = img.size
+                    item_metadata = {"original_mode": img.mode}
+            elif base_item_type == "video":
                 item_id = str(uuid.uuid4())
-                
-                # Generate filename
-                filename = f"{item_id}.png"
+                filename = f"{item_id}{file_ext}" 
                 dest_path = self.images_dir / filename
-                
-                # Copy the file to the library
                 shutil.copy2(file_path, dest_path)
-                
-                # Get image dimensions
-                width, height = img.size
-                
-                # Create item metadata
-                item_metadata = {
-                    "original_mode": img.mode
-                }
-                
-                # Update with additional metadata if provided
-                if metadata and isinstance(metadata, dict):
-                    item_metadata.update(metadata)
-                
-                # Create item entry
-                item_data = {
-                    "id": item_id,
-                    "filename": filename,
-                    "path": str(dest_path.absolute()),
-                    "caption": caption,
-                    "date_added": date_added or datetime.now().isoformat(),
-                    "tags": [],
-                    "dimensions": [width, height],
-                    "size_str": f"{os.path.getsize(dest_path) / 1024:.1f} KB",
-                    "metadata": item_metadata
-                }
-                
-                # Add to library data
-                self.library_data["items"][item_id] = item_data
-                
-                # Save library data
-                self._save_library_data(self.library_data)
-                
-                return item_data
+                width, height = None, None 
+                item_metadata = {}
+            else: # Should be caught by earlier checks
+                self.logger.error(f"Internal error: Unexpected base_item_type {base_item_type}")
+                return None
+
+            if metadata and isinstance(metadata, dict):
+                item_metadata.update(metadata)
+            
+            item_data = {
+                "id": item_id,
+                "type": item_type, # Updated type field
+                "filename": filename,
+                "path": str(dest_path.absolute()),
+                "caption": caption,
+                "date_added": date_added or datetime.now().isoformat(),
+                "tags": [],
+                "dimensions": [width, height],
+                "size_str": f"{os.path.getsize(dest_path) / 1024:.1f} KB",
+                "metadata": item_metadata
+            }
+            
+            # Add to library data
+            self.library_data["items"][item_id] = item_data
+            
+            # Save library data
+            self._save_library_data(self.library_data)
+            
+            return item_data
                 
         except Exception as e:
             self.logger.error(f"Error adding item from path to library: {e}")
             return None
             
     def add_item(self, image: Image.Image, caption: str = "", 
-                date_added: str = None, metadata: dict = None) -> Optional[str]:
+                date_added: str = None, metadata: dict = None, 
+                is_post_ready: bool = False) -> Optional[str]:
         """
         Add an item to the library.
         
         Args:
-            image: PIL Image object
+            image: PIL Image object (implies it's a photo)
             caption: Caption text for the image
             date_added: ISO format date string (defaults to now)
             metadata: Additional metadata for the item
+            is_post_ready: Flag to mark item as post-ready photo
             
         Returns:
             str: ID of the added item, or None on failure
         """
         try:
-            # Generate unique ID
             item_id = str(uuid.uuid4())
-            
-            # Generate filename
-            filename = f"{item_id}.png"
+            filename = f"{item_id}.png" 
             file_path = self.images_dir / filename
-            
-            # Preserve image mode
             original_mode = image.mode
-            
-            # Save image with high quality settings
+
             if original_mode == 'RGBA':
-                # PNG with maximum compression - lossless
                 image.save(file_path, format="PNG", compress_level=0)
             else:
-                # Convert to RGB if needed
                 if original_mode != 'RGB':
                     image = image.convert('RGB')
-                # PNG with maximum compression - lossless
                 image.save(file_path, format="PNG", compress_level=0)
             
-            # Get image dimensions
             width, height = image.size
-            
-            # Create item metadata
-            item_metadata = {
-                "original_mode": original_mode
-            }
-            
-            # Update with additional metadata if provided
+            item_metadata = {"original_mode": original_mode}
+
             if metadata and isinstance(metadata, dict):
                 item_metadata.update(metadata)
             
-            # Create item entry
+            # Determine item_type based on is_post_ready
+            item_type = "post_ready_photo" if is_post_ready else "raw_photo"
+            if is_post_ready and not caption:
+                self.logger.warning(f"Adding post-ready image item {filename} without a caption.")
+
             item_data = {
                 "id": item_id,
+                "type": item_type, # Updated type field
                 "filename": filename,
                 "path": str(file_path.absolute()),
                 "caption": caption,
@@ -442,3 +486,79 @@ class LibraryManager:
         except Exception as e:
             self.logger.error(f"Error adding item {item_id} to collection {collection_id}: {e}")
             return False 
+
+    # --- Item Retrieval by Type ---
+    def _ensure_item_details(self, item: Dict[str, Any]) -> Dict[str, Any]:
+        """Helper to ensure path, dimensions, and size are set for an item."""
+        if "path" not in item and "filename" in item:
+            file_path = self.images_dir / item["filename"]
+            item["path"] = str(file_path.absolute())
+        
+        item_type = item.get("type", "unknown")
+
+        if "dimensions" not in item and "path" in item and item_type not in ["raw_video", "post_ready_video"]:
+            try:
+                with Image.open(item["path"]) as img:
+                    item["dimensions"] = [img.width, img.height]
+            except Exception:
+                item["dimensions"] = [None, None] # Use None for consistency
+        elif item_type in ["raw_video", "post_ready_video"] and "dimensions" not in item:
+             item["dimensions"] = [None, None] # Videos might not have dimensions initially
+
+        if "size_str" not in item and "path" in item and Path(item["path"]).exists():
+            try:
+                size_bytes = os.path.getsize(item["path"])
+                item["size_str"] = f"{size_bytes / 1024:.1f} KB"
+            except Exception:
+                item["size_str"] = "Unknown"
+        elif "size_str" not in item: # If path doesn't exist or other issue
+            item["size_str"] = "Unknown"
+            
+        return item
+
+    def get_items_by_type(self, item_type_or_types: str | List[str]) -> List[Dict[str, Any]]:
+        """Get items filtered by a specific type or list of types."""
+        try:
+            all_items = list(self.library_data["items"].values())
+            
+            types_to_match = []
+            if isinstance(item_type_or_types, str):
+                types_to_match.append(item_type_or_types)
+            elif isinstance(item_type_or_types, list):
+                types_to_match = item_type_or_types
+            else:
+                self.logger.warning("Invalid type for item_type_or_types in get_items_by_type")
+                return []
+
+            filtered_items = [
+                self._ensure_item_details(item.copy()) 
+                for item in all_items 
+                if item.get("type") in types_to_match
+            ]
+            
+            # Sort by date added (newest first)
+            filtered_items.sort(key=lambda x: x.get("date_added", ""), reverse=True)
+            return filtered_items
+        except Exception as e:
+            self.logger.error(f"Error in get_items_by_type: {e}")
+            return []
+
+    def get_raw_photos(self) -> List[Dict[str, Any]]:
+        """Get all raw photo items."""
+        return self.get_items_by_type("raw_photo")
+
+    def get_raw_videos(self) -> List[Dict[str, Any]]:
+        """Get all raw video items."""
+        return self.get_items_by_type("raw_video")
+
+    def get_post_ready_photos(self) -> List[Dict[str, Any]]:
+        """Get all post-ready photo items."""
+        return self.get_items_by_type("post_ready_photo")
+
+    def get_post_ready_videos(self) -> List[Dict[str, Any]]:
+        """Get all post-ready video items."""
+        return self.get_items_by_type("post_ready_video")
+
+    def get_all_post_ready_items(self) -> List[Dict[str, Any]]:
+        """Get all post-ready items (both photos and videos)."""
+        return self.get_items_by_type(["post_ready_photo", "post_ready_video"]) 

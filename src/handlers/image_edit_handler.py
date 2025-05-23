@@ -7,7 +7,7 @@ import base64
 import tempfile
 import io
 from typing import Dict, Any, Optional, List, Tuple, Union
-from PIL import Image
+from PIL import Image, ImageDraw, ImageFont, ImageStat
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
@@ -342,4 +342,254 @@ class ImageEditHandler:
             
         except Exception as e:
             self.logger.error(f"Error applying filters to image: {e}")
-            return False, "", f"Error during filter application: {str(e)}" 
+            return False, "", f"Error during filter application: {str(e)}"
+
+    def optimize_for_story(self, image_path: str, target_aspect_ratio: float = 9/16, background_color=(0,0,0)) -> Tuple[bool, str, str]:
+        """
+        Optimizes an image for a story format (e.g., 9:16 aspect ratio).
+        The image is scaled to fill the target aspect ratio by covering it, 
+        and then cropped from the center if necessary. No black bars are added.
+        """
+        try:
+            if not os.path.exists(image_path):
+                return False, "", f"Image file not found: {image_path}"
+
+            img = Image.open(image_path).convert("RGB")
+            original_width, original_height = img.width, img.height
+            original_aspect_ratio = original_width / original_height
+
+            if abs(original_aspect_ratio - target_aspect_ratio) < 0.001:
+                self.logger.info(f"Image {image_path} already has target aspect ratio.")
+                base_name, ext = os.path.splitext(os.path.basename(image_path))
+                optimized_file_path = os.path.join(TEMP_DIR, f"{base_name}_story_optimized{ext}")
+                img.save(optimized_file_path, quality=95)
+                return True, optimized_file_path, "Image already optimized for story."
+
+            # Determine the dimensions of the crop box based on the target aspect ratio
+            if original_aspect_ratio > target_aspect_ratio:
+                # Original is wider than target (e.g., landscape for portrait target)
+                # Crop the sides: height remains original, width is calculated
+                crop_height = original_height
+                crop_width = int(crop_height * target_aspect_ratio)
+            else:
+                # Original is taller or same aspect ratio (but different from target, handled above)
+                # Crop the top/bottom: width remains original, height is calculated
+                crop_width = original_width
+                crop_height = int(crop_width / target_aspect_ratio)
+
+            # Calculate crop box (center crop)
+            left = (original_width - crop_width) / 2
+            top = (original_height - crop_height) / 2
+            right = left + crop_width
+            bottom = top + crop_height
+
+            cropped_img = img.crop((left, top, right, bottom))
+            
+            # Optional: If a specific output resolution is desired (e.g., 1080x1920 for stories)
+            # Resize the cropped image here. For now, we maintain the aspect ratio 
+            # with the cropped dimensions.
+            # Example for fixed output size:
+            # target_output_w, target_output_h = 1080, 1920 
+            # if cropped_img.width != target_output_w or cropped_img.height != target_output_h:
+            #    cropped_img = cropped_img.resize((target_output_w, target_output_h), Image.Resampling.LANCZOS)
+
+            base_name, ext = os.path.splitext(os.path.basename(image_path))
+            optimized_file_path = os.path.join(TEMP_DIR, f"{base_name}_story_optimized{ext}")
+            cropped_img.save(optimized_file_path, quality=95)
+            self.logger.info(f"Successfully saved story-optimized image to {optimized_file_path} with new dimensions {cropped_img.size}")
+            return True, optimized_file_path, "Image successfully optimized for story."
+
+        except Exception as e:
+            self.logger.error(f"Error optimizing image for story: {e}", exc_info=True)
+            return False, "", f"Error optimizing image for story: {str(e)}"
+
+    def add_caption_overlay(self, image_path: str, caption_text: str, 
+                              position: str = "bottom",
+                              font_path: Optional[str] = None, 
+                              font_size_px: int = 0, 
+                              padding: int = 20) -> Tuple[bool, str, str]:
+        """
+        Adds a text caption overlay to an image.
+        Text is white with a black outline, no background box.
+        """
+        try:
+            if not os.path.exists(image_path):
+                return False, "", f"Image file not found: {image_path}"
+
+            img = Image.open(image_path).convert("RGBA")
+            draw = ImageDraw.Draw(img)
+            img_width, img_height = img.size
+
+            actual_font_path = font_path if font_path and os.path.exists(font_path) else const.DEFAULT_FONT_PATH
+            # dynamic_font_size is already calculated based on image height / settings
+
+            if not os.path.exists(actual_font_path):
+                self.logger.warning(
+                    f"Custom font not found at {actual_font_path}. Using PIL default. "
+                    f"Font sizing will be very limited and may not reflect chosen sizes accurately. "
+                    f"Please install a .ttf font (e.g., opensans.ttf) at the specified path for best results."
+                )
+                # Attempt to use font_size_px as a hint for the default font, results may vary significantly
+                try:
+                    font = ImageFont.load_default(size=font_size_px)
+                except TypeError:
+                    # Older PIL versions might not accept size, or it may not be effective
+                    font = ImageFont.load_default() 
+                # dynamic_font_size is already set from MainWindow, we'll use it for calculations,
+                # but the visual rendering with default font might not match.
+            else:
+                try:
+                    font = ImageFont.truetype(actual_font_path, font_size_px)
+                except IOError:
+                    self.logger.warning(f"Could not load font {actual_font_path}. Using PIL default. Sizing issues may occur.")
+                    try:
+                        font = ImageFont.load_default(size=font_size_px)
+                    except TypeError:
+                        font = ImageFont.load_default()
+            
+            # Ensure dynamic_font_size is at least a minimum usable value for calculations
+            # The actual rendered size with default font might still be fixed.
+            # dynamic_font_size = max(10, font_size_px) # font_size_px is already calculated and constrained in MainWindow
+
+            lines = []
+            words = caption_text.split()
+            current_line = ""
+            max_text_width = img_width - (2 * padding)
+
+            for word in words:
+                # Check width with the current font
+                if hasattr(font, 'getbbox'):
+                    test_line_bbox = font.getbbox(current_line + word + " ")
+                    test_line_width = test_line_bbox[2] - test_line_bbox[0]
+                elif hasattr(font, 'getsize'):
+                    test_line_width, _ = font.getsize(current_line + word + " ")
+                else: 
+                    test_line_width = len(current_line + word + " ") * (font_size_px * 0.6)
+
+                if test_line_width <= max_text_width:
+                    current_line += word + " "
+                else:
+                    lines.append(current_line.strip())
+                    current_line = word + " "
+            lines.append(current_line.strip())
+
+            total_text_height = 0
+            line_heights = []
+            for line_idx, line_content in enumerate(lines):
+                if hasattr(font, 'getbbox'):
+                    line_bbox = font.getbbox(line_content)
+                    h = line_bbox[3] - line_bbox[1]
+                elif hasattr(font, 'getsize'):
+                    _, h = font.getsize(line_content)
+                else:
+                    h = font_size_px 
+                line_heights.append(h)
+                total_text_height += h
+                if line_idx < len(lines) - 1:
+                    total_text_height += (font_size_px // 4) 
+
+            if position == "top":
+                text_start_y = padding
+            elif position == "center":
+                text_start_y = (img_height - total_text_height) / 2
+            else: # bottom
+                text_start_y = img_height - total_text_height - padding
+            
+            current_y = text_start_y
+            # Make outline radius and thickness more substantial for visibility
+            # outline_radius = max(1, font_size_px // 15)
+            outline_thickness = max(1, int(font_size_px * 0.06)) # e.g., for 30px font, ~2px outline
+            outline_thickness = min(outline_thickness, 5) # Cap thickness to avoid excessive blockiness for very large fonts
+
+            # Determine optimal text color based on background
+            # Calculate the bounding box of the entire text block
+            text_block_x_positions = []
+            max_text_block_width = 0
+            for line_content_for_bbox in lines:
+                if hasattr(font, 'getbbox'):
+                    line_bbox_for_calc = font.getbbox(line_content_for_bbox)
+                    text_width_for_calc = line_bbox_for_calc[2] - line_bbox_for_calc[0]
+                elif hasattr(font, 'getsize'):
+                    text_width_for_calc, _ = font.getsize(line_content_for_bbox)
+                else:
+                    text_width_for_calc = len(line_content_for_bbox) * (font_size_px * 0.6)
+                text_block_x_positions.append((img_width - text_width_for_calc) / 2)
+                if text_width_for_calc > max_text_block_width:
+                    max_text_block_width = text_width_for_calc
+            
+            text_block_left = min(text_block_x_positions) if text_block_x_positions else padding
+            text_block_right = text_block_left + max_text_block_width
+            text_block_top = text_start_y
+            text_block_bottom = text_start_y + total_text_height
+
+            # Ensure coordinates are within image bounds and are integers
+            text_block_left = max(0, int(text_block_left))
+            text_block_top = max(0, int(text_block_top))
+            text_block_right = min(img_width, int(text_block_right))
+            text_block_bottom = min(img_height, int(text_block_bottom))
+
+            text_color = (255, 255, 255, 255) # Default white
+            outline_color = (0, 0, 0, 255) # Default black
+
+            if text_block_right > text_block_left and text_block_bottom > text_block_top:
+                # Crop the region of the original image where text will be placed
+                # Use a copy of the image for analysis to avoid altering the one being drawn on prematurely
+                image_for_analysis = img.copy() 
+                background_region = image_for_analysis.crop((text_block_left, text_block_top, text_block_right, text_block_bottom))
+                
+                if background_region.size[0] > 0 and background_region.size[1] > 0:
+                    # Convert to grayscale and get average pixel brightness
+                    avg_brightness = ImageStat.Stat(background_region.convert('L')).mean[0]
+                    self.logger.info(f"Average brightness of background for text: {avg_brightness}")
+                    if avg_brightness < 128: # Dark background
+                        text_color = (255, 255, 255, 255) # White text
+                        outline_color = (0, 0, 0, 255)   # Black outline
+                    else: # Light background
+                        text_color = (0, 0, 0, 255)       # Black text
+                        outline_color = (255, 255, 255, 255) # White outline
+                else:
+                    self.logger.warning("Background region for text analysis is empty.")        
+            else:
+                self.logger.warning("Cannot determine text background region, using default text colors.")
+
+            for i, line in enumerate(lines):
+                if hasattr(font, 'getbbox'):
+                    line_bbox = font.getbbox(line)
+                    text_width = line_bbox[2] - line_bbox[0]
+                elif hasattr(font, 'getsize'):
+                    text_width, _ = font.getsize(line)
+                else:
+                    text_width = len(line) * (font_size_px*0.6)
+
+                x_position = (img_width - text_width) / 2 
+
+                # Draw thicker outline (black)
+                # Iterate for a thicker outline effect by drawing multiple offset texts
+                for dx in range(-outline_thickness, outline_thickness + 1):
+                    for dy in range(-outline_thickness, outline_thickness + 1):
+                        # Optional: for a more rounded/less boxy thick outline, 
+                        # you could check if (dx*dx + dy*dy) is within a certain radius squared,
+                        # but for simplicity, a square boundary for offsets works well for thickness.
+                        if dx != 0 or dy != 0: # Don't redraw at the exact same spot as the main text yet
+                           draw.text((x_position + dx, current_y + dy), line, font=font, fill=outline_color) # Use determined outline color
+                
+                # Draw main text (white) over the outline
+                draw.text((x_position, current_y), line, font=font, fill=text_color) # Use determined text color
+                
+                current_y += line_heights[i] + (font_size_px // 4)
+
+            base_name, ext = os.path.splitext(os.path.basename(image_path))
+            overlay_file_path = os.path.join(TEMP_DIR, f"{base_name}_caption_overlay{ext}")
+            
+            if img.mode == 'RGBA' and ext.lower() in ['.jpg', '.jpeg']:
+                final_img = img.convert('RGB')
+            else:
+                final_img = img
+
+            final_img.save(overlay_file_path, quality=95)
+            self.logger.info(f"Successfully saved image with caption overlay to {overlay_file_path}")
+            return True, overlay_file_path, "Image successfully updated with caption overlay."
+
+        except Exception as e:
+            self.logger.error(f"Error adding caption overlay: {e}", exc_info=True)
+            return False, "", f"Error adding caption overlay: {str(e)}" 

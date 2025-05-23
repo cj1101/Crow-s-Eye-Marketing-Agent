@@ -60,6 +60,72 @@
             "metadata": {
                 "original_mode": "RGB"
             }
+        },
+        "0ba2f959-a853-42f5-bd3d-2357e18b64d1": {
+            "id": "0ba2f959-a853-42f5-bd3d-2357e18b64d1",
+            "filename": "0ba2f959-a853-42f5-bd3d-2357e18b64d1.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\0ba2f959-a853-42f5-bd3d-2357e18b64d1.png",
+            "caption": "Hop into savings this Easter!  Get 20% OFF all our freshly baked loaves (like these beauties!) all week long.  They're practically begging to be part of your Easter brunch! \ud83d\udc30\ud83c\udf5e #EasterBakeSale #BreadLove #20PercentOff #ArtisanBread",
+            "date_added": "2025-05-12T18:37:42.035436",
+            "tags": [],
+            "dimensions": [
+                225,
+                225
+            ],
+            "size_str": "20.8 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
+        },
+        "6852a587-3968-4310-85e7-b641bead48d4": {
+            "id": "6852a587-3968-4310-85e7-b641bead48d4",
+            "filename": "6852a587-3968-4310-85e7-b641bead48d4.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\6852a587-3968-4310-85e7-b641bead48d4.png",
+            "caption": "The aroma of freshly baked bread fills the air in our little bakery!  This is where artisan baking meets modern style.  Come experience the magic. \u2728 #artisanbaking #smallbakery #supportlocal #breadlover #bakerylife",
+            "date_added": "2025-05-21T13:14:07.353028",
+            "tags": [],
+            "dimensions": [
+                800,
+                521
+            ],
+            "size_str": "69.3 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
+        },
+        "de920f6a-09f7-4684-bb86-ca481f9eb48d": {
+            "id": "de920f6a-09f7-4684-bb86-ca481f9eb48d",
+            "type": "raw_photo",
+            "filename": "de920f6a-09f7-4684-bb86-ca481f9eb48d.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\de920f6a-09f7-4684-bb86-ca481f9eb48d.png",
+            "caption": "This loaf is so good, it's practically begging to be the logo for my new bakery, \"Breadsmith.\"  Anyone want to invest in my sourdough dreams? \ud83e\udd56\ud83d\ude02 #Breadsmith #BakeryLife #SourdoughDreams #LogoDesign",
+            "date_added": "2025-05-21T14:43:49.136691",
+            "tags": [],
+            "dimensions": [
+                1024,
+                1024
+            ],
+            "size_str": "673.4 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
+        },
+        "8622eeba-c4b5-4218-aceb-c22f536bfa2d": {
+            "id": "8622eeba-c4b5-4218-aceb-c22f536bfa2d",
+            "type": "raw_photo",
+            "filename": "8622eeba-c4b5-4218-aceb-c22f536bfa2d.jpg",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\8622eeba-c4b5-4218-aceb-c22f536bfa2d.jpg",
+            "caption": "Breadbreadbread",
+            "date_added": "2025-05-21T15:07:47.063081",
+            "tags": [],
+            "dimensions": [
+                612,
+                408
+            ],
+            "size_str": "158.4 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
         }
     },
     "last_updated": "2025-04-21T20:56:19.275364",

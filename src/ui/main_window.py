@@ -33,7 +33,7 @@ from .components.status_bar import StatusBarWidget
 from .library_window import LibraryWindow
 from .scheduling_panel import SchedulingPanel
 from .scheduling_dialog import ScheduleDialog
-from .login_dialog import LoginDialog
+from .modern_login_dialog import ModernLoginDialog
 from .preset_manager import PresetManager
 
 class MainWindow(QMainWindow):
@@ -466,8 +466,8 @@ class MainWindow(QMainWindow):
                     
                 return
             
-            # Create and show login dialog
-            dialog = LoginDialog(self)
+            # Create and show modern login dialog
+            dialog = ModernLoginDialog(self)
             dialog.login_successful.connect(self._on_login_successful)
             
             # The dialog will handle its own translation in __init__
@@ -546,7 +546,7 @@ class MainWindow(QMainWindow):
         """Open the knowledge management dialog."""
         try:
             # Import here to avoid circular imports
-            from knowledge_simulator import KnowledgeSimulatorDialog
+            from .knowledge_simulator import KnowledgeSimulatorDialog
             
             # Create and show dialog
             dialog = KnowledgeSimulatorDialog(self)

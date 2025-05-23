@@ -14,9 +14,6 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, Signal, QSize
 from PySide6.QtGui import QFont, QIcon
 
-# Import local knowledge management dialog
-from .knowledge_management import KnowledgeManagementDialog
-
 class KnowledgeSimulatorDialog(QDialog):
     """Dialog for testing knowledge-based Q&A"""
     
@@ -202,36 +199,45 @@ class KnowledgeSimulatorDialog(QDialog):
             # Sort by relevance
             relevant_content.sort(key=lambda x: x['relevance'], reverse=True)
             
-            if not relevant_content:
-                # No relevant content found
-                return "I don't have specific information about that. Please try asking a different question related to our products or services."
-            
-            # Use the most relevant file to generate a response
-            file_content = relevant_content[0]['content']
-            
-            # Simple paragraph extraction
-            paragraphs = [p.strip() for p in file_content.split('\n\n') if p.strip()]
-            
-            for paragraph in paragraphs:
-                # Check if paragraph contains any of the question keywords
-                if any(word in paragraph.lower() for word in question_lower.split() if len(word) > 3):
-                    return paragraph
-            
-            # Fall back to the first paragraph if no good match
-            if paragraphs:
-                return paragraphs[0]
+            if relevant_content:
+                # Use the most relevant file to generate a response
+                best_match = relevant_content[0]
                 
-            return "I found some information that might help, but I couldn't extract a specific answer. Please check our knowledge base files or ask a more specific question."
-            
+                # Get paragraphs from the content
+                paragraphs = best_match['content'].split('\n\n')
+                
+                # Filter relevant paragraphs
+                relevant_paragraphs = []
+                for para in paragraphs:
+                    para_lower = para.lower()
+                    if any(word in para_lower for word in question_lower.split() if len(word) > 3):
+                        relevant_paragraphs.append(para)
+                
+                if relevant_paragraphs:
+                    # Use the most relevant paragraph
+                    response = f"Based on our information: {relevant_paragraphs[0]}"
+                    
+                    # Add reference
+                    response += f"\n\n(Source: {best_match['file']})"
+                    
+                    return response
+                else:
+                    # Fall back to a general response from the file
+                    return f"I found some information that might help, but I couldn't find a specific answer to your question in our knowledge base. Please try to rephrase or ask a more specific question."
+            else:
+                return "I don't have specific information about that in my knowledge base. Please try asking something else or contact support for more assistance."
+                
         except Exception as e:
             self.logger.exception(f"Error generating response: {e}")
-            return f"Error generating response: {str(e)}"
+            return f"Sorry, I encountered an error while trying to answer your question: {str(e)}"
             
     def _on_manage_clicked(self):
         """Open the knowledge management dialog."""
         try:
-            management_dialog = KnowledgeManagementDialog(self)
-            management_dialog.exec()
+            from .knowledge_management import KnowledgeManagementDialog
+            
+            knowledge_dialog = KnowledgeManagementDialog(parent=self)
+            result = knowledge_dialog.exec()
             
             # Reload knowledge files after management
             self._load_knowledge_files()
@@ -245,14 +251,17 @@ class KnowledgeSimulatorDialog(QDialog):
             )
             
     def _on_pending_clicked(self):
-        """Open the knowledge management dialog to the pending messages tab."""
+        """Open the knowledge management dialog with the Pending Messages tab active."""
         try:
-            management_dialog = KnowledgeManagementDialog(self)
+            from .knowledge_management import KnowledgeManagementDialog
             
-            # Select the Pending Messages tab
-            management_dialog.tab_widget.setCurrentIndex(1)  # Assuming it's the second tab
+            knowledge_dialog = KnowledgeManagementDialog(parent=self)
+            # Switch to the Pending Messages tab (index 1)
+            knowledge_dialog.tab_widget.setCurrentIndex(1)
+            result = knowledge_dialog.exec()
             
-            management_dialog.exec()
+            # Reload knowledge files after management
+            self._load_knowledge_files()
             
         except Exception as e:
             self.logger.exception(f"Error opening pending messages: {e}")

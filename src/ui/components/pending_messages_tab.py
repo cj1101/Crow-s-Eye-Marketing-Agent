@@ -12,7 +12,7 @@ from PySide6.QtWidgets import (
     QScrollArea, QFrame, QTextEdit, QCheckBox, QSplitter,
     QMessageBox, QLineEdit
 )
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtCore import Qt, Signal, QSize, QEvent
 from PySide6.QtGui import QFont, QIcon
 
 try:
@@ -42,137 +42,122 @@ class PendingMessageWidget(QWidget):
         self.message_data = message_data
         self.logger = logging.getLogger(self.__class__.__name__)
         
-        # Set up UI
+        self._init_ui_elements()
         self._create_ui()
+        self.retranslateUi() # Initial translation
         
+    def _init_ui_elements(self):
+        self.source_label = QLabel()
+        self.from_label = QLabel()
+        self.time_label = QLabel()
+        self.message_intro_label = QLabel() # For "Message:"
+        self.message_text_edit = QTextEdit()
+        self.response_intro_label = QLabel() # For "Suggested Response:"
+        self.response_text_edit = QTextEdit()
+        self.approve_button = QPushButton()
+        self.edit_button = QPushButton()
+        self.delete_button = QPushButton()
+
     def _create_ui(self):
         """Create the widget UI."""
         main_layout = QVBoxLayout(self)
-        
-        # Message frame
         message_frame = QFrame()
         message_frame.setFrameShape(QFrame.Shape.StyledPanel)
         message_frame.setLineWidth(1)
         message_layout = QVBoxLayout(message_frame)
-        
-        # Message info
         info_layout = QHBoxLayout()
         
-        # Source (Comment/DM)
-        source_label = QLabel(f"<b>{self.message_data['type']}:</b>")
-        info_layout.addWidget(source_label)
-        
-        # From
-        from_label = QLabel(f"From: <b>{self.message_data['sender']}</b>")
-        info_layout.addWidget(from_label)
-        
-        # Time
-        time_label = QLabel(f"Time: {self.message_data['time']}")
-        info_layout.addWidget(time_label)
-        
-        # Add spacer
+        # self.source_label = QLabel(f"<b>{self.message_data['type']}:</b>") // Text set in retranslateUi
+        info_layout.addWidget(self.source_label)
+        # self.from_label = QLabel(f"From: <b>{self.message_data['sender']}</b>") // Text set in retranslateUi
+        info_layout.addWidget(self.from_label)
+        # self.time_label = QLabel(f"Time: {self.message_data['time']}") // Text set in retranslateUi
+        info_layout.addWidget(self.time_label)
         info_layout.addStretch()
-        
         message_layout.addLayout(info_layout)
         
-        # Original message
-        message_label = QLabel("<b>Message:</b>")
-        message_layout.addWidget(message_label)
+        # self.message_intro_label = QLabel("<b>Message:</b>") // Text set in retranslateUi
+        message_layout.addWidget(self.message_intro_label)
+        # self.message_text_edit = QTextEdit() // Initialized
+        self.message_text_edit.setReadOnly(True)
+        self.message_text_edit.setPlainText(self.message_data['content']) # Content is dynamic
+        self.message_text_edit.setMaximumHeight(80)
+        message_layout.addWidget(self.message_text_edit)
         
-        message_text = QTextEdit()
-        message_text.setReadOnly(True)
-        message_text.setPlainText(self.message_data['content'])
-        message_text.setMaximumHeight(80)
-        message_layout.addWidget(message_text)
+        # self.response_intro_label = QLabel("<b>Suggested Response:</b>") // Text set in retranslateUi
+        message_layout.addWidget(self.response_intro_label)
+        # self.response_text_edit = QTextEdit() // Initialized
+        self.response_text_edit.setPlainText(self.message_data['suggested_response']) # Content is dynamic
+        self.response_text_edit.setMaximumHeight(100)
+        message_layout.addWidget(self.response_text_edit)
         
-        # Suggested response
-        response_label = QLabel("<b>Suggested Response:</b>")
-        message_layout.addWidget(response_label)
-        
-        self.response_text = QTextEdit()
-        self.response_text.setPlainText(self.message_data['suggested_response'])
-        self.response_text.setMaximumHeight(100)
-        message_layout.addWidget(self.response_text)
-        
-        # Action buttons
         buttons_layout = QHBoxLayout()
-        
-        approve_button = QPushButton("Approve")
-        approve_button.clicked.connect(self._on_approve)
-        buttons_layout.addWidget(approve_button)
-        
-        edit_button = QPushButton("Edit & Approve")
-        edit_button.clicked.connect(self._on_edit)
-        buttons_layout.addWidget(edit_button)
-        
-        delete_button = QPushButton("Delete")
-        delete_button.clicked.connect(self._on_delete)
-        buttons_layout.addWidget(delete_button)
-        
+        # self.approve_button = QPushButton("Approve") // Text set in retranslateUi
+        self.approve_button.clicked.connect(self._on_approve)
+        buttons_layout.addWidget(self.approve_button)
+        # self.edit_button = QPushButton("Edit & Approve") // Text set in retranslateUi
+        self.edit_button.clicked.connect(self._on_edit)
+        buttons_layout.addWidget(self.edit_button)
+        # self.delete_button = QPushButton("Delete") // Text set in retranslateUi
+        self.delete_button.clicked.connect(self._on_delete)
+        buttons_layout.addWidget(self.delete_button)
         message_layout.addLayout(buttons_layout)
-        
         main_layout.addWidget(message_frame)
         
     def _on_approve(self):
         """Approve the response without editing."""
         try:
-            # Clone the message data and add the final response
             message = dict(self.message_data)
             message['final_response'] = message['suggested_response']
             self.approved.emit(message)
         except Exception as e:
             self.logger.exception(f"Error approving message: {e}")
-            QMessageBox.warning(
-                self,
-                "Error",
-                f"Could not approve message: {str(e)}"
-            )
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not approve message: {error_message}").format(error_message=str(e)))
     
     def _on_edit(self):
         """Edit and approve the response."""
         try:
-            # Get the edited response text
-            edited_response = self.response_text.toPlainText().strip()
-            
+            edited_response = self.response_text_edit.toPlainText().strip()
             if not edited_response:
-                QMessageBox.warning(
-                    self,
-                    "Empty Response",
-                    "Please provide a response before approving."
-                )
+                QMessageBox.warning(self, self.tr("Empty Response"), self.tr("Please provide a response before approving."))
                 return
-            
-            # Clone the message data
             message = dict(self.message_data)
             self.edited.emit(message, edited_response)
         except Exception as e:
             self.logger.exception(f"Error editing message: {e}")
-            QMessageBox.warning(
-                self,
-                "Error",
-                f"Could not edit message: {str(e)}"
-            )
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not edit message: {error_message}").format(error_message=str(e)))
     
     def _on_delete(self):
         """Delete the message."""
         try:
-            # Confirm deletion
             result = QMessageBox.question(
                 self,
-                "Confirm Deletion",
-                "Are you sure you want to delete this message?",
+                self.tr("Confirm Deletion"), 
+                self.tr("Are you sure you want to delete this message?"),
                 QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
             )
-            
             if result == QMessageBox.StandardButton.Yes:
                 self.deleted.emit(self.message_data)
         except Exception as e:
             self.logger.exception(f"Error deleting message: {e}")
-            QMessageBox.warning(
-                self,
-                "Error",
-                f"Could not delete message: {str(e)}"
-            )
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not delete message: {error_message}").format(error_message=str(e)))
+
+    def changeEvent(self, event: QEvent) -> None:
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        """Retranslate all UI elements in PendingMessageWidget."""
+        # Dynamic parts of labels need to be reconstructed
+        self.source_label.setText(self.tr("<b>{message_type}:</b>").format(message_type=self.message_data['type']))
+        self.from_label.setText(self.tr("From: <b>{sender}</b>").format(sender=self.message_data['sender']))
+        self.time_label.setText(self.tr("Time: {time}").format(time=self.message_data['time']))
+        self.message_intro_label.setText(self.tr("<b>Message:</b>"))
+        self.response_intro_label.setText(self.tr("<b>Suggested Response:</b>"))
+        self.approve_button.setText(self.tr("Approve"))
+        self.edit_button.setText(self.tr("Edit & Approve"))
+        self.delete_button.setText(self.tr("Delete"))
 
 class PendingMessagesTab(QWidget):
     """Tab for displaying and managing pending messages."""
@@ -190,11 +175,28 @@ class PendingMessagesTab(QWidget):
         # Auto-approve setting
         self.auto_approve = False
         
+        # Initialize UI elements
+        self._init_ui_elements()
+        
         # Create UI
         self._create_ui()
+
+        # Initial translation
+        self.retranslateUi()
         
         # Load messages data
         self._load_messages_data()
+
+    def _init_ui_elements(self):
+        """Initialize UI elements for translatability."""
+        self.filter_label = QLabel()
+        self.filter_input = QLineEdit()
+        self.auto_approve_checkbox = QCheckBox()
+        self.refresh_button = QPushButton()
+        self.messages_scroll_area = QScrollArea()
+        self.messages_container = QWidget()
+        self.messages_layout = QVBoxLayout(self.messages_container) # Keep as is, layout for dynamic content
+        self.status_label = QLabel()
         
     def _create_ui(self):
         """Create the tab UI."""
@@ -204,36 +206,36 @@ class PendingMessagesTab(QWidget):
         controls_layout = QHBoxLayout()
         
         # Filter input
-        filter_label = QLabel("Filter:")
-        controls_layout.addWidget(filter_label)
+        # self.filter_label = QLabel("Filter:") // Text set in retranslateUi
+        controls_layout.addWidget(self.filter_label)
         
-        self.filter_input = QLineEdit()
-        self.filter_input.setPlaceholderText("Filter by sender or content...")
+        # self.filter_input = QLineEdit() // Initialized
+        # self.filter_input.setPlaceholderText("Filter by sender or content...") // Text set in retranslateUi
         self.filter_input.textChanged.connect(self._on_filter_changed)
         controls_layout.addWidget(self.filter_input)
         
         # Auto-approve checkbox
-        self.auto_approve_checkbox = QCheckBox("Auto-approve responses")
-        self.auto_approve_checkbox.setToolTip(
-            "When enabled, suggested responses will be automatically approved without review."
-        )
+        # self.auto_approve_checkbox = QCheckBox("Auto-approve responses") // Text set in retranslateUi
+        # self.auto_approve_checkbox.setToolTip( // Tooltip set in retranslateUi
+        # "When enabled, suggested responses will be automatically approved without review."
+        # )
         self.auto_approve_checkbox.toggled.connect(self._on_auto_approve_toggled)
         controls_layout.addWidget(self.auto_approve_checkbox)
         
         # Refresh button
-        refresh_button = QPushButton("Refresh")
-        refresh_button.clicked.connect(self._on_refresh)
-        controls_layout.addWidget(refresh_button)
+        # self.refresh_button = QPushButton("Refresh") // Text set in retranslateUi
+        self.refresh_button.clicked.connect(self._on_refresh)
+        controls_layout.addWidget(self.refresh_button)
         
         main_layout.addLayout(controls_layout)
         
         # Scroll area for messages
-        self.messages_scroll_area = QScrollArea()
+        # self.messages_scroll_area = QScrollArea() // Initialized
         self.messages_scroll_area.setWidgetResizable(True)
         
         # Container widget for messages
-        self.messages_container = QWidget()
-        self.messages_layout = QVBoxLayout(self.messages_container)
+        # self.messages_container = QWidget() // Initialized
+        # self.messages_layout = QVBoxLayout(self.messages_container) // Initialized
         self.messages_layout.setSpacing(10)
         self.messages_layout.setAlignment(Qt.AlignmentFlag.AlignTop)
         
@@ -241,27 +243,44 @@ class PendingMessagesTab(QWidget):
         main_layout.addWidget(self.messages_scroll_area, 1)  # 1 = stretch factor
         
         # Status label
-        self.status_label = QLabel("Ready")
+        # self.status_label = QLabel("Ready") // Text set in retranslateUi
         main_layout.addWidget(self.status_label)
+
+    def changeEvent(self, event: QEvent) -> None:
+        """Handle language change event."""
+        if event.type() == QEvent.Type.LanguageChange:
+            self.retranslateUi()
+        super().changeEvent(event)
+
+    def retranslateUi(self):
+        """Retranslate all UI elements in PendingMessagesTab."""
+        self.filter_label.setText(self.tr("Filter:"))
+        self.filter_input.setPlaceholderText(self.tr("Filter by sender or content..."))
+        self.auto_approve_checkbox.setText(self.tr("Auto-approve responses"))
+        self.auto_approve_checkbox.setToolTip(
+            self.tr("When enabled, suggested responses will be automatically approved without review.")
+        )
+        self.refresh_button.setText(self.tr("Refresh"))
+        self.status_label.setText(self.tr("Ready")) # Initial status
 
     def _on_auto_approve_toggled(self, checked: bool):
         """Handle auto-approve checkbox toggled."""
         self.auto_approve = checked
         
         if checked:
-            self.status_label.setText("Auto-approve mode enabled.")
+            self.status_label.setText(self.tr("Auto-approve mode enabled."))
             
             # Process any current messages for auto-approval
             self._process_auto_approvals()
         else:
-            self.status_label.setText("Auto-approve mode disabled.")
+            self.status_label.setText(self.tr("Auto-approve mode disabled."))
         
         self.logger.info(f"Auto-approve mode {'enabled' if checked else 'disabled'}")
         
     def _on_refresh(self):
         """Refresh the messages list."""
         try:
-            self.status_label.setText("Refreshing messages...")
+            self.status_label.setText(self.tr("Refreshing messages..."))
             self._load_messages_data()
         except Exception as e:
             self.logger.exception(f"Error refreshing messages: {e}")
@@ -297,32 +316,29 @@ class PendingMessagesTab(QWidget):
             
     def _load_messages(self, messages: List[Dict[str, Any]]):
         """Load messages into the UI."""
-        # Clear existing messages
         self._clear_messages()
-        
         if not messages:
-            self.status_label.setText("No pending messages found.")
+            self.status_label.setText(self.tr("No pending messages found."))
             return
+
+        if HAS_MESSAGES_HANDLER:
+            self.status_label.setText(self.tr("Loading messages..."))
+        else:
+            self.status_label.setText(self.tr("Displaying test data (messages_handler not found)."))
             
-        # Add message widgets
-        for message in messages:
-            # Check if the message has an ID
-            if 'id' not in message:
-                message['id'] = f"{message['type']}_{message['sender']}_{message['time']}"
-                
-            # Create message widget
-            message_widget = PendingMessageWidget(message)
+        for msg_data in messages:
+            widget = PendingMessageWidget(msg_data)
             
             # Connect signals
-            message_widget.approved.connect(self._on_message_approved)
-            message_widget.edited.connect(self._on_message_edited)
-            message_widget.deleted.connect(self._on_message_deleted)
+            widget.approved.connect(self._on_message_approved)
+            widget.edited.connect(self._on_message_edited)
+            widget.deleted.connect(self._on_message_deleted)
             
             # Add to layout
-            self.messages_layout.addWidget(message_widget)
+            self.messages_layout.addWidget(widget)
             
             # Add to pending messages list
-            self.pending_messages.append(message)
+            self.pending_messages.append(msg_data)
             
         # Process auto-approvals if enabled
         if self.auto_approve:
@@ -332,58 +348,60 @@ class PendingMessagesTab(QWidget):
         self.status_label.setText(f"Loaded {len(messages)} pending messages.")
         
     def _load_messages_data(self):
-        """Load message data from the messages handler."""
-        try:
-            if HAS_MESSAGES_HANDLER:
-                # Get pending messages from the messages handler
-                pending_messages = messages_handler.get_pending_messages()
-                self._load_messages(pending_messages)
-                
-                self.logger.info(f"Loaded {len(pending_messages)} pending messages from handler")
-            else:
-                # Load test data for development
-                self._load_test_data()
-                
-                self.logger.info("Loaded test message data (messages handler not available)")
-                
-        except Exception as e:
-            self.logger.exception(f"Error loading message data: {e}")
-            self.status_label.setText(f"Error loading messages: {str(e)}")
-            
-            # Load test data as fallback
+        """Load messages from the handler or test data."""
+        if HAS_MESSAGES_HANDLER:
+            try:
+                self.status_label.setText(self.tr("Fetching messages from handler..."))
+                # Ensure messages_handler is available
+                if messages_handler is None:
+                    self.logger.error("messages_handler is None even though HAS_MESSAGES_HANDLER is True.")
+                    QMessageBox.critical(self, self.tr("Error"), self.tr("Messages handler is not available. Cannot load messages."))
+                    self.status_label.setText(self.tr("Error: Messages handler not available."))
+                    return
+
+                self.pending_messages = messages_handler.get_pending_messages()
+                self._load_messages(self.pending_messages)
+                if not self.pending_messages: # Check after loading
+                     self.status_label.setText(self.tr("No new messages from handler."))
+                else:
+                    self.status_label.setText(self.tr("Messages loaded from handler."))
+
+            except Exception as e:
+                self.logger.exception(f"Error loading messages from handler: {e}")
+                QMessageBox.critical(self, self.tr("Error"), self.tr("Could not load messages from handler: {error_message}").format(error_message=str(e)))
+                self.status_label.setText(self.tr("Error loading messages from handler."))
+        else:
+            # Fallback to test data if handler not available
+            self.status_label.setText(self.tr("Messages handler not found. Loading test data."))
             self._load_test_data()
             
     def _process_auto_approvals(self):
-        """Process auto-approvals for pending messages."""
+        """Process auto-approvals for currently loaded messages."""
         if not self.auto_approve:
             return
-            
+        
+        if not self.pending_messages:
+            self.status_label.setText(self.tr("Auto-approve: No messages to process."))
+            return
+
         approved_count = 0
-        
-        # Process each message
-        messages_to_approve = list(self.pending_messages)  # Create a copy
-        
-        for message in messages_to_approve:
-            # Skip messages without a suggested response
-            if not message.get('suggested_response'):
-                continue
-                
-            # Attempt to approve the message
-            if self._process_message_approval(message):
-                approved_count += 1
-                
-                # Remove from pending messages list
-                if message in self.pending_messages:
-                    self.pending_messages.remove(message)
-                    
-                # Remove widget from UI
-                self._remove_message_widget(message['id'])
-                
-        # Update status
+        self.status_label.setText(self.tr("Auto-approving messages..."))
+        for message_data in list(self.pending_messages): # Iterate over a copy
+            if message_data.get('suggested_response'):
+                # Simulate approval process
+                if self._process_message_approval(message_data): # Use the existing approval logic
+                    approved_count += 1
+                    self._remove_message_widget(message_data['id']) # Remove from UI
+
         if approved_count > 0:
-            self.status_label.setText(f"Auto-approved {approved_count} messages.")
-            self.logger.info(f"Auto-approved {approved_count} messages")
+            self.status_label.setText(self.tr("{count} messages auto-approved.").format(count=approved_count))
+        else:
+            self.status_label.setText(self.tr("Auto-approve: No messages met criteria for auto-approval."))
             
+        # Refresh the view if any messages were auto-approved
+        if approved_count > 0:
+            self._load_messages(self.pending_messages) # Re-load to update UI
+
     def _clear_messages(self):
         """Clear all message widgets."""
         # Remove all message widgets
@@ -396,146 +414,112 @@ class PendingMessagesTab(QWidget):
         self.pending_messages.clear()
         
     def _on_message_approved(self, message: Dict[str, Any]):
-        """Handle message approved signal."""
+        """Handle message approval from widget."""
         try:
-            # Process the message approval
             if self._process_message_approval(message):
-                # Remove from pending messages list
-                if message in self.pending_messages:
-                    self.pending_messages.remove(message)
-                    
-                # Remove widget from UI
+                self.status_label.setText(self.tr("Message approved and sent: {message_id}").format(message_id=message.get('id', 'N/A')))
                 self._remove_message_widget(message['id'])
-                
-                # Update status
-                self.status_label.setText(f"Message approved and sent.")
-                self.logger.info(f"Message approved: {message['id']}")
-                
-                # If messages list is now empty, update status
-                if not self.pending_messages:
-                    self.status_label.setText("No pending messages remaining.")
-            
+            else:
+                # _process_message_approval already shows an error message box
+                self.status_label.setText(self.tr("Failed to approve message: {message_id}").format(message_id=message.get('id', 'N/A')))
+
         except Exception as e:
-            self.logger.exception(f"Error approving message: {e}")
-            self.status_label.setText(f"Error approving message: {str(e)}")
-            
+            self.logger.exception(f"Error during message approval: {e}")
+            QMessageBox.warning(self, self.tr("Approval Error"), self.tr("An unexpected error occurred during message approval: {error_message}").format(error_message=str(e)))
+            self.status_label.setText(self.tr("Error during approval."))
+
     def _process_message_approval(self, message: Dict[str, Any]) -> bool:
-        """
-        Process the approval of a message.
-        
-        Args:
-            message: The message data dictionary
-            
-        Returns:
-            bool: True if approval was successful, False otherwise
-        """
+        """Process the approval of a single message, sending it via the handler."""
+        if not HAS_MESSAGES_HANDLER:
+            self.logger.warning("Cannot process message approval: messages_handler not available.")
+            QMessageBox.warning(self, self.tr("Handler Missing"), self.tr("Cannot send message: Messages handler is not configured."))
+            return False
+
         try:
-            if HAS_MESSAGES_HANDLER:
-                # Get the response text
-                response_text = message.get('final_response', message.get('suggested_response', ''))
-                
-                if not response_text:
-                    QMessageBox.warning(
-                        self,
-                        "Empty Response",
-                        "Cannot approve a message with an empty response."
-                    )
-                    return False
-                
-                # Send the response using the messages handler
-                success = messages_handler.send_response(
-                    message['id'],
-                    response_text,
-                    message['type']
-                )
-                
-                if not success:
-                    QMessageBox.warning(
-                        self,
-                        "Response Failed",
-                        "Failed to send the response. Please try again later."
-                    )
-                    return False
-                
+            # Ensure messages_handler is available
+            if messages_handler is None:
+                self.logger.error("messages_handler is None even though HAS_MESSAGES_HANDLER is True.")
+                QMessageBox.critical(self, self.tr("Error"), self.tr("Messages handler is not available. Cannot process approval."))
+                return False
+
+            success = messages_handler.send_response(
+                message_id=message['id'], 
+                response_text=message['final_response'], 
+                message_type=message['type']
+            )
+            if success:
+                self.logger.info(f"Message {message['id']} approved and response sent.")
+                # Remove from internal list after successful send
+                self.pending_messages = [m for m in self.pending_messages if m['id'] != message['id']]
                 return True
             else:
-                # Simulate successful approval for development
-                self.logger.info(f"Simulated approval: {message['id']}")
-                
-                # Show confirmation
-                QMessageBox.information(
-                    self,
-                    "Response Simulated",
-                    f"Response would be sent: {message.get('final_response', message.get('suggested_response', ''))}"
-                )
-                
-                return True
-                
+                self.logger.error(f"Failed to send response for message {message['id']}.")
+                QMessageBox.warning(self, self.tr("Send Error"), self.tr("Failed to send response for message {message_id}.").format(message_id=message['id']))
+                return False
         except Exception as e:
-            self.logger.exception(f"Error in message approval process: {e}")
-            QMessageBox.critical(
-                self,
-                "Approval Error",
-                f"Error processing message approval: {str(e)}"
-            )
+            self.logger.exception(f"Error sending response for message {message['id']}: {e}")
+            QMessageBox.critical(self, self.tr("Send Error"), self.tr("An error occurred while sending response for {message_id}: {error_message}").format(message_id=message['id'], error_message=str(e)))
             return False
-            
+
     def _on_message_edited(self, message: Dict[str, Any], edited_response: str):
-        """Handle message edited signal."""
+        """Handle message editing and approval from widget."""
         try:
-            # Create a copy with the edited response
-            edited_message = dict(message)
-            edited_message['final_response'] = edited_response
-            
-            # Process the message approval
-            if self._process_message_approval(edited_message):
-                # Remove from pending messages list
-                if message in self.pending_messages:
-                    self.pending_messages.remove(message)
-                    
-                # Remove widget from UI
-                self._remove_message_widget(message['id'])
-                
-                # Update status
-                self.status_label.setText(f"Edited message approved and sent.")
-                self.logger.info(f"Edited message approved: {message['id']}")
-                
-                # If messages list is now empty, update status
-                if not self.pending_messages:
-                    self.status_label.setText("No pending messages remaining.")
-            
+            message_copy = dict(message) # Work with a copy
+            message_copy['final_response'] = edited_response
+
+            if self._process_message_approval(message_copy): # Use the same approval logic
+                self.status_label.setText(self.tr("Message edited, approved, and sent: {message_id}").format(message_id=message_copy.get('id', 'N/A')))
+                self._remove_message_widget(message_copy['id'])
+            else:
+                # _process_message_approval already shows an error message box
+                self.status_label.setText(self.tr("Failed to process edited message: {message_id}").format(message_id=message_copy.get('id', 'N/A')))
+        
         except Exception as e:
-            self.logger.exception(f"Error processing edited message: {e}")
-            self.status_label.setText(f"Error processing edited message: {str(e)}")
-            
+            self.logger.exception(f"Error during message edit and approval: {e}")
+            QMessageBox.warning(self, self.tr("Edit Error"), self.tr("An unexpected error occurred during message edit and approval: {error_message}").format(error_message=str(e)))
+            self.status_label.setText(self.tr("Error during edit and approval."))
+
+
     def _on_message_deleted(self, message: Dict[str, Any]):
-        """Handle message deleted signal."""
-        try:
-            # Check if we should notify the messages handler
-            if HAS_MESSAGES_HANDLER:
-                # Mark message as deleted/dismissed
-                messages_handler.dismiss_message(message['id'])
-                
-            # Remove from pending messages list
-            if message in self.pending_messages:
-                self.pending_messages.remove(message)
-                
-            # Remove widget from UI
+        """Handle message deletion from widget."""
+        if not HAS_MESSAGES_HANDLER:
+            self.logger.warning("Cannot process message deletion: messages_handler not available.")
+            # For local deletion even without handler:
+            # self.pending_messages = [m for m in self.pending_messages if m['id'] != message['id']]
+            # self._remove_message_widget(message['id'])
+            # self.status_label.setText(self.tr("Message {message_id} removed locally (handler not available).").format(message_id=message['id']))
+            QMessageBox.warning(self, self.tr("Handler Missing"), self.tr("Cannot properly delete message: Messages handler is not configured. Message removed from view only."))
+            # Still remove from view
+            self.pending_messages = [m for m in self.pending_messages if m['id'] != message['id']]
             self._remove_message_widget(message['id'])
-            
-            # Update status
-            remaining = len(self.pending_messages)
-            self.status_label.setText(f"Message deleted. {remaining} message(s) remaining.")
-            self.logger.info(f"Message deleted: {message['id']}")
-            
-            # If messages list is now empty, update status
-            if not self.pending_messages:
-                self.status_label.setText("No pending messages remaining.")
-                
+            self.status_label.setText(self.tr("Message {message_id} removed from view (handler not available).").format(message_id=message['id']))
+
+            return
+
+        try:
+            # Ensure messages_handler is available
+            if messages_handler is None:
+                self.logger.error("messages_handler is None even though HAS_MESSAGES_HANDLER is True.")
+                QMessageBox.critical(self, self.tr("Error"), self.tr("Messages handler is not available. Cannot process deletion."))
+                return
+
+            success = messages_handler.delete_message(message_id=message['id'], message_type=message['type'])
+            if success:
+                self.logger.info(f"Message {message['id']} deleted successfully via handler.")
+                self.status_label.setText(self.tr("Message deleted: {message_id}").format(message_id=message.get('id', 'N/A')))
+                # Remove from internal list and UI
+                self.pending_messages = [m for m in self.pending_messages if m['id'] != message['id']]
+                self._remove_message_widget(message['id'])
+            else:
+                self.logger.error(f"Failed to delete message {message['id']} via handler.")
+                QMessageBox.warning(self, self.tr("Deletion Error"), self.tr("Failed to delete message {message_id} via handler.").format(message_id=message['id']))
+                self.status_label.setText(self.tr("Failed to delete message via handler: {message_id}").format(message_id=message.get('id', 'N/A')))
+
         except Exception as e:
-            self.logger.exception(f"Error deleting message: {e}")
-            self.status_label.setText(f"Error deleting message: {str(e)}")
-            
+            self.logger.exception(f"Error deleting message {message['id']} via handler: {e}")
+            QMessageBox.critical(self, self.tr("Deletion Error"), self.tr("An error occurred while deleting message {message_id} via handler: {error_message}").format(message_id=message['id'], error_message=str(e)))
+            self.status_label.setText(self.tr("Error during message deletion via handler."))
+
     def _remove_message_widget(self, message_id: str):
         """Remove a message widget from the UI."""
         # Find and remove the widget with the matching message ID
@@ -572,9 +556,9 @@ class PendingMessagesTab(QWidget):
                 'id': 'comment_2',
                 'type': 'Comment',
                 'sender': 'Sarah Johnson',
-                'content': 'Your sourdough looks amazing! What's your secret?',
+                'content': 'Your sourdough looks amazing! What\'s your secret?',
                 'time': '2023-05-26 16:45',
-                'suggested_response': 'Thank you for the kind words! Our sourdough is made with a 100-year-old starter that's been carefully maintained. We use organic flour and a 24-hour fermentation process to develop that complex flavor and perfect texture. Come in for a free sample anytime!'
+                'suggested_response': 'Thank you for the kind words! Our sourdough is made with a 100-year-old starter that\'s been carefully maintained. We use organic flour and a 24-hour fermentation process to develop that complex flavor and perfect texture. Come in for a free sample anytime!'
             }
         ]
         
