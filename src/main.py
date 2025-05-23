@@ -86,6 +86,9 @@ def main(enable_scheduling=False):
     app.setProperty("current_language", "en")
     app.setProperty("json_translations", {})  # Empty dict for default language
     
+    # Initialize I18N system
+    from .i18n import i18n
+    
     # Create application state
     from .models.app_state import AppState
     from .handlers.media_handler import MediaHandler

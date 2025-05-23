@@ -1,37 +1,34 @@
 import logging
-from PySide6.QtWidgets import QWidget, QApplication
+from PySide6.QtWidgets import QWidget, QApplication, QSizePolicy
 from PySide6.QtCore import QEvent
 
 class BaseWidget(QWidget):
     """
     Base class for all widgets in the application, providing common functionality.
-    Overrides the tr method to use JSON-based translations when available.
+    Overrides the tr method to use the I18N system.
     """
     
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(self.__class__.__name__)
         
-    def tr(self, text):
+        # Connect to i18n system
+        from ..i18n import i18n
+        self.i18n = i18n
+        self.i18n.language_changed.connect(self.retranslateUi)
+        
+    def tr(self, text, **kwargs):
         """
-        Translate text using JSON-based translations if available.
-        Falls back to Qt's tr method if not.
+        Translate text using the I18N system.
         
         Args:
             text: The text to translate
+            **kwargs: Format arguments for string formatting
             
         Returns:
             str: The translated text
         """
-        # Try to get translations from app properties
-        app = QApplication.instance()
-        if app:
-            translations = app.property("json_translations")
-            if translations and isinstance(translations, dict) and text in translations:
-                return translations[text]
-        
-        # Fall back to Qt's tr method
-        return super().tr(text)
+        return self.i18n.t(text, **kwargs)
         
     def changeEvent(self, event):
         """Handle change events, particularly language changes."""

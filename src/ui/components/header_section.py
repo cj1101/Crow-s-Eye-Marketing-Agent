@@ -171,22 +171,7 @@ class HeaderSection(BaseWidget):
             font-weight: bold;
         """)
         
-        # Language data: [("Native Name", "code"), ...]
-        # From crowseye-spec.md: Spanish, French, German, Dutch, Portuguese, Italian, Mandarin, Cantonese, Japanese, Korean, Russian
-        self.languages = [
-            ("English", "en"), # Default/Fallback
-            ("Español", "es"),
-            ("Français", "fr"),
-            ("Deutsch", "de"),
-            ("Nederlands", "nl"),
-            ("Português", "pt"),
-            ("Italiano", "it"),
-            ("简体中文", "zh-CN"), # Mandarin (Simplified Chinese)
-            ("繁體中文", "zh-TW"), # Cantonese can be represented by Traditional Chinese for broader use, or specific code if available
-            ("日本語", "ja"),
-            ("한국어", "ko"),
-            ("Русский", "ru")
-        ]
+                # Language data: [("Native Name", "code"), ...]        # Match the language codes from our translation files        self.languages = [            ("English", "en"),            ("Español", "es"),            ("中文", "zh"),            ("हिन्दी", "hi"),            ("Français", "fr"),            ("العربية", "ar"),            ("Português", "pt"),            ("Русский", "ru"),            ("日本語", "ja"),            ("Deutsch", "de")        ]
         
         for lang_name, lang_code in self.languages:
             self.language_combo.addItem(lang_name, userData=lang_code)
@@ -245,17 +230,7 @@ class HeaderSection(BaseWidget):
         """Handle theme toggle button click"""
         self.theme_toggled.emit()
         
-    def _on_library_clicked(self):
-        """Handle library button click"""
-        self.library_clicked.emit()
-        
-    def _on_language_changed(self, index: int):
-        """Handle language selection change (Currently disabled)"""
-        # Keep the UI element but disable the functionality
-        selected_lang_code = self.language_combo.itemData(index)
-        if selected_lang_code:
-            self.logger.info(f"Language selected: {selected_lang_code} (functionality disabled)")
-            # Disabled: self.language_changed.emit(selected_lang_code)
+        def _on_library_clicked(self):        """Handle library button click"""        self.library_clicked.emit()            def _on_language_changed(self, index: int):        """Handle language selection change"""        selected_lang_code = self.language_combo.itemData(index)        if selected_lang_code:            self.logger.info(f"Language selected: {selected_lang_code}")            # Switch language using i18n system            from ...i18n import i18n            i18n.switch(selected_lang_code)            self.language_changed.emit(selected_lang_code)
         
     def _on_schedule_clicked(self):
         """Handle schedule button click"""
