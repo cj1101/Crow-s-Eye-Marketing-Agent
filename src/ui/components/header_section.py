@@ -171,7 +171,20 @@ class HeaderSection(BaseWidget):
             font-weight: bold;
         """)
         
-                # Language data: [("Native Name", "code"), ...]        # Match the language codes from our translation files        self.languages = [            ("English", "en"),            ("Español", "es"),            ("中文", "zh"),            ("हिन्दी", "hi"),            ("Français", "fr"),            ("العربية", "ar"),            ("Português", "pt"),            ("Русский", "ru"),            ("日本語", "ja"),            ("Deutsch", "de")        ]
+        # Language data: [("Native Name", "code"), ...]
+        # Match the language codes from our translation files
+        self.languages = [
+            ("English", "en"),
+            ("Español", "es"),
+            ("中文", "zh"),
+            ("हिन्दी", "hi"),
+            ("Français", "fr"),
+            ("العربية", "ar"),
+            ("Português", "pt"),
+            ("Русский", "ru"),
+            ("日本語", "ja"),
+            ("Deutsch", "de")
+        ]
         
         for lang_name, lang_code in self.languages:
             self.language_combo.addItem(lang_name, userData=lang_code)
@@ -230,7 +243,19 @@ class HeaderSection(BaseWidget):
         """Handle theme toggle button click"""
         self.theme_toggled.emit()
         
-        def _on_library_clicked(self):        """Handle library button click"""        self.library_clicked.emit()            def _on_language_changed(self, index: int):        """Handle language selection change"""        selected_lang_code = self.language_combo.itemData(index)        if selected_lang_code:            self.logger.info(f"Language selected: {selected_lang_code}")            # Switch language using i18n system            from ...i18n import i18n            i18n.switch(selected_lang_code)            self.language_changed.emit(selected_lang_code)
+    def _on_library_clicked(self):
+        """Handle library button click"""
+        self.library_clicked.emit()
+        
+    def _on_language_changed(self, index: int):
+        """Handle language selection change"""
+        selected_lang_code = self.language_combo.itemData(index)
+        if selected_lang_code:
+            self.logger.info(f"Language selected: {selected_lang_code}")
+            # Switch language using i18n system
+            from ...i18n import i18n
+            i18n.switch(selected_lang_code)
+            self.language_changed.emit(selected_lang_code)
         
     def _on_schedule_clicked(self):
         """Handle schedule button click"""
