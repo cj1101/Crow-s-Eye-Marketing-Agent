@@ -552,13 +552,6 @@ class LibraryWindow(BaseMainWindow):
             from ..models.app_state import AppState
             self.ai_handler = AIHandler(AppState())
         
-        # Initialize CrowsEyeHandler if not available from library_manager
-        if hasattr(self.library_manager, 'crowseye_handler') and self.library_manager.crowseye_handler:
-            self.crowseye_handler = self.library_manager.crowseye_handler
-        else:
-            from ..handlers.crowseye_handler import CrowsEyeHandler
-            self.crowseye_handler = CrowsEyeHandler()
-            
         # Initialize MediaHandler if not available from library_manager
         if hasattr(self.library_manager, 'media_handler') and self.library_manager.media_handler:
             self.media_handler = self.library_manager.media_handler
@@ -566,6 +559,16 @@ class LibraryWindow(BaseMainWindow):
             from ..handlers.media_handler import MediaHandler
             from ..models.app_state import AppState
             self.media_handler = MediaHandler(AppState())
+            
+        # Initialize CrowsEyeHandler if not available from library_manager
+        if hasattr(self.library_manager, 'crowseye_handler') and self.library_manager.crowseye_handler:
+            self.crowseye_handler = self.library_manager.crowseye_handler
+        else:
+            from ..handlers.crowseye_handler import CrowsEyeHandler
+            from ..models.app_state import AppState
+            # Create CrowsEyeHandler with required arguments
+            app_state = AppState()
+            self.crowseye_handler = CrowsEyeHandler(app_state, self.media_handler, self.library_manager)
         
         # Set window properties
         self.setMinimumSize(1200, 800)
