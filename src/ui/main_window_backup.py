@@ -495,7 +495,7 @@ class MainWindow(QMainWindow):
             self.header_section.update_login_button(True, account_name)
             self.status_bar.showMessage(self.tr("Logged in as {account_name}").format(account_name=account_name))
             
-                        # Update the app state with credentials
+            # Update the app state with credentials
             if hasattr(self.app_state, 'meta_credentials'):
                 # Load credentials from file
                 with open(const.META_CREDENTIALS_FILE, "r", encoding="utf-8") as f:
@@ -505,26 +505,7 @@ class MainWindow(QMainWindow):
             self.logger.exception(f"Error handling login success: {e}")
             self._show_error(self.tr("Login Error"), self.tr("An error occurred after login: {error_message}").format(error_message=str(e)))
     
-    def _on_open_library(self):
-        """Open the library window with media and Crow's Eye functionality."""
-        try:
-            if not self.library_window:
-                self.library_window = LibraryWindow(
-                    library_manager_instance=self.library_manager,
-                    parent=self,
-                    scheduler=self.scheduler
-                )
-                # Connect the generate post signal
-                self.library_window.generate_post_requested.connect(self._on_generate_post_from_library)
-                
-            # Show the window
-            self.library_window.show()
-            self.library_window.raise_()
-            self.library_window.activateWindow()
-            
-        except Exception as e:
-            self.logger.exception(f"Error opening library window: {e}")
-            self._show_error(self.tr("Library Error"), self.tr("Could not open library window: {error_message}").format(error_message=e))
+    def _on_open_library(self):        """Open the library window with media and Crow's Eye functionality."""        try:            if not self.library_window:                self.library_window = LibraryWindow(                    library_manager_instance=self.library_manager,                    parent=self,  # Pass self as parent so library window can access app_state and media_handler                    scheduler=self.scheduler                )                # Connect the generate post signal                self.library_window.generate_post_requested.connect(self._on_generate_post_from_library)                            # Show the window            self.library_window.show()            self.library_window.raise_()            self.library_window.activateWindow()                    except Exception as e:            self.logger.exception(f"Error opening library window: {e}")            self._show_error(self.tr("Library Error"), self.tr("Could not open library window: {error_message}").format(error_message=e))
             
     def _on_open_schedule(self):
         """Open the scheduling panel."""
@@ -1046,22 +1027,4 @@ class MainWindow(QMainWindow):
         <p>For privacy concerns: privacy@breadsmithbakery.com</p>
         """
         
-        QMessageBox.about(self, "About Crow's Eye", about_text)
-    
-    def _on_generate_post_from_library(self, media_path: str):
-        """Handle generate post request from library window."""
-        try:
-            # Load the media into the main window
-            self._on_media_selected(media_path)
-            
-            # Show a status message
-            self.status_bar.showMessage(f"Loaded media for post generation: {os.path.basename(media_path)}")
-            
-            # Bring main window to front
-            self.show()
-            self.raise_()
-            self.activateWindow()
-            
-        except Exception as e:
-            self.logger.error(f"Error loading media from library: {e}")
-            self._show_error("Load Error", f"Could not load media for post generation: {str(e)}")
+        QMessageBox.about(self, "About Crow's Eye", about_text)        def _on_generate_post_from_library(self, media_path: str):        """Handle generate post request from library window."""        try:            # Load the media into the main window            self._on_media_selected(media_path)                        # Show a status message            self.status_bar.showMessage(f"Loaded media for post generation: {os.path.basename(media_path)}")                        # Bring main window to front            self.show()            self.raise_()            self.activateWindow()                    except Exception as e:            self.logger.error(f"Error loading media from library: {e}")            self._show_error("Load Error", f"Could not load media for post generation: {str(e)}")

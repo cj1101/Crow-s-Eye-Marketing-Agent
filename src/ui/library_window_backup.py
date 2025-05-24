@@ -22,7 +22,6 @@ class LibraryWindow(BaseMainWindow):
     """Main window for the media library with complete selection → gallery workflow."""
     
     gallery_created = Signal(dict)
-    generate_post_requested = Signal(str)  # Signal to request post generation with media
     
     def __init__(self, library_manager_instance: LibraryManager, parent=None, scheduler=None):
         self.library_manager = library_manager_instance
@@ -34,8 +33,8 @@ class LibraryWindow(BaseMainWindow):
         from ..handlers.media_handler import MediaHandler
         
         app_state = AppState()
-        self.media_handler = MediaHandler(app_state)
-        self.crowseye_handler = CrowsEyeHandler(app_state, self.media_handler, library_manager_instance)
+        media_handler = MediaHandler(app_state)
+        self.crowseye_handler = CrowsEyeHandler(app_state, media_handler, library_manager_instance)
         
         # Selection state for gallery creation
         self.selected_media = []
@@ -257,7 +256,6 @@ class LibraryWindow(BaseMainWindow):
                         widget_type = "image" if media_type == "raw_photos" else "video"
                         thumbnail = MediaThumbnailWidget(media_path, widget_type)
                         thumbnail.clicked.connect(self._on_media_item_selected)
-                        thumbnail.generate_post_requested.connect(self._on_generate_post_requested)
                         
                         self.media_layout.addWidget(thumbnail, row, col)
                         self.media_thumbnails[media_path] = thumbnail
@@ -289,9 +287,8 @@ class LibraryWindow(BaseMainWindow):
             galleries = self.crowseye_handler.get_saved_galleries()
             
             for gallery in galleries:
-                widget = GalleryItemWidget(gallery, self.media_handler, self)
-                widget.view_edit_requested.connect(self._on_view_edit_gallery_clicked)
-                widget.add_media_requested.connect(self._on_add_media_to_gallery_clicked)
+                widget = GalleryItemWidget(gallery, self)
+                widget.view_edit_clicked.connect(self._on_view_edit_gallery_clicked)
                 self.galleries_layout.addWidget(widget)
         except Exception as e:
             logging.error(f"Error loading galleries: {e}")
@@ -304,7 +301,7 @@ class LibraryWindow(BaseMainWindow):
         for item in items:
             if 'path' in item and os.path.exists(item['path']):
                 media_type = "video" if item['path'].lower().endswith(('.mp4', '.mov', '.avi', '.mkv')) else "image"
-                thumbnail = MediaThumbnailWidget(item['path'], media_type, show_generate_post=False)
+                thumbnail = MediaThumbnailWidget(item['path'], media_type)
                 grid_layout.addWidget(thumbnail, row, col)
                 
                 col += 1
@@ -348,39 +345,9 @@ class LibraryWindow(BaseMainWindow):
         for media_path in self.selected_media:
             if media_path in self.media_thumbnails:
                 self.media_thumbnails[media_path].set_selected(False)
-        self.selected_media.clear()
-        self._update_selection_display()
+                self.selected_media.clear()        self._update_selection_display()        def _highlight_media(self, media_paths):        """Highlight specific media paths in the media tab."""        # Clear current selection first        self._clear_selection()                # Select the specified media paths        for media_path in media_paths:            if media_path in self.media_thumbnails:                self.selected_media.append(media_path)                self.media_thumbnails[media_path].set_selected(True)                # Update display and switch to media tab        self._update_selection_display()        self.tab_widget.setCurrentIndex(0)  # Switch to Media tab
     
-    def _highlight_media(self, media_paths):
-        """Highlight specific media paths in the media tab."""
-        # Clear current selection first
-        self._clear_selection()
-        
-        # Select the specified media paths
-        for media_path in media_paths:
-            if media_path in self.media_thumbnails:
-                self.selected_media.append(media_path)
-                self.media_thumbnails[media_path].set_selected(True)
-        
-        # Update display and switch to media tab
-        self._update_selection_display()
-        self.tab_widget.setCurrentIndex(0)  # Switch to Media tab
-    
-    def _on_generate_gallery(self):
-        """Generate gallery with AI."""
-        from .dialogs.gallery_generation_dialog import GalleryGenerationDialog
-        
-        dialog = GalleryGenerationDialog(self.crowseye_handler, self)
-        if dialog.exec():
-            # Highlight selected media in the media tab
-            selected_paths = dialog.get_selected_media_paths()
-            if selected_paths:
-                self._highlight_media(selected_paths)
-            
-            # Switch to galleries tab and refresh
-            self.tab_widget.setCurrentIndex(2)
-            self.refresh_library()
-            self.status_label.setText("Gallery generated!")
+            def _on_generate_gallery(self):        """Generate gallery with AI."""        from .dialogs.gallery_generation_dialog import GalleryGenerationDialog                dialog = GalleryGenerationDialog(self.crowseye_handler, self)        if dialog.exec():            # Highlight selected media in the media tab            selected_paths = dialog.get_selected_media_paths()            self._highlight_media(selected_paths)                        # Switch to galleries tab and refresh            self.tab_widget.setCurrentIndex(2)            self.refresh_library()            self.status_label.setText("Gallery generated!")
     
     def _on_create_gallery_from_selection(self):
         """Create gallery from selection."""
@@ -397,48 +364,6 @@ class LibraryWindow(BaseMainWindow):
             self.tab_widget.setCurrentIndex(2)
             self.status_label.setText("Gallery created!")
     
-
-    def _on_add_media_to_gallery_clicked(self, gallery_data):
-        """Handle add media to gallery request."""
-        from .dialogs.media_selection_dialog import MediaSelectionDialog
-        
-        try:
-            # Get all available media for selection
-            all_media = self.crowseye_handler.get_all_media()
-            all_media_paths = []
-            for media_type, paths in all_media.items():
-                all_media_paths.extend(paths)
-            
-            if not all_media_paths:
-                from PySide6.QtWidgets import QMessageBox
-                QMessageBox.information(self, "No Media", "No media available to add. Please upload some media first.")
-                return
-            
-            # Open media selection dialog
-            dialog = MediaSelectionDialog(all_media_paths, self)
-            if dialog.exec():
-                selected_media = dialog.get_selected_media()
-                if selected_media:
-                    # Add selected media to the gallery
-                    gallery_filename = gallery_data.get('filename', '')
-                    if gallery_filename:
-                        success = self.crowseye_handler.add_media_to_gallery(gallery_filename, selected_media)
-                        if success:
-                            self._load_finished_galleries()  # Refresh galleries
-                            self.status_label.setText(f"Added {len(selected_media)} media item(s) to gallery")
-                        else:
-                            from PySide6.QtWidgets import QMessageBox
-                            QMessageBox.warning(self, "Error", "Failed to add media to gallery.")
-                    else:
-                        from PySide6.QtWidgets import QMessageBox
-                        QMessageBox.warning(self, "Error", "Gallery filename not found.")
-                
-        except Exception as e:
-            import logging
-            logging.error(f"Error adding media to gallery: {e}")
-            from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Error", f"Failed to add media to gallery: {str(e)}")
-
     def _on_view_edit_gallery_clicked(self, gallery_data):
         """View/edit gallery."""
         from .dialogs.gallery_viewer_dialog import GalleryViewerDialog
@@ -450,19 +375,6 @@ class LibraryWindow(BaseMainWindow):
     def _on_gallery_generated(self, media_paths):
         """Handle gallery generation completion."""
         self.status_label.setText(f"Gallery generated with {len(media_paths)} items")
-    
-    def _on_generate_post_requested(self, media_path):
-        """Handle request to generate post with specific media."""
-        try:
-            # Emit signal to main window to load this media for post generation
-            self.generate_post_requested.emit(media_path)
-            
-            # Close the library window to return to main window
-            self.close()
-            
-        except Exception as e:
-            logging.error(f"Error handling generate post request: {e}")
-            QMessageBox.warning(self, "Error", f"Could not load media for post generation: {str(e)}")
     
     def _on_file_upload(self):
         """Handle file upload."""

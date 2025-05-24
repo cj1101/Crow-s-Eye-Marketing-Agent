@@ -16,7 +16,7 @@ from PySide6.QtGui import QPixmap
 
 from ..config import constants as const
 from ..models.app_state import AppState
-from .scheduling_dialog import ScheduleDialog
+from .dialogs.scheduling_dialog import ScheduleDialog
 
 class SchedulingPanel(QWidget):
     """Panel for managing post schedules in the main window."""

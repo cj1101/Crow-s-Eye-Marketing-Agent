@@ -126,6 +126,74 @@
             "metadata": {
                 "original_mode": "RGB"
             }
+        },
+        "c72c2c18-3669-4c90-844c-08fd98c1b869": {
+            "id": "c72c2c18-3669-4c90-844c-08fd98c1b869",
+            "type": "raw_photo",
+            "filename": "c72c2c18-3669-4c90-844c-08fd98c1b869.jpg",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\c72c2c18-3669-4c90-844c-08fd98c1b869.jpg",
+            "caption": "Hop into Easter weekend with a 20% sale on ALL our baked goods!  From artisan loaves to pretzel perfection (and everything in between!), we've got your holiday spread sorted.  \ud83d\udc30\ud83c\udf5e  #EasterBaking #BreadSale #ArtisanBread #BakeryLove",
+            "date_added": "2025-05-23T22:42:00.048692",
+            "tags": [],
+            "dimensions": [
+                612,
+                408
+            ],
+            "size_str": "265.9 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
+        },
+        "953dc257-28eb-4966-87f6-0a7dac2122e0": {
+            "id": "953dc257-28eb-4966-87f6-0a7dac2122e0",
+            "type": "raw_photo",
+            "filename": "953dc257-28eb-4966-87f6-0a7dac2122e0.jpg",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\953dc257-28eb-4966-87f6-0a7dac2122e0.jpg",
+            "caption": "Hop into Easter weekend with a 20% sale on ALL our baked goods!  This week only, snag some seriously delicious breads, pastries, and more \u2013 it's almost too good to be true! \ud83d\udc30\ud83c\udf5e  #EasterBaking #BakerySale #SweetTreats #HappyEaster #BreadLovers",
+            "date_added": "2025-05-23T22:48:03.311720",
+            "tags": [],
+            "dimensions": [
+                612,
+                408
+            ],
+            "size_str": "225.6 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
+        },
+        "2bfc96fc-cfb1-4843-8696-e215758121b4": {
+            "id": "2bfc96fc-cfb1-4843-8696-e215758121b4",
+            "type": "raw_photo",
+            "filename": "2bfc96fc-cfb1-4843-8696-e215758121b4.jpeg",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\2bfc96fc-cfb1-4843-8696-e215758121b4.jpeg",
+            "caption": "Hop into spring savings with 20% OFF EVERYTHING all week long at our little bakery!  This bunny's got a serious craving for our delicious breads and pastries \u2013 and maybe a little something purple (that scarf!). \ud83d\udc30\ud83d\udc9c\ud83c\udf5e #EasterSale #BakeryLove #SmallBusiness #SupportLocal #BreadAndButter",
+            "date_added": "2025-05-23T23:00:27.070666",
+            "tags": [],
+            "dimensions": [
+                800,
+                521
+            ],
+            "size_str": "321.6 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
+        },
+        "1fbcc487-343f-4edd-be63-3e7c848383d2": {
+            "id": "1fbcc487-343f-4edd-be63-3e7c848383d2",
+            "type": "raw_photo",
+            "filename": "1fbcc487-343f-4edd-be63-3e7c848383d2.jpeg",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\1fbcc487-343f-4edd-be63-3e7c848383d2.jpeg",
+            "caption": "Hop into savings this Easter!  Everything in our bakery is 20% off all week long.  Come grab some artisan bread and maybe even a little goofy happiness with us! \ud83d\ude09\ud83d\udc30\ud83c\udf5e #EasterBakeSale #ArtisanBread #SmallBakeryLove #20percentoff",
+            "date_added": "2025-05-23T23:46:47.775624",
+            "tags": [],
+            "dimensions": [
+                800,
+                521
+            ],
+            "size_str": "321.6 KB",
+            "metadata": {
+                "original_mode": "RGB"
+            }
         }
     },
     "last_updated": "2025-04-21T20:56:19.275364",
