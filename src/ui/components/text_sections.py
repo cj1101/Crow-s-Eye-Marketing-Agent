@@ -296,6 +296,33 @@ class TextSections(BaseWidget):
         """
         return self.keep_caption_checkbox.isChecked()
     
+    def get_instructions(self) -> str:
+        """
+        Get the instructions text.
+        
+        Returns:
+            str: The instructions text content
+        """
+        return self.get_text("instructions")
+    
+    def get_photo_editing_instructions(self) -> str:
+        """
+        Get the photo editing instructions text.
+        
+        Returns:
+            str: The photo editing instructions text content
+        """
+        return self.get_text("photo_editing")
+    
+    def get_keep_caption_state(self) -> bool:
+        """
+        Get the state of the keep caption checkbox.
+        
+        Returns:
+            bool: True if keep caption is checked, False otherwise
+        """
+        return self.should_keep_caption()
+    
     def get_context_files(self) -> List[str]:
         """
         Get the list of context file paths.
