@@ -35,6 +35,7 @@ from .scheduling_panel import SchedulingPanel
 from .scheduling_dialog import ScheduleDialog
 from .modern_login_dialog import ModernLoginDialog
 from .preset_manager import PresetManager
+from .compliance_dialog import ComplianceDialog
 
 class MainWindow(QMainWindow):
     """Main application window."""
@@ -191,6 +192,9 @@ class MainWindow(QMainWindow):
         # Status bar
         self.status_bar = StatusBarWidget()
         self.setStatusBar(self.status_bar)
+        
+        # Create menu bar
+        self._create_menu_bar()
         
         # Style the tab buttons
         self._style_tab_buttons()
@@ -899,3 +903,141 @@ class MainWindow(QMainWindow):
 
         # Note: Messages shown via QMessageBox, QInputDialog, QFileDialog are typically
         # translated at the point they are shown, using self.tr() there.
+
+    def _create_menu_bar(self):
+        """Create the menu bar with compliance features."""
+        try:
+            menubar = self.menuBar()
+            
+            # File menu
+            file_menu = menubar.addMenu('&File')
+            
+            # Add export action
+            export_action = file_menu.addAction('Export Data...')
+            export_action.setShortcut('Ctrl+E')
+            export_action.triggered.connect(self._quick_export_data)
+            
+            file_menu.addSeparator()
+            
+            # Add exit action
+            exit_action = file_menu.addAction('E&xit')
+            exit_action.setShortcut('Ctrl+Q')
+            exit_action.triggered.connect(self.close)
+            
+            # Privacy menu
+            privacy_menu = menubar.addMenu('&Privacy')
+            
+            # Add compliance dialog action
+            compliance_action = privacy_menu.addAction('Privacy & Compliance...')
+            compliance_action.setShortcut('Ctrl+P')
+            compliance_action.triggered.connect(self._on_open_compliance)
+            
+            privacy_menu.addSeparator()
+            
+            # Add quick factory reset action
+            factory_reset_action = privacy_menu.addAction('Factory Reset...')
+            factory_reset_action.triggered.connect(self._quick_factory_reset)
+            
+            # Help menu
+            help_menu = menubar.addMenu('&Help')
+            
+            # Add privacy policy action
+            privacy_policy_action = help_menu.addAction('Privacy Policy')
+            privacy_policy_action.triggered.connect(self._open_privacy_policy)
+            
+            # Add about action
+            about_action = help_menu.addAction('About')
+            about_action.triggered.connect(self._show_about)
+            
+            self.logger.info("Menu bar created successfully")
+            
+        except Exception as e:
+            self.logger.error(f"Error creating menu bar: {e}")
+    
+    def _on_open_compliance(self):
+        """Open the compliance and privacy dialog."""
+        try:
+            dialog = ComplianceDialog(self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening compliance dialog: {e}")
+            self._show_error("Compliance Error", f"Could not open compliance dialog: {str(e)}")
+    
+    def _quick_export_data(self):
+        """Quick data export action from menu."""
+        try:
+            from ..handlers.compliance_handler import compliance_handler
+            
+            reply = QMessageBox.question(
+                self,
+                "Export User Data",
+                "This will create a comprehensive export of all your data. Continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.Yes
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                export_path = compliance_handler.export_user_data()
+                self._show_info("Export Complete", f"Data exported successfully to:\n{export_path}")
+                
+        except Exception as e:
+            self.logger.error(f"Error during quick export: {e}")
+            self._show_error("Export Error", f"Failed to export data: {str(e)}")
+    
+    def _quick_factory_reset(self):
+        """Quick factory reset action from menu."""
+        try:
+            reply = QMessageBox.critical(
+                self,
+                "⚠️ FACTORY RESET WARNING ⚠️",
+                "This will PERMANENTLY DELETE ALL YOUR DATA!\n\n"
+                "This includes all media files, presets, settings, and cached data.\n\n"
+                "THIS CANNOT BE UNDONE!\n\n"
+                "For a more detailed view of what will be deleted,\n"
+                "please use Privacy & Compliance dialog instead.\n\n"
+                "Are you absolutely sure you want to continue?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                # Open the compliance dialog to the factory reset tab
+                dialog = ComplianceDialog(self)
+                dialog.tab_widget.setCurrentIndex(4)  # Factory reset tab is index 4
+                dialog.exec()
+                
+        except Exception as e:
+            self.logger.error(f"Error during factory reset: {e}")
+            self._show_error("Factory Reset Error", f"Failed to initiate factory reset: {str(e)}")
+    
+    def _open_privacy_policy(self):
+        """Open the privacy policy URL."""
+        try:
+            import webbrowser
+            webbrowser.open("https://www.breadsmithbakery.com/privacy-policy")
+        except Exception as e:
+            self.logger.error(f"Error opening privacy policy: {e}")
+            self._show_error("Privacy Policy Error", "Could not open privacy policy in browser")
+    
+    def _show_about(self):
+        """Show about dialog."""
+        about_text = """
+        <h3>Crow's Eye - Social Media Marketing Tool</h3>
+        <p><b>Version:</b> 5.0</p>
+        <p><b>Meta Developer Platform Compliant</b></p>
+        <br>
+        <p>A smart marketing automation platform for creators and small businesses.</p>
+        <br>
+        <p><b>Privacy & Compliance Features:</b></p>
+        <ul>
+        <li>✅ Data Deletion Request Handling</li>
+        <li>✅ GDPR/CCPA Compliant Data Export</li>
+        <li>✅ Factory Reset Capability</li>
+        <li>✅ Privacy Policy Integration</li>
+        <li>✅ Security Incident Reporting</li>
+        </ul>
+        <br>
+        <p>For privacy concerns: privacy@breadsmithbakery.com</p>
+        """
+        
+        QMessageBox.about(self, "About Crow's Eye", about_text)
