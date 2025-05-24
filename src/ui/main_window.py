@@ -627,6 +627,10 @@ class MainWindow(QMainWindow):
                 language_code=current_language # Pass the language code
             )
             self.logger.info(f"Caption generated: {caption_to_use[:50]}...")
+            # Set the generated caption in the UI
+            if caption_to_use:
+                self.text_sections.set_text("caption", caption_to_use)
+                self.app_state.current_caption = caption_to_use
         elif keep_caption and self.app_state.current_caption: # If keeping caption and one exists
             caption_to_use = self.app_state.current_caption
             self.logger.info(f"Keeping existing caption: {caption_to_use[:50]}...")
