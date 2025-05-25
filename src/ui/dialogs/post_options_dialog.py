@@ -139,6 +139,14 @@ class PostOptionsDialog(QDialog):
         self.ig_checkbox.setChecked(True)
         post_now_layout.addWidget(self.ig_checkbox)
         
+        self.linkedin_checkbox = QCheckBox() # Text set in retranslateUi
+        self.linkedin_checkbox.setChecked(False)
+        post_now_layout.addWidget(self.linkedin_checkbox)
+        
+        self.x_checkbox = QCheckBox() # Text set in retranslateUi
+        self.x_checkbox.setChecked(False)
+        post_now_layout.addWidget(self.x_checkbox)
+        
         self.post_now_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
         self.post_now_btn.setObjectName("postNowButton")
         self.post_now_btn.clicked.connect(self._on_post_now)
@@ -188,7 +196,8 @@ class PostOptionsDialog(QDialog):
         
     def _on_post_now(self):
         """Handle post now button click."""
-        if not self.fb_checkbox.isChecked() and not self.ig_checkbox.isChecked():
+        if not (self.fb_checkbox.isChecked() or self.ig_checkbox.isChecked() or 
+                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked()):
             QMessageBox.warning(self, self.tr("Post Error"), self.tr("Please select at least one platform to post to."))
             return
             
@@ -197,6 +206,10 @@ class PostOptionsDialog(QDialog):
             platforms.append("facebook")
         if self.ig_checkbox.isChecked():
             platforms.append("instagram")
+        if self.linkedin_checkbox.isChecked():
+            platforms.append("linkedin")
+        if self.x_checkbox.isChecked():
+            platforms.append("x")
             
         # Add platforms to post data
         post_data = self.post_data.copy() # Ensure we don't modify original dict directly if passed around
@@ -253,6 +266,10 @@ class PostOptionsDialog(QDialog):
             self.fb_checkbox.setText(self.tr("Post to Facebook"))
         if hasattr(self, 'ig_checkbox') and self.ig_checkbox: # Check if ig_checkbox exists
             self.ig_checkbox.setText(self.tr("Post to Instagram"))
+        if hasattr(self, 'linkedin_checkbox') and self.linkedin_checkbox: # Check if linkedin_checkbox exists
+            self.linkedin_checkbox.setText(self.tr("Post to LinkedIn"))
+        if hasattr(self, 'x_checkbox') and self.x_checkbox: # Check if x_checkbox exists
+            self.x_checkbox.setText(self.tr("Post to X"))
         if self.post_now_btn: # Check if post_now_btn exists
             self.post_now_btn.setText(self.tr("Post Now"))
 

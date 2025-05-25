@@ -15,6 +15,7 @@ from PySide6.QtGui import QPixmap, QFont, QIcon
 
 from ...config import constants as const
 from ...handlers.meta_posting_handler import MetaPostingHandler, MetaPostingWorker
+from ...handlers.unified_posting_handler import UnifiedPostingHandler, UnifiedPostingWorker
 from ..base_dialog import BaseDialog
 
 class CustomMediaUploadDialog(BaseDialog):
@@ -28,6 +29,7 @@ class CustomMediaUploadDialog(BaseDialog):
         
         # Initialize components
         self.meta_handler = MetaPostingHandler()
+        self.unified_handler = UnifiedPostingHandler()
         self.worker_thread = None
         self.selected_media_path = None
         self.selected_audio_path = None
@@ -39,6 +41,8 @@ class CustomMediaUploadDialog(BaseDialog):
         self.caption_text = None
         self.instagram_checkbox = None
         self.facebook_checkbox = None
+        self.linkedin_checkbox = None
+        self.x_checkbox = None
         self.upload_button = None
         self.progress_bar = None
         self.status_label = None
@@ -217,6 +221,14 @@ class CustomMediaUploadDialog(BaseDialog):
         self.facebook_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
         platform_layout.addWidget(self.facebook_checkbox)
         
+        self.linkedin_checkbox = QCheckBox("LinkedIn")
+        self.linkedin_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_layout.addWidget(self.linkedin_checkbox)
+        
+        self.x_checkbox = QCheckBox("X (Twitter)")
+        self.x_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_layout.addWidget(self.x_checkbox)
+        
         layout.addWidget(platform_group)
         
         # Progress section
@@ -293,13 +305,15 @@ class CustomMediaUploadDialog(BaseDialog):
         # Platform checkboxes
         self.instagram_checkbox.toggled.connect(self._validate_form)
         self.facebook_checkbox.toggled.connect(self._validate_form)
+        self.linkedin_checkbox.toggled.connect(self._validate_form)
+        self.x_checkbox.toggled.connect(self._validate_form)
         
-        # Meta handler signals
-        self.meta_handler.signals.upload_started.connect(self._on_upload_started)
-        self.meta_handler.signals.upload_progress.connect(self._on_upload_progress)
-        self.meta_handler.signals.upload_success.connect(self._on_upload_success)
-        self.meta_handler.signals.upload_error.connect(self._on_upload_error)
-        self.meta_handler.signals.status_update.connect(self._on_status_update)
+        # Unified handler signals
+        self.unified_handler.signals.upload_started.connect(self._on_upload_started)
+        self.unified_handler.signals.upload_progress.connect(self._on_upload_progress)
+        self.unified_handler.signals.upload_success.connect(self._on_upload_success)
+        self.unified_handler.signals.upload_error.connect(self._on_upload_error)
+        self.unified_handler.signals.status_update.connect(self._on_status_update)
         
     def _select_media_file(self):
         """Open file dialog to select media file."""
@@ -444,49 +458,85 @@ class CustomMediaUploadDialog(BaseDialog):
     def _validate_form(self):
         """Validate form and enable/disable upload button."""
         has_media = self.selected_media_path is not None
-        has_platform = self.instagram_checkbox.isChecked() or self.facebook_checkbox.isChecked()
-        caption_valid = len(self.caption_text.toPlainText()) <= const.IG_MAX_CAPTION_LENGTH
+        has_platform = (self.instagram_checkbox.isChecked() or 
+                       self.facebook_checkbox.isChecked() or 
+                       self.linkedin_checkbox.isChecked() or 
+                       self.x_checkbox.isChecked())
         
-        self.upload_button.setEnabled(has_media and has_platform and caption_valid)
+        # Check if any text-only platforms are selected (LinkedIn, X, Facebook)
+        text_only_platforms = (self.linkedin_checkbox.isChecked() or 
+                              self.x_checkbox.isChecked() or 
+                              self.facebook_checkbox.isChecked())
+        
+        # Instagram requires media, but other platforms can be text-only
+        instagram_selected = self.instagram_checkbox.isChecked()
+        
+        # Form is valid if:
+        # 1. At least one platform is selected
+        # 2. If Instagram is selected, media must be provided
+        # 3. If only text-only platforms are selected, caption must be provided
+        caption = self.caption_text.toPlainText().strip()
+        caption_valid = len(caption) <= const.IG_MAX_CAPTION_LENGTH
+        
+        form_valid = (has_platform and caption_valid and 
+                     ((instagram_selected and has_media) or 
+                      (not instagram_selected and (has_media or (text_only_platforms and caption)))))
+        
+        self.upload_button.setEnabled(form_valid)
     
     def _check_platform_availability(self):
         """Check which platforms are available for posting."""
-        status = self.meta_handler.get_posting_status()
+        available_platforms = self.unified_handler.get_available_platforms()
+        platform_errors = self.unified_handler.get_platform_errors()
         
-        if not status["credentials_loaded"]:
-            self.instagram_checkbox.setEnabled(False)
-            self.facebook_checkbox.setEnabled(False)
-            self.status_label.setText("Meta credentials not loaded. Please connect your accounts first.")
-            self.status_label.setStyleSheet("color: #f44336; font-size: 12px;")
-            return
+        # Set platform availability
+        self.instagram_checkbox.setEnabled(available_platforms.get('instagram', False))
+        self.facebook_checkbox.setEnabled(available_platforms.get('facebook', False))
+        self.linkedin_checkbox.setEnabled(available_platforms.get('linkedin', False))
+        self.x_checkbox.setEnabled(available_platforms.get('x', False))
         
-        self.instagram_checkbox.setEnabled(status["instagram_available"])
-        self.facebook_checkbox.setEnabled(status["facebook_available"])
-        
-        if not status["instagram_available"]:
+        # Update labels for unavailable platforms
+        if not available_platforms.get('instagram', False):
             self.instagram_checkbox.setText("Instagram (Not Available)")
             self.instagram_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
         
-        if not status["facebook_available"]:
+        if not available_platforms.get('facebook', False):
             self.facebook_checkbox.setText("Facebook (Not Available)")
             self.facebook_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
         
-        if status["error_message"]:
-            self.status_label.setText(status["error_message"])
+        if not available_platforms.get('linkedin', False):
+            self.linkedin_checkbox.setText("LinkedIn (Not Available)")
+            self.linkedin_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
+        
+        if not available_platforms.get('x', False):
+            self.x_checkbox.setText("X (Not Available)")
+            self.x_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
+        
+        # Show error message if any platforms are unavailable
+        error_messages = []
+        for platform, error in platform_errors.items():
+            if error:
+                error_messages.append(f"{platform.title()}: {error}")
+        
+        if error_messages:
+            self.status_label.setText("Some platforms unavailable. Check credentials.")
             self.status_label.setStyleSheet("color: #f44336; font-size: 12px;")
+        else:
+            self.status_label.setText("All platforms available")
+            self.status_label.setStyleSheet("color: #4CAF50; font-size: 12px;")
     
     def _start_upload(self):
         """Start the upload process."""
-        if not self.selected_media_path:
-            QMessageBox.warning(self, "No Media", "Please select a media file first.")
-            return
-        
         # Get selected platforms
         platforms = []
         if self.instagram_checkbox.isChecked():
             platforms.append("Instagram")
         if self.facebook_checkbox.isChecked():
             platforms.append("Facebook")
+        if self.linkedin_checkbox.isChecked():
+            platforms.append("LinkedIn")
+        if self.x_checkbox.isChecked():
+            platforms.append("X")
         
         if not platforms:
             QMessageBox.warning(self, "No Platforms", "Please select at least one platform.")
@@ -495,21 +545,33 @@ class CustomMediaUploadDialog(BaseDialog):
         # Get caption
         caption = self.caption_text.toPlainText().strip()
         
+        # Check if Instagram is selected and requires media
+        if "Instagram" in platforms and not self.selected_media_path:
+            QMessageBox.warning(self, "No Media", "Instagram requires a media file. Please select a media file or uncheck Instagram.")
+            return
+        
+        # Check if we have either media or caption for text-only platforms
+        text_only_platforms = [p for p in platforms if p in ["LinkedIn", "X", "Facebook"]]
+        if text_only_platforms and not self.selected_media_path and not caption:
+            QMessageBox.warning(self, "No Content", "Please provide either a media file or caption text.")
+            return
+        
         # Disable UI during upload
         self.upload_button.setEnabled(False)
         self.progress_bar.setVisible(True)
         self.progress_bar.setValue(0)
         
         # Start worker thread
-        self.worker_thread = MetaPostingWorker(
-            self.meta_handler, 
-            self.selected_media_path, 
-            caption, 
+        self.worker_thread = UnifiedPostingWorker(
+            self.unified_handler, 
             platforms,
-            self.selected_audio_path
+            self.selected_media_path, 
+            caption,
+            self.is_video
         )
         self.worker_thread.finished.connect(self._on_worker_finished)
         self.worker_thread.progress.connect(self._on_worker_progress)
+        self.worker_thread.platform_complete.connect(self._on_platform_complete)
         self.worker_thread.start()
     
     def _on_upload_started(self, platform: str):
@@ -536,20 +598,35 @@ class CustomMediaUploadDialog(BaseDialog):
         """Handle status update signal."""
         self.status_label.setText(message)
     
-    def _on_worker_finished(self, success: bool, platform: str, message: str):
+    def _on_worker_finished(self, success: bool, results: dict):
         """Handle worker thread completion."""
         self.progress_bar.setVisible(False)
         self.upload_button.setEnabled(True)
         
         if success:
+            successful_platforms = [platform for platform, (success, _) in results.items() if success]
             QMessageBox.information(self, "Upload Complete", 
-                                  f"Successfully uploaded to {platform}!")
-            self.upload_completed.emit(True, f"Uploaded to {platform}")
+                                  f"Successfully uploaded to {', '.join(successful_platforms)}!")
+            self.upload_completed.emit(True, f"Uploaded to {', '.join(successful_platforms)}")
             self.accept()
         else:
-            QMessageBox.critical(self, "Upload Failed", 
-                               f"Failed to upload to {platform}: {message}")
-            self.upload_completed.emit(False, message)
+            failed_platforms = []
+            for platform, (success, message) in results.items():
+                if not success:
+                    failed_platforms.append(f"{platform}: {message}")
+            
+            error_msg = "\n".join(failed_platforms)
+            QMessageBox.critical(self, "Upload Failed", f"Upload failed:\n{error_msg}")
+            self.upload_completed.emit(False, error_msg)
+    
+    def _on_platform_complete(self, platform: str, success: bool, message: str):
+        """Handle individual platform completion."""
+        if success:
+            self.status_label.setText(f"✓ {platform} completed successfully")
+            self.status_label.setStyleSheet("color: #4CAF50; font-size: 12px;")
+        else:
+            self.status_label.setText(f"✗ {platform} failed: {message}")
+            self.status_label.setStyleSheet("color: #f44336; font-size: 12px;")
     
     def _on_worker_progress(self, message: str, percentage: int):
         """Handle worker progress updates."""
