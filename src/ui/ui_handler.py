@@ -194,11 +194,37 @@ class UIHandler:
         self.signals.status_update.emit("Processing upload...")
         
         try:
-            # TODO: Implement actual upload logic
-            self.signals.info.emit(
-                "Upload Complete",
-                f"Successfully processed {len(file_paths)} files"
-            )
+            # Use the main window's library functionality for upload
+            if hasattr(self.main_window, '_on_file_upload'):
+                # Delegate to the main window's upload handler
+                self.main_window._on_file_upload()
+            else:
+                # Basic file copy to media library
+                import shutil
+                uploaded = 0
+                media_library_dir = "media_library"
+                os.makedirs(media_library_dir, exist_ok=True)
+                
+                for file_path in file_paths:
+                    if os.path.exists(file_path):
+                        filename = os.path.basename(file_path)
+                        dest_path = os.path.join(media_library_dir, filename)
+                        
+                        # Handle duplicate filenames
+                        counter = 1
+                        base_name, ext = os.path.splitext(filename)
+                        while os.path.exists(dest_path):
+                            new_filename = f"{base_name}_{counter}{ext}"
+                            dest_path = os.path.join(media_library_dir, new_filename)
+                            counter += 1
+                        
+                        shutil.copy2(file_path, dest_path)
+                        uploaded += 1
+                
+                self.signals.info.emit(
+                    "Upload Complete",
+                    f"Successfully uploaded {uploaded} files to media library"
+                )
         except Exception as e:
             self._show_error("Upload Error", str(e))
         finally:
@@ -219,8 +245,16 @@ class UIHandler:
         self.signals.status_update.emit("Applying edits...")
         
         try:
-            # TODO: Implement actual edit logic
-            self.signals.info.emit("Edit Complete", "Media edited successfully")
+            # Open the image edit dialog for the selected media
+            from .dialogs.image_edit_dialog import ImageEditDialog
+            
+            dialog = ImageEditDialog(self.main_window, selected_media)
+            if dialog.exec() == dialog.DialogCode.Accepted:
+                self.signals.info.emit("Edit Complete", "Media edited successfully")
+                # Refresh the media display
+                self.signals.media_refreshed.emit()
+            else:
+                self.signals.status_update.emit("Edit cancelled")
         except Exception as e:
             self._show_error("Edit Error", str(e))
         finally:
@@ -241,8 +275,19 @@ class UIHandler:
         self.signals.status_update.emit("Posting to Instagram...")
         
         try:
-            # TODO: Implement actual posting logic
-            self.signals.info.emit("Post Complete", "Media posted successfully")
+            # Open the custom media upload dialog for posting
+            from .dialogs.custom_media_upload_dialog import CustomMediaUploadDialog
+            from ..handlers.meta_posting_handler import MetaPostingHandler
+            
+            # Create meta posting handler
+            meta_handler = MetaPostingHandler()
+            
+            # Create and show upload dialog
+            dialog = CustomMediaUploadDialog(self.main_window, meta_handler, selected_media)
+            if dialog.exec() == dialog.DialogCode.Accepted:
+                self.signals.info.emit("Post Complete", "Media posted successfully")
+            else:
+                self.signals.status_update.emit("Post cancelled")
         except Exception as e:
             self._show_error("Post Error", str(e))
         finally:
@@ -294,7 +339,9 @@ class UIHandler:
     def cleanup(self) -> None:
         """Clean up resources before closing."""
         self.refresh_timer.stop()
-        # TODO: Add any additional cleanup needed
+        # Clean up any open dialogs or resources
+        if hasattr(self, 'app_state') and self.app_state:
+            self.app_state = None
 
     def load_media(self, media_path: str) -> None:
         """

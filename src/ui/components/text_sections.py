@@ -367,6 +367,25 @@ class TextSections(BaseWidget):
         if self.keep_caption_checkbox:
             self.keep_caption_checkbox.setChecked(False)
         self.logger.info("All text sections cleared.")
+    
+    def set_photo_editing_enabled(self, enabled: bool):
+        """Enable or disable the photo editing section."""
+        if hasattr(self, 'photo_editing_group_box'):
+            self.photo_editing_group_box.setEnabled(enabled)
+            
+            # Update the style to show it's disabled
+            if enabled:
+                self.photo_editing_group_box.setStyleSheet("")
+            else:
+                self.photo_editing_group_box.setStyleSheet("""
+                    QGroupBox {
+                        color: #888888;
+                    }
+                    QTextEdit {
+                        background-color: #f5f5f5;
+                        color: #888888;
+                    }
+                """)
 
     def changeEvent(self, event):
         """Handle change events, particularly language changes."""

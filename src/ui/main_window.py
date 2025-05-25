@@ -36,6 +36,11 @@ from .dialogs.scheduling_dialog import ScheduleDialog
 from .dialogs.modern_login_dialog import ModernLoginDialog
 from .preset_manager import PresetManager
 from .dialogs.compliance_dialog import ComplianceDialog
+from .dialogs.highlight_reel_dialog import HighlightReelDialog
+from .dialogs.story_assistant_dialog import StoryAssistantDialog
+from .dialogs.thumbnail_selector_dialog import ThumbnailSelectorDialog
+from .dialogs.audio_overlay_dialog import AudioOverlayDialog
+from .dialogs.custom_media_upload_dialog import CustomMediaUploadDialog
 
 class MainWindow(QMainWindow):
     """Main application window."""
@@ -261,6 +266,7 @@ class MainWindow(QMainWindow):
         self.media_section.media_selected.connect(self._on_media_selected)
         self.media_section.toggle_view.connect(self._on_toggle_image_view)
         self.media_section.post_format_changed.connect(self._on_post_format_changed)
+        self.media_section.video_selected.connect(self._on_video_selected)
         
         # Text sections signals
         self.text_sections.context_files_changed.connect(self._on_context_files_changed)
@@ -604,6 +610,7 @@ class MainWindow(QMainWindow):
         context_files = self.app_state.context_files
         keep_caption = self.text_sections.get_keep_caption_state()
         current_image_path_for_processing = self.app_state.selected_media
+        current_audio_path = self.media_section.get_current_audio_path()
 
         # Get current language code from app_state, default to 'en'
         current_language = getattr(self.app_state, 'current_language_code', 'en')
@@ -721,6 +728,11 @@ class MainWindow(QMainWindow):
             self.app_state.showing_edited = True
             self.media_section.set_edited_media(final_image_path) # This will refresh the preview
 
+        # Store audio path in app state for later use
+        if current_audio_path:
+            self.app_state.current_audio = current_audio_path
+            self.logger.info(f"Audio file attached to post: {os.path.basename(current_audio_path)}")
+        
         # Update status
         self.status_bar.showMessage(self.tr("Caption generated successfully"))
         self.button_section.set_generating(False)
@@ -767,6 +779,15 @@ class MainWindow(QMainWindow):
             try:
                 if hasattr(self.media_handler, 'get_media_metadata'):
                     metadata = self.media_handler.get_media_metadata(media_path)
+                
+                # Add audio information to metadata if available
+                if hasattr(self.app_state, 'current_audio') and self.app_state.current_audio:
+                    metadata['audio_file'] = self.app_state.current_audio
+                    metadata['has_audio'] = True
+                    self.logger.info(f"Including audio file in post metadata: {os.path.basename(self.app_state.current_audio)}")
+                else:
+                    metadata['has_audio'] = False
+                    
             except Exception as e:
                 self.logger.warning(f"Could not get metadata for {media_path}: {e}")
             
@@ -774,7 +795,8 @@ class MainWindow(QMainWindow):
             result = self.library_manager.add_item_from_path(
                 file_path=media_path,
                 caption=caption,
-                metadata=metadata
+                metadata=metadata,
+                is_post_ready=True
             )
             
             if result:
@@ -784,6 +806,12 @@ class MainWindow(QMainWindow):
                 # Update last updated timestamp
                 if hasattr(self.app_state, 'library_last_updated'):
                     self.app_state.library_last_updated = datetime.datetime.now()
+                
+                # Refresh library window if it's open
+                if hasattr(self, 'library_window') and self.library_window and self.library_window.isVisible():
+                    self.library_window.refresh_library()
+                if hasattr(self, 'library_window_instance') and self.library_window_instance and self.library_window_instance.isVisible():
+                    self.library_window_instance.refresh_library()
                     
                 # Switch to the Crow's Eye Marketing tab to see the finished post
                 # self._switch_tab(1) # Remove this line - perhaps switch to library or stay on current tab
@@ -869,7 +897,23 @@ class MainWindow(QMainWindow):
         
         # All preview logic removed. Generate button will handle final application.
         
-        # Rest of the method remains unchanged (which is nothing in this simplified version) 
+        # Rest of the method remains unchanged (which is nothing in this simplified version)
+    
+    def _on_video_selected(self, is_video: bool):
+        """Handle when video is selected to enable/disable photo editing."""
+        try:
+            # Enable/disable photo editing section based on media type
+            self.text_sections.set_photo_editing_enabled(not is_video)
+            
+            if is_video:
+                self.logger.info("Video selected - photo editing section disabled")
+                self.status_bar.showMessage("Video selected - photo editing disabled")
+            else:
+                self.logger.info("Image selected - photo editing section enabled")
+                self.status_bar.showMessage("Image selected - photo editing enabled")
+                
+        except Exception as e:
+            self.logger.exception(f"Error handling video selection: {e}") 
 
     def _on_language_selected(self, lang_code: str):
         """Handle language selection change (Currently disabled)"""
@@ -929,6 +973,54 @@ class MainWindow(QMainWindow):
             exit_action = file_menu.addAction('E&xit')
             exit_action.setShortcut('Ctrl+Q')
             exit_action.triggered.connect(self.close)
+            
+            # Social Media menu
+            social_menu = menubar.addMenu('&Social Media')
+            
+            # Add custom media upload action
+            upload_action = social_menu.addAction('Upload Custom Media...')
+            upload_action.setShortcut('Ctrl+U')
+            upload_action.triggered.connect(self._on_open_custom_upload)
+            
+            social_menu.addSeparator()
+            
+            # Add post to platforms action (for current media)
+            post_current_action = social_menu.addAction('Post Current Media...')
+            post_current_action.setShortcut('Ctrl+Shift+P')
+            post_current_action.triggered.connect(self._on_post_current_media)
+            
+            # Video menu
+            video_menu = menubar.addMenu('&Video')
+            
+            # Add highlight reel generator
+            highlight_reel_action = video_menu.addAction('Highlight Reel Generator...')
+            highlight_reel_action.setShortcut('Ctrl+H')
+            highlight_reel_action.triggered.connect(self._on_open_highlight_reel)
+            
+            # Add story assistant
+            story_assistant_action = video_menu.addAction('Story Assistant...')
+            story_assistant_action.setShortcut('Ctrl+S')
+            story_assistant_action.triggered.connect(self._on_open_story_assistant)
+            
+            # Add thumbnail selector
+            thumbnail_selector_action = video_menu.addAction('Reel Thumbnail Selector...')
+            thumbnail_selector_action.setShortcut('Ctrl+T')
+            thumbnail_selector_action.triggered.connect(self._on_open_thumbnail_selector)
+            
+            video_menu.addSeparator()
+            
+            # Add audio overlay
+            audio_overlay_action = video_menu.addAction('Audio Overlay...')
+            audio_overlay_action.setShortcut('Ctrl+A')
+            audio_overlay_action.triggered.connect(self._on_open_audio_overlay)
+            
+            # Analytics menu
+            analytics_menu = menubar.addMenu('&Analytics')
+            
+            # Add analytics dashboard
+            analytics_action = analytics_menu.addAction('Performance Dashboard...')
+            analytics_action.setShortcut('Ctrl+D')
+            analytics_action.triggered.connect(self._on_open_analytics_dashboard)
             
             # Privacy menu
             privacy_menu = menubar.addMenu('&Privacy')
@@ -1065,3 +1157,99 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Error loading media from library: {e}")
             self._show_error("Load Error", f"Could not load media for post generation: {str(e)}")
+    
+    def _on_open_highlight_reel(self):
+        """Open the highlight reel generator dialog."""
+        try:
+            dialog = HighlightReelDialog(self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening highlight reel dialog: {e}")
+            self._show_error("Highlight Reel Error", f"Could not open highlight reel generator: {str(e)}")
+    
+    def _on_open_story_assistant(self):
+        """Open the story assistant dialog."""
+        try:
+            dialog = StoryAssistantDialog(self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening story assistant dialog: {e}")
+            self._show_error("Story Assistant Error", f"Could not open story assistant: {str(e)}")
+    
+    def _on_open_thumbnail_selector(self):
+        """Open the thumbnail selector dialog."""
+        try:
+            dialog = ThumbnailSelectorDialog(parent=self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening thumbnail selector dialog: {e}")
+            self._show_error("Thumbnail Selector Error", f"Could not open thumbnail selector: {str(e)}")
+    
+    def _on_open_audio_overlay(self):
+        """Open the audio overlay dialog."""
+        try:
+            dialog = AudioOverlayDialog(parent=self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening audio overlay dialog: {e}")
+            self._show_error("Audio Overlay Error", f"Could not open audio overlay: {str(e)}")
+    
+    def _on_open_analytics_dashboard(self):
+        """Open the analytics dashboard dialog."""
+        try:
+            from .dialogs.analytics_dashboard_dialog import AnalyticsDashboardDialog
+            dialog = AnalyticsDashboardDialog(self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening analytics dashboard: {e}")
+            self._show_error("Analytics Error", f"Could not open analytics dashboard: {str(e)}")
+    
+    def _on_open_custom_upload(self):
+        """Open the custom media upload dialog."""
+        try:
+            dialog = CustomMediaUploadDialog(self)
+            dialog.upload_completed.connect(self._on_custom_upload_completed)
+            dialog.exec()
+        except Exception as e:
+            self.logger.error(f"Error opening custom upload dialog: {e}")
+            self._show_error("Upload Error", f"Could not open custom media upload: {str(e)}")
+    
+    def _on_custom_upload_completed(self, success: bool, message: str):
+        """Handle completion of custom media upload."""
+        try:
+            if success:
+                self.status_bar.showMessage(f"Upload successful: {message}", 5000)
+                self._show_info("Upload Complete", message)
+            else:
+                self.status_bar.showMessage(f"Upload failed: {message}", 5000)
+                self._show_error("Upload Failed", message)
+        except Exception as e:
+            self.logger.error(f"Error handling upload completion: {e}")
+    
+    def _on_post_current_media(self):
+        """Post the currently selected media to social platforms."""
+        try:
+            # Get the currently displayed media path
+            media_path = self.media_section.get_current_display_path()
+            
+            if not media_path:
+                self._show_warning("No Media", "No media is currently selected. Please select media first or use 'Upload Custom Media' to upload new content.")
+                return
+            
+            # Get the current caption
+            caption = self.text_sections.get_text("caption")
+            
+            # Open custom upload dialog with pre-filled data
+            dialog = CustomMediaUploadDialog(self)
+            
+            # Pre-load the current media and caption
+            dialog._load_media_file(media_path)
+            if caption:
+                dialog.caption_text.setPlainText(caption)
+            
+            dialog.upload_completed.connect(self._on_custom_upload_completed)
+            dialog.exec()
+            
+        except Exception as e:
+            self.logger.error(f"Error posting current media: {e}")
+            self._show_error("Post Error", f"Could not post current media: {str(e)}")

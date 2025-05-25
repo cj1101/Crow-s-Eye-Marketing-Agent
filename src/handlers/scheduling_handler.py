@@ -168,8 +168,7 @@ class PostScheduler:
             
     def _publish_post(self, post: Dict[str, Any]) -> bool:
         """
-        Publish a post.
-        This is a placeholder for actual publishing functionality.
+        Publish a post using the actual posting handler.
         
         Args:
             post: Post data
@@ -178,14 +177,55 @@ class PostScheduler:
             bool: True if successful, False otherwise
         """
         try:
+            media_path = post.get('media_path', '')
+            caption = post.get('caption', '')
+            platforms = post.get('platforms', ['instagram', 'facebook'])
+            
+            if not media_path or not os.path.exists(media_path):
+                self.logger.warning(f"Media file not found: {media_path}")
+                return False
+            
             # Log the post
-            self.logger.info(f"Publishing post: {post.get('media_path')}")
-            self.signals.status_update.emit(f"Publishing post: {post.get('media_path')}")
+            self.logger.info(f"Publishing post: {media_path}")
+            self.signals.status_update.emit(f"Publishing post: {os.path.basename(media_path)}")
             
-            # Emit signal
-            self.signals.post_published.emit(post)
+            # Use the actual posting handler
+            from .meta_posting_handler import MetaPostingHandler
+            meta_handler = MetaPostingHandler()
             
-            return True
+            success_count = 0
+            for platform in platforms:
+                try:
+                    if platform.lower() in ["instagram", "facebook"]:
+                        # Determine if it's a video
+                        _, ext = os.path.splitext(media_path)
+                        is_video = ext.lower() in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']
+                        
+                        # Post to the platform
+                        if platform.lower() == "instagram":
+                            success, message = meta_handler.post_to_instagram(media_path, caption, is_video)
+                        else:  # facebook
+                            success, message = meta_handler.post_to_facebook(media_path, caption, is_video)
+                        
+                        if success:
+                            success_count += 1
+                            self.logger.info(f"Successfully published to {platform}: {media_path}")
+                        else:
+                            self.logger.warning(f"Failed to publish to {platform}: {message}")
+                    else:
+                        self.logger.warning(f"Unsupported platform: {platform}")
+                except Exception as e:
+                    self.logger.exception(f"Error publishing to {platform}: {e}")
+            
+            # Check if at least one platform succeeded
+            if success_count > 0:
+                # Emit signal
+                self.signals.post_published.emit(post)
+                return True
+            else:
+                self.logger.warning("Failed to publish to any platform")
+                return False
+            
         except Exception as e:
             self.logger.error(f"Error publishing post: {e}")
             self.signals.error.emit("Publish Error", f"Failed to publish post: {str(e)}")
@@ -431,12 +471,38 @@ class PostScheduler:
             self.logger.info(f"Posting to {', '.join(platforms)}: {media_path}")
             self.signals.status_update.emit(f"Posting to {', '.join(platforms)}: {os.path.basename(media_path)}")
             
-            # Placeholder for actual posting logic
-            # In a real implementation, this would call the API for each platform
+            # Use the actual posting handler for each platform
+            from .meta_posting_handler import MetaPostingHandler
+            meta_handler = MetaPostingHandler()
+            
+            success_count = 0
             for platform in platforms:
-                # Simulate posting delay
-                time.sleep(0.5)
-                self.logger.info(f"Posted to {platform}: {media_path}")
+                try:
+                    if platform.lower() in ["instagram", "facebook"]:
+                        # Determine if it's a video
+                        _, ext = os.path.splitext(media_path)
+                        is_video = ext.lower() in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']
+                        
+                        # Post to the platform
+                        if platform.lower() == "instagram":
+                            success, message = meta_handler.post_to_instagram(media_path, caption, is_video)
+                        else:  # facebook
+                            success, message = meta_handler.post_to_facebook(media_path, caption, is_video)
+                        
+                        if success:
+                            success_count += 1
+                            self.logger.info(f"Successfully posted to {platform}: {media_path}")
+                        else:
+                            self.logger.warning(f"Failed to post to {platform}: {message}")
+                    else:
+                        self.logger.warning(f"Unsupported platform: {platform}")
+                except Exception as e:
+                    self.logger.exception(f"Error posting to {platform}: {e}")
+            
+            # Check if at least one platform succeeded
+            if success_count == 0:
+                self.signals.warning.emit("Post Warning", "Failed to post to any platform")
+                return False
                 
             # Create result data
             result_data = {

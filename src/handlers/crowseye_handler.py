@@ -75,6 +75,14 @@ class CrowsEyeHandler:
         self.signals = CrowsEyeSignals()
         self.logger = logging.getLogger(self.__class__.__name__)
         
+        # Initialize analytics handler
+        try:
+            from .analytics_handler import AnalyticsHandler
+            self.analytics_handler = AnalyticsHandler()
+        except Exception as e:
+            self.logger.warning(f"Could not initialize analytics handler: {e}")
+            self.analytics_handler = None
+        
         # Directories
         self.media_gallery_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'media_gallery')
         self._ensure_directories()
@@ -95,7 +103,8 @@ class CrowsEyeHandler:
     
     def get_all_media(self) -> Dict[str, List[str]]:
         """
-        Get all media organized by type, using LibraryManager.
+        Get all media organized by type.
+        Raw media comes from media_library directory, finished posts from LibraryManager.
         
         Returns:
             Dict with keys 'raw_photos', 'raw_videos', 'finished_posts' and media paths as values.
@@ -107,17 +116,27 @@ class CrowsEyeHandler:
         }
         
         try:
-            raw_photos_items = self.library_manager.get_raw_photos()
-            result["raw_photos"] = [item["path"] for item in raw_photos_items if "path" in item]
+            # Get raw uploads from media_library directory
+            media_library_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '..', 'media_library')
+            if os.path.exists(media_library_dir):
+                for filename in os.listdir(media_library_dir):
+                    file_path = os.path.join(media_library_dir, filename)
+                    if os.path.isfile(file_path):
+                        file_ext = os.path.splitext(filename)[1].lower()
+                        
+                        # Check if it's an image
+                        if file_ext in ['.jpg', '.jpeg', '.png', '.gif', '.bmp', '.webp']:
+                            result["raw_photos"].append(file_path)
+                        # Check if it's a video
+                        elif file_ext in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']:
+                            result["raw_videos"].append(file_path)
             
-            raw_videos_items = self.library_manager.get_raw_videos()
-            result["raw_videos"] = [item["path"] for item in raw_videos_items if "path" in item]
-            
+            # Get finished posts from LibraryManager
             post_ready_items = self.library_manager.get_all_post_ready_items()
             result["finished_posts"] = [item["path"] for item in post_ready_items if "path" in item]
             
             self.logger.info(
-                f"Retrieved from LibraryManager: "
+                f"Retrieved media: "
                 f"{len(result['raw_photos'])} raw photos, "
                 f"{len(result['raw_videos'])} raw videos, "
                 f"{len(result['finished_posts'])} finished posts."
@@ -125,7 +144,7 @@ class CrowsEyeHandler:
             return result
             
         except Exception as e:
-            self.logger.exception(f"Error getting media from LibraryManager: {e}")
+            self.logger.exception(f"Error getting media: {e}")
             self.signals.error.emit("Media Error", f"Could not retrieve media: {str(e)}")
             return result # Return empty structure on error
     
@@ -747,6 +766,13 @@ class CrowsEyeHandler:
             
             with open(filepath, 'w', encoding='utf-8') as f:
                 json.dump(gallery_data, f, indent=2)
+            
+            # Track gallery creation in analytics
+            if self.analytics_handler:
+                try:
+                    self.analytics_handler.track_gallery_creation(name, media_paths)
+                except Exception as e:
+                    self.logger.warning(f"Could not track gallery creation: {e}")
             
             self.signals.status_update.emit(f"Gallery '{name}' saved")
             self.signals.info.emit("Gallery Saved", f"Gallery '{name}' has been saved successfully")

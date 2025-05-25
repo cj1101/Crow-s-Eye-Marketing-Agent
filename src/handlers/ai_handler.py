@@ -79,9 +79,10 @@ class AIHandler:
                 selected_media = self.app_state.selected_media
                 self.logger.info(f"Selected media for caption generation: {selected_media}")
             
-            # Analyze image if it's a supported format
+            # Analyze media if it's a supported format
             image_analysis = {}
             content_analysis = {}
+            video_analysis = {}
             if selected_media and os.path.exists(selected_media):
                 _, ext = os.path.splitext(selected_media.lower())
                 if ext in const.SUPPORTED_IMAGE_FORMATS:
@@ -94,15 +95,22 @@ class AIHandler:
                     # Get content analysis using Gemini
                     content_analysis = self._analyze_image_content_with_gemini(selected_media)
                     self.logger.info(f"Gemini content analysis complete")
+                elif ext in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']:
+                    self.logger.info(f"Analyzing video: {selected_media}")
+                    
+                    # Get video analysis
+                    video_analysis = self._analyze_video_content(selected_media)
+                    self.logger.info(f"Video analysis complete")
             
-            # Generate caption using context files, instructions, and image analysis
+            # Generate caption using context files, instructions, and media analysis
             caption = self._generate_caption_with_gemini(
                 instructions, 
                 photo_editing, 
                 context_content,
                 image_analysis,
                 content_analysis,
-                language_code
+                language_code,
+                video_analysis
             )
             
             # Save the generated caption to app state
@@ -328,11 +336,239 @@ class AIHandler:
             self.logger.error(f"Error analyzing image with Gemini: {e}")
             return {"content_description": f"Error analyzing image content: {str(e)}"}
     
+    def _analyze_video_content(self, video_path: str) -> Dict[str, Any]:
+        """
+        Analyze a video to extract content information for caption generation.
+        
+        Args:
+            video_path: Path to the video file
+            
+        Returns:
+            Dict: Video analysis results
+        """
+        try:
+            from .video_handler import VideoHandler
+            video_handler = VideoHandler()
+            
+            analysis = {
+                "duration": 0,
+                "resolution": "",
+                "file_size": 0,
+                "frame_samples": [],
+                "content_description": "",
+                "motion_analysis": "",
+                "audio_present": False
+            }
+            
+            # Get basic video info
+            video_info = video_handler.get_video_info(video_path)
+            if "error" not in video_info:
+                analysis["duration"] = video_info.get("duration", 0)
+                analysis["resolution"] = f"{video_info.get('width', 0)}x{video_info.get('height', 0)}"
+                analysis["file_size"] = video_info.get("file_size", 0)
+                analysis["audio_present"] = video_info.get("has_audio", False)
+            
+            # Extract key frames for analysis
+            frame_paths = self._extract_key_frames(video_path)
+            
+            if frame_paths:
+                # Analyze each frame with Gemini
+                frame_analyses = []
+                for i, frame_path in enumerate(frame_paths[:5]):  # Limit to 5 frames
+                    try:
+                        frame_analysis = self._analyze_image_content_with_gemini(frame_path)
+                        if frame_analysis:
+                            frame_analyses.append({
+                                "timestamp": i * (analysis["duration"] / len(frame_paths)),
+                                "analysis": frame_analysis
+                            })
+                        
+                        # Clean up frame file
+                        if os.path.exists(frame_path):
+                            os.remove(frame_path)
+                    except Exception as e:
+                        self.logger.warning(f"Error analyzing frame {i}: {e}")
+                
+                analysis["frame_samples"] = frame_analyses
+                
+                # Generate overall content description from frame analyses
+                if frame_analyses:
+                    analysis["content_description"] = self._synthesize_video_content(frame_analyses)
+            
+            # Analyze motion (basic implementation)
+            analysis["motion_analysis"] = self._analyze_video_motion(video_path)
+            
+            return analysis
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing video content: {e}")
+            return {}
+    
+    def _extract_key_frames(self, video_path: str, num_frames: int = 5) -> List[str]:
+        """
+        Extract key frames from a video for analysis.
+        
+        Args:
+            video_path: Path to the video file
+            num_frames: Number of frames to extract
+            
+        Returns:
+            List[str]: Paths to extracted frame images
+        """
+        try:
+            import cv2
+            import tempfile
+            
+            cap = cv2.VideoCapture(video_path)
+            total_frames = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            duration = total_frames / fps if fps > 0 else 0
+            
+            frame_paths = []
+            
+            if duration > 0:
+                # Extract frames at regular intervals
+                for i in range(num_frames):
+                    timestamp = (i + 1) * duration / (num_frames + 1)
+                    frame_number = int(timestamp * fps)
+                    
+                    cap.set(cv2.CAP_PROP_POS_FRAMES, frame_number)
+                    ret, frame = cap.read()
+                    
+                    if ret:
+                        # Save frame as temporary image
+                        temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+                        cv2.imwrite(temp_file.name, frame)
+                        frame_paths.append(temp_file.name)
+            
+            cap.release()
+            return frame_paths
+            
+        except Exception as e:
+            self.logger.error(f"Error extracting key frames: {e}")
+            return []
+    
+    def _synthesize_video_content(self, frame_analyses: List[Dict]) -> str:
+        """
+        Synthesize content description from multiple frame analyses.
+        
+        Args:
+            frame_analyses: List of frame analysis results
+            
+        Returns:
+            str: Synthesized content description
+        """
+        try:
+            if not frame_analyses:
+                return ""
+            
+            # Extract common themes and objects
+            all_objects = []
+            all_activities = []
+            all_settings = []
+            
+            for frame_data in frame_analyses:
+                analysis = frame_data.get("analysis", {})
+                
+                if "main_subject" in analysis:
+                    all_objects.append(analysis["main_subject"])
+                if "activities" in analysis:
+                    all_activities.append(analysis["activities"])
+                if "setting" in analysis:
+                    all_settings.append(analysis["setting"])
+            
+            # Find most common elements
+            from collections import Counter
+            
+            common_objects = [item for item, count in Counter(all_objects).most_common(3) if item]
+            common_activities = [item for item, count in Counter(all_activities).most_common(2) if item]
+            common_settings = [item for item, count in Counter(all_settings).most_common(1) if item]
+            
+            # Build description
+            description_parts = []
+            
+            if common_settings:
+                description_parts.append(f"Setting: {common_settings[0]}")
+            
+            if common_objects:
+                description_parts.append(f"Key elements: {', '.join(common_objects)}")
+            
+            if common_activities:
+                description_parts.append(f"Activities: {', '.join(common_activities)}")
+            
+            return "; ".join(description_parts)
+            
+        except Exception as e:
+            self.logger.error(f"Error synthesizing video content: {e}")
+            return ""
+    
+    def _analyze_video_motion(self, video_path: str) -> str:
+        """
+        Analyze motion characteristics of a video.
+        
+        Args:
+            video_path: Path to the video file
+            
+        Returns:
+            str: Motion analysis description
+        """
+        try:
+            import cv2
+            
+            cap = cv2.VideoCapture(video_path)
+            
+            # Read first frame
+            ret, frame1 = cap.read()
+            if not ret:
+                cap.release()
+                return "No motion data available"
+            
+            # Convert to grayscale
+            gray1 = cv2.cvtColor(frame1, cv2.COLOR_BGR2GRAY)
+            
+            motion_scores = []
+            frame_count = 0
+            max_frames = 30  # Analyze first 30 frames for motion
+            
+            while frame_count < max_frames:
+                ret, frame2 = cap.read()
+                if not ret:
+                    break
+                
+                gray2 = cv2.cvtColor(frame2, cv2.COLOR_BGR2GRAY)
+                
+                # Calculate frame difference
+                diff = cv2.absdiff(gray1, gray2)
+                motion_score = diff.mean()
+                motion_scores.append(motion_score)
+                
+                gray1 = gray2
+                frame_count += 1
+            
+            cap.release()
+            
+            if motion_scores:
+                avg_motion = sum(motion_scores) / len(motion_scores)
+                
+                if avg_motion > 30:
+                    return "High motion/dynamic content"
+                elif avg_motion > 15:
+                    return "Moderate motion"
+                else:
+                    return "Low motion/static content"
+            
+            return "Motion analysis unavailable"
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing video motion: {e}")
+            return "Motion analysis failed"
+    
     def _generate_caption_with_gemini(self, instructions: str, photo_editing: str, 
                                context_content: str = "", 
                                image_analysis: Dict[str, Any] = None,
                                content_analysis: Dict[str, Any] = None,
-                               language_code: str = "en") -> str:
+                               language_code: str = "en",
+                               video_analysis: Dict[str, Any] = None) -> str:
         """
         Generate a caption using Gemini based on instructions, context, and image content.
         
@@ -396,44 +632,76 @@ class AIHandler:
                 language_name = language_map.get(language_code.lower(), language_code) # Fallback to code if name not found
                 language_instruction = f"IMPORTANT: Generate the caption in {language_name}.\\n"
 
+            # Determine if we're working with video or image content
+            is_video = video_analysis and video_analysis.get('duration', 0) > 0
+            media_type = "video" if is_video else "image"
+            
             # Format the prompt with all available information
-            prompt = f"""{language_instruction}Generate a social media caption for an image based on the following information:
+            if is_video:
+                prompt = f"""{language_instruction}Generate a social media caption for a video based on the following information:
 
-            IMAGE CONTENT:
-            {content_analysis.get('content_description', 'Not available')}
+                VIDEO CONTENT:
+                {video_analysis.get('content_description', 'Not available')}
 
-            Main subject: {content_analysis.get('main_subject', 'Not specified')}
-            Setting: {content_analysis.get('setting', 'Not specified')}
-            Activities: {content_analysis.get('activities', 'Not specified')}
-            Mood: {content_analysis.get('mood', 'Not specified')}
-            Themes: {', '.join(content_analysis.get('themes', ['Not specified']))}
-            Distinctive elements: {', '.join(content_analysis.get('distinctive_elements', ['Not specified']))}
+                Duration: {video_analysis.get('duration', 0):.1f} seconds
+                Resolution: {video_analysis.get('resolution', 'Not specified')}
+                Motion: {video_analysis.get('motion_analysis', 'Not specified')}
+                Audio: {'Yes' if video_analysis.get('audio_present', False) else 'No'}
 
-            GENERAL INSTRUCTIONS:
-            {instructions}
+                GENERAL INSTRUCTIONS:
+                {instructions}
 
-            PHOTO EDITING NOTES:
-            {photo_editing}
+                CONTEXT FROM FILES:
+                {context_content}
 
-            CONTEXT FROM FILES:
-            {context_content}
+                Create an engaging caption that:
+                1. Connects the VIDEO CONTENT to the CONTEXT from files
+                2. Aligns with the GENERAL INSTRUCTIONS
+                3. Includes 3-5 relevant hashtags
+                4. Is conversational, engaging, and social media-ready
+                5. Is between 1-3 sentences plus hashtags
+                6. Considers the video's motion and duration characteristics
 
-            TECHNICAL IMAGE DETAILS:
-            - Brightness: {image_analysis.get('brightness', 'Not specified')}
-            - Colors: {', '.join(image_analysis.get('colors', ['Not specified']))}
-            - Composition: {image_analysis.get('composition', 'Not specified')}
-            - Attributes: {', '.join(image_analysis.get('attributes', ['Not specified']))}
+                Focus on the content, theme, and subject of the video itself.
+                """
+            else:
+                prompt = f"""{language_instruction}Generate a social media caption for an image based on the following information:
 
-            Create an engaging caption that:
-            1. Connects the IMAGE CONTENT (not its technical aspects) to the CONTEXT from files
-            2. Aligns with the GENERAL INSTRUCTIONS
-            3. Includes 3-5 relevant hashtags
-            4. Is conversational, engaging, and social media-ready
-            5. Is between 1-3 sentences plus hashtags
+                IMAGE CONTENT:
+                {content_analysis.get('content_description', 'Not available')}
 
-            Do not describe the technical aspects of the image or how it was edited.
-            Focus on the content, theme, and subject of the image itself.
-            """
+                Main subject: {content_analysis.get('main_subject', 'Not specified')}
+                Setting: {content_analysis.get('setting', 'Not specified')}
+                Activities: {content_analysis.get('activities', 'Not specified')}
+                Mood: {content_analysis.get('mood', 'Not specified')}
+                Themes: {', '.join(content_analysis.get('themes', ['Not specified']))}
+                Distinctive elements: {', '.join(content_analysis.get('distinctive_elements', ['Not specified']))}
+
+                GENERAL INSTRUCTIONS:
+                {instructions}
+
+                PHOTO EDITING NOTES:
+                {photo_editing}
+
+                CONTEXT FROM FILES:
+                {context_content}
+
+                TECHNICAL IMAGE DETAILS:
+                - Brightness: {image_analysis.get('brightness', 'Not specified')}
+                - Colors: {', '.join(image_analysis.get('colors', ['Not specified']))}
+                - Composition: {image_analysis.get('composition', 'Not specified')}
+                - Attributes: {', '.join(image_analysis.get('attributes', ['Not specified']))}
+
+                Create an engaging caption that:
+                1. Connects the IMAGE CONTENT (not its technical aspects) to the CONTEXT from files
+                2. Aligns with the GENERAL INSTRUCTIONS
+                3. Includes 3-5 relevant hashtags
+                4. Is conversational, engaging, and social media-ready
+                5. Is between 1-3 sentences plus hashtags
+
+                Do not describe the technical aspects of the image or how it was edited.
+                Focus on the content, theme, and subject of the image itself.
+                """
             
             # Get response from Gemini
             request_params = {

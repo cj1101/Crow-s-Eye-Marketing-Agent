@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QLabel, QFileDialog,
     QFrame, QScrollArea, QGridLayout, QSizePolicy, QHBoxLayout,
     QComboBox, QCheckBox, QGroupBox, QMessageBox, QGraphicsScene,
-    QGraphicsView, QGraphicsPixmapItem
+    QGraphicsView, QGraphicsPixmapItem, QPushButton
 )
 from PySide6.QtCore import Signal, Qt, QSize, QEvent
 from PySide6.QtGui import QPixmap, QImage, QPainter, QColor, QIcon
@@ -23,6 +23,7 @@ class MediaSection(BaseWidget):
     media_selected = Signal(str)
     toggle_view = Signal(bool)    # Signal to toggle between original/edited view (True = showing edited)
     post_format_changed = Signal(dict) # Signal for formatting changes
+    video_selected = Signal(bool)  # Signal when video is selected (True) or image (False)
     
     def __init__(self, parent=None):
         """Initialize the media section."""
@@ -33,6 +34,7 @@ class MediaSection(BaseWidget):
         self.current_media_path = None
         self.edited_media_path = None
         self.showing_edited = False
+        self.current_audio_path = None
         
         # Setup UI
         self._setup_ui()
@@ -107,6 +109,9 @@ class MediaSection(BaseWidget):
         # Add button layout to main layout
         layout.addLayout(button_layout)
         
+        # Audio selection section
+        self._setup_audio_selection_ui(layout)
+        
         # Post Formatting Options
         self._setup_post_formatting_ui(layout)
         
@@ -152,6 +157,60 @@ class MediaSection(BaseWidget):
 
         self.formatting_group.setLayout(formatting_layout)
         parent_layout.addWidget(self.formatting_group)
+    
+    def _setup_audio_selection_ui(self, parent_layout: QVBoxLayout):
+        """Set up the audio selection UI components."""
+        self.audio_group = QGroupBox()
+        audio_layout = QVBoxLayout()
+        
+        # Audio file display
+        self.audio_display_layout = QHBoxLayout()
+        
+        self.audio_icon_label = QLabel("🎵")
+        self.audio_icon_label.setStyleSheet("font-size: 16px;")
+        self.audio_display_layout.addWidget(self.audio_icon_label)
+        
+        self.audio_filename_label = QLabel()
+        self.audio_filename_label.setStyleSheet("color: #666; font-style: italic;")
+        self.audio_display_layout.addWidget(self.audio_filename_label)
+        
+        self.audio_display_layout.addStretch()
+        
+        # Audio control buttons
+        self.select_audio_btn = AdjustableButton()
+        self.select_audio_btn.setStyleSheet("""
+            background-color: #9c27b0;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        """)
+        self.select_audio_btn.clicked.connect(self._on_select_audio)
+        self.audio_display_layout.addWidget(self.select_audio_btn)
+        
+        self.clear_audio_btn = AdjustableButton()
+        self.clear_audio_btn.setStyleSheet("""
+            background-color: #f44336;
+            color: white;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 4px;
+            font-size: 12px;
+        """)
+        self.clear_audio_btn.clicked.connect(self._on_clear_audio)
+        self.clear_audio_btn.setEnabled(False)
+        self.audio_display_layout.addWidget(self.clear_audio_btn)
+        
+        audio_layout.addLayout(self.audio_display_layout)
+        
+        # Audio info label
+        self.audio_info_label = QLabel()
+        self.audio_info_label.setStyleSheet("color: #888; font-size: 11px;")
+        audio_layout.addWidget(self.audio_info_label)
+        
+        self.audio_group.setLayout(audio_layout)
+        parent_layout.addWidget(self.audio_group)
 
     def _on_format_changed(self):
         """Handle changes in formatting options and emit a signal."""
@@ -192,9 +251,37 @@ class MediaSection(BaseWidget):
         self.media_preview.setText(self.tr("No media selected"))
         self.media_preview.setPixmap(QPixmap())  # Clear pixmap
         self.media_selected.emit("")  # Emit empty string to indicate no selection
+        self.video_selected.emit(False)  # Reset to image mode when cleared
         self.showing_edited = False
         self._update_toggle_button_text()
         self.status_label.setText("")
+        # Also clear audio when media is cleared
+        self._on_clear_audio()
+    
+    def _on_select_audio(self):
+        """Handle audio selection button click."""
+        try:
+            # Open file dialog for audio files
+            file_path, _ = QFileDialog.getOpenFileName(
+                self,
+                self.tr("Select Audio File"),
+                os.path.expanduser("~"),
+                self.tr("Audio Files (*.mp3 *.wav *.aac *.m4a *.ogg *.flac);;All Files (*.*)")
+            )
+            
+            if file_path:
+                self.set_audio(file_path)
+            
+        except Exception as e:
+            self.logger.exception(f"Error selecting audio: {e}")
+    
+    def _on_clear_audio(self):
+        """Clear selected audio."""
+        self.current_audio_path = None
+        self.audio_filename_label.setText("")
+        self.audio_info_label.setText("")
+        self.clear_audio_btn.setEnabled(False)
+        self._update_audio_display()
     
     def _on_toggle_view(self):
         """Toggle between original and edited image view."""
@@ -219,6 +306,217 @@ class MediaSection(BaseWidget):
             self.toggle_btn.setText(self.tr("Show Original"))
         else:
             self.toggle_btn.setText(self.tr("Show Edited"))
+    
+    def _handle_video_selection(self, video_path):
+        """Handle when a video file is selected."""
+        try:
+            # Get video info
+            from ...handlers.video_handler import VideoHandler
+            video_handler = VideoHandler()
+            video_info = video_handler.get_video_info(video_path)
+            
+            if "error" not in video_info:
+                # Display video information with video indicator
+                duration_min = int(video_info["duration"] // 60)
+                duration_sec = int(video_info["duration"] % 60)
+                
+                info_text = f"""
+                <div style="text-align: center;">
+                <b>🎬 VIDEO FILE</b><br>
+                <b>{os.path.basename(video_path)}</b><br>
+                Resolution: {video_info['width']}x{video_info['height']}<br>
+                Duration: {duration_min}:{duration_sec:02d}<br>
+                Size: {video_info['file_size'] / (1024*1024):.1f} MB<br>
+                <br>
+                <i>Opening video processing options...</i>
+                </div>
+                """
+                self.media_preview.setText(info_text)
+                
+                # Open the new video processing dialog
+                self._open_video_processing_dialog(video_path)
+            else:
+                self.media_preview.setText(f"Error reading video: {video_info.get('error', 'Unknown error')}")
+                
+        except Exception as e:
+            self.logger.exception(f"Error handling video selection: {e}")
+            self.media_preview.setText(f"Error processing video: {str(e)}")
+    
+    def _open_video_processing_dialog(self, video_path):
+        """Open the new video processing dialog."""
+        try:
+            from ..dialogs.video_processing_dialog import VideoProcessingDialog
+            dialog = VideoProcessingDialog(video_path, self)
+            
+            # Connect the video processed signal to handle the result
+            dialog.video_processed.connect(self._on_video_processed)
+            
+            dialog.exec()
+                
+        except Exception as e:
+            self.logger.exception(f"Error opening video processing dialog: {e}")
+    
+    def _on_video_processed(self, final_video_path):
+        """Handle when video processing is complete."""
+        try:
+            # Load the processed video as the current media
+            self.set_media(final_video_path)
+            
+            # Create a thumbnail for display
+            self._create_video_thumbnail(final_video_path)
+            
+            # Emit signal that media has been selected
+            self.media_selected.emit(final_video_path)
+            
+            self.logger.info(f"Video processing complete, loaded: {final_video_path}")
+            
+        except Exception as e:
+            self.logger.exception(f"Error handling processed video: {e}")
+    
+    def _create_video_thumbnail(self, video_path):
+        """Create and display a thumbnail for the video with video indicator."""
+        try:
+            from ...handlers.video_handler import VideoHandler
+            video_handler = VideoHandler()
+            
+            # Generate thumbnail at 1 second mark
+            success, thumbnail_path, message = video_handler.generate_thumbnail(video_path, timestamp=1.0)
+            
+            if success and thumbnail_path and os.path.exists(thumbnail_path):
+                # Load the thumbnail
+                pixmap = QPixmap()
+                pixmap.load(thumbnail_path)
+                
+                if not pixmap.isNull():
+                    # Add video indicator overlay
+                    painter = QPainter(pixmap)
+                    painter.setRenderHint(QPainter.RenderHint.Antialiasing)
+                    
+                    # Draw semi-transparent overlay
+                    overlay_color = QColor(0, 0, 0, 128)
+                    painter.fillRect(pixmap.rect(), overlay_color)
+                    
+                    # Draw play button icon
+                    play_size = min(pixmap.width(), pixmap.height()) // 4
+                    play_x = (pixmap.width() - play_size) // 2
+                    play_y = (pixmap.height() - play_size) // 2
+                    
+                    painter.setBrush(QColor(255, 255, 255, 200))
+                    painter.setPen(QColor(255, 255, 255))
+                    
+                    # Draw triangle (play button)
+                    from PySide6.QtGui import QPolygon
+                    from PySide6.QtCore import QPoint
+                    triangle = QPolygon([
+                        QPoint(play_x, play_y),
+                        QPoint(play_x, play_y + play_size),
+                        QPoint(play_x + play_size, play_y + play_size // 2)
+                    ])
+                    painter.drawPolygon(triangle)
+                    
+                    # Draw "VIDEO" text
+                    painter.setFont(painter.font())
+                    font = painter.font()
+                    font.setPointSize(max(12, play_size // 8))
+                    font.setBold(True)
+                    painter.setFont(font)
+                    
+                    text_rect = pixmap.rect()
+                    text_rect.setTop(play_y + play_size + 10)
+                    painter.drawText(text_rect, Qt.AlignmentFlag.AlignCenter, "VIDEO")
+                    
+                    painter.end()
+                    
+                    # Scale and display the thumbnail
+                    scaled_pixmap = pixmap.scaled(
+                        self.media_preview.size(),
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    self.media_preview.setPixmap(scaled_pixmap)
+                    
+                    # Update status
+                    self.status_label.setText(self.tr("Video loaded with thumbnail"))
+                    
+                    self.logger.info(f"Video thumbnail created and displayed for: {video_path}")
+                else:
+                    self._show_video_info_text(video_path)
+            else:
+                self._show_video_info_text(video_path)
+                
+        except Exception as e:
+            self.logger.exception(f"Error creating video thumbnail: {e}")
+            self._show_video_info_text(video_path)
+    
+    def _show_video_info_text(self, video_path):
+        """Show video info as text when thumbnail creation fails."""
+        try:
+            from ...handlers.video_handler import VideoHandler
+            video_handler = VideoHandler()
+            video_info = video_handler.get_video_info(video_path)
+            
+            if "error" not in video_info:
+                duration_min = int(video_info["duration"] // 60)
+                duration_sec = int(video_info["duration"] % 60)
+                
+                info_text = f"""
+                <div style="text-align: center;">
+                <b>🎬 VIDEO FILE</b><br>
+                <b>{os.path.basename(video_path)}</b><br>
+                Resolution: {video_info['width']}x{video_info['height']}<br>
+                Duration: {duration_min}:{duration_sec:02d}<br>
+                Size: {video_info['file_size'] / (1024*1024):.1f} MB<br>
+                <br>
+                <i>Processed video ready</i>
+                </div>
+                """
+                self.media_preview.setText(info_text)
+            else:
+                self.media_preview.setText(f"🎬 Video: {os.path.basename(video_path)}")
+                
+        except Exception as e:
+            self.media_preview.setText(f"🎬 Video: {os.path.basename(video_path)}")
+            self.logger.exception(f"Error showing video info: {e}")
+    
+    def _open_highlight_reel_dialog(self, video_path):
+        """Open the highlight reel dialog with the selected video."""
+        try:
+            from ..dialogs.highlight_reel_dialog import HighlightReelDialog
+            dialog = HighlightReelDialog(self)
+            dialog.video_path = video_path
+            dialog._update_video_info()
+            dialog.exec()
+        except Exception as e:
+            self.logger.exception(f"Error opening highlight reel dialog: {e}")
+    
+    def _open_story_assistant_dialog(self, video_path):
+        """Open the story assistant dialog with the selected video."""
+        try:
+            from ..dialogs.story_assistant_dialog import StoryAssistantDialog
+            dialog = StoryAssistantDialog(self)
+            dialog.video_path = video_path
+            dialog._update_video_info()
+            dialog.exec()
+        except Exception as e:
+            self.logger.exception(f"Error opening story assistant dialog: {e}")
+    
+    def _open_thumbnail_selector_dialog(self, video_path):
+        """Open the thumbnail selector dialog with the selected video."""
+        try:
+            from ..dialogs.thumbnail_selector_dialog import ThumbnailSelectorDialog
+            dialog = ThumbnailSelectorDialog(video_path, self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.exception(f"Error opening thumbnail selector dialog: {e}")
+    
+    def _open_audio_overlay_dialog(self, video_path):
+        """Open the audio overlay dialog with the selected video."""
+        try:
+            from ..dialogs.audio_overlay_dialog import AudioOverlayDialog
+            dialog = AudioOverlayDialog(video_path, self)
+            dialog.exec()
+        except Exception as e:
+            self.logger.exception(f"Error opening audio overlay dialog: {e}")
     
     def set_media(self, media_path):
         """
@@ -268,16 +566,20 @@ class MediaSection(BaseWidget):
                 )
                 self.media_preview.setPixmap(scaled_pixmap)
                 self.logger.info(f"Displayed image with dimensions: {scaled_pixmap.width()}x{scaled_pixmap.height()}")
+                # Emit image selected signal
+                self.video_selected.emit(False)
             else:
                 self.media_preview.setText(f"Error loading image: {os.path.basename(media_path)}")
                 self.logger.error(f"Failed to load image: {media_path}")
-        else:
+        elif ext in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']:
             self.logger.info(f"Video file selected: {media_path}")
-            # For video, you might want to extract a frame or show a placeholder icon
-            self.media_preview.setText(self.tr("Video preview not implemented"))
-            # Example: Load a generic video icon
-            # video_icon = QIcon.fromTheme("video-x-generic", QIcon(":/icons/video_placeholder.png")) 
-            # self.media_preview.setPixmap(video_icon.pixmap(self.media_preview.size()))
+            # Emit video selected signal
+            self.video_selected.emit(True)
+            # Show video file info and offer video processing options
+            self._handle_video_selection(media_path)
+        else:
+            self.logger.info(f"Unsupported file type selected: {media_path}")
+            self.media_preview.setText(self.tr("Unsupported file type"))
     
     def set_edited_media(self, edited_path):
         """
@@ -348,6 +650,68 @@ class MediaSection(BaseWidget):
             self.logger.warning("Attempted to refresh media, but no valid path is currently displayed.")
             self._on_clear_media() # Clear if path is invalid
 
+    def set_audio(self, audio_path):
+        """Set the audio file for the post."""
+        try:
+            if not os.path.exists(audio_path):
+                self.logger.error(f"Audio file does not exist: {audio_path}")
+                return
+            
+            # Validate audio file
+            file_ext = os.path.splitext(audio_path)[1].lower()
+            if file_ext not in const.SUPPORTED_AUDIO_FORMATS:
+                QMessageBox.warning(
+                    self, 
+                    self.tr("Unsupported Audio Format"), 
+                    self.tr("The selected audio format is not supported. Please select an MP3, WAV, AAC, M4A, OGG, or FLAC file.")
+                )
+                return
+            
+            # Check file size
+            file_size = os.path.getsize(audio_path)
+            if file_size > const.MAX_AUDIO_SIZE:
+                size_mb = file_size / (1024 * 1024)
+                max_mb = const.MAX_AUDIO_SIZE / (1024 * 1024)
+                QMessageBox.warning(
+                    self, 
+                    self.tr("Audio File Too Large"), 
+                    self.tr("The audio file is {size:.1f}MB, which exceeds the maximum size of {max:.1f}MB.").format(
+                        size=size_mb, max=max_mb
+                    )
+                )
+                return
+            
+            self.current_audio_path = audio_path
+            self._update_audio_display()
+            self.clear_audio_btn.setEnabled(True)
+            
+            self.logger.info(f"Audio file selected: {audio_path}")
+            
+        except Exception as e:
+            self.logger.exception(f"Error setting audio: {e}")
+            QMessageBox.critical(self, self.tr("Audio Error"), self.tr("Failed to load audio file: {error}").format(error=str(e)))
+    
+    def _update_audio_display(self):
+        """Update the audio display area."""
+        if self.current_audio_path:
+            filename = os.path.basename(self.current_audio_path)
+            self.audio_filename_label.setText(filename)
+            
+            # Get file size
+            try:
+                file_size = os.path.getsize(self.current_audio_path)
+                size_mb = file_size / (1024 * 1024)
+                self.audio_info_label.setText(self.tr("Audio: {size:.1f}MB").format(size=size_mb))
+            except:
+                self.audio_info_label.setText(self.tr("Audio file selected"))
+        else:
+            self.audio_filename_label.setText(self.tr("No audio selected"))
+            self.audio_info_label.setText("")
+    
+    def get_current_audio_path(self):
+        """Get the path of the currently selected audio file."""
+        return self.current_audio_path
+
     def changeEvent(self, event):
         """Handle change events including language changes."""
         if event.type() == QEvent.Type.LanguageChange:
@@ -405,6 +769,20 @@ class MediaSection(BaseWidget):
             self.font_size_combo.addItem(self.tr("Extra Large"))
             # Restore selection
             self.font_size_combo.setCurrentIndex(current_index)
+
+        # Update audio section
+        if hasattr(self, 'audio_group'):
+            self.audio_group.setTitle(self.tr("Background Audio"))
+        if hasattr(self, 'select_audio_btn'):
+            self.select_audio_btn.setText(self.tr("Select Audio"))
+        if hasattr(self, 'clear_audio_btn'):
+            self.clear_audio_btn.setText(self.tr("Clear Audio"))
+        
+        # Update audio display
+        if hasattr(self, 'current_audio_path') and self.current_audio_path:
+            self._update_audio_display()
+        elif hasattr(self, 'audio_filename_label'):
+            self.audio_filename_label.setText(self.tr("No audio selected"))
 
         # Update status label
         if hasattr(self, 'status_label'):

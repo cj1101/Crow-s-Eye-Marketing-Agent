@@ -305,6 +305,10 @@ class LibraryWindow(BaseMainWindow):
             if 'path' in item and os.path.exists(item['path']):
                 media_type = "video" if item['path'].lower().endswith(('.mp4', '.mov', '.avi', '.mkv')) else "image"
                 thumbnail = MediaThumbnailWidget(item['path'], media_type, show_generate_post=False)
+                
+                # Connect finished post click to show post options dialog
+                thumbnail.clicked.connect(lambda path=item['path'], item_data=item: self._on_finished_post_clicked(path, item_data))
+                
                 grid_layout.addWidget(thumbnail, row, col)
                 
                 col += 1
@@ -464,6 +468,101 @@ class LibraryWindow(BaseMainWindow):
             logging.error(f"Error handling generate post request: {e}")
             QMessageBox.warning(self, "Error", f"Could not load media for post generation: {str(e)}")
     
+    def _on_finished_post_clicked(self, media_path, item_data):
+        """Handle finished post click to show post preview dialog."""
+        try:
+            from .dialogs.post_preview_dialog import PostPreviewDialog
+            
+            # Prepare post data for the dialog
+            post_data = {
+                "media_path": media_path,
+                "caption": item_data.get("caption", ""),
+                "id": item_data.get("id", ""),
+                "is_post_ready": True
+            }
+            
+            # Show post preview dialog with media handler
+            dialog = PostPreviewDialog(self, post_data, self.media_handler)
+            
+            # Connect dialog signals
+            dialog.post_now.connect(self._on_post_now)
+            dialog.add_to_queue.connect(self._on_add_to_queue)
+            dialog.edit_post.connect(self._on_edit_post)
+            dialog.delete_post.connect(self._on_delete_post)
+            
+            dialog.exec()
+            
+        except Exception as e:
+            logging.error(f"Error showing post preview for {media_path}: {e}")
+            QMessageBox.warning(self, "Error", f"Could not show post preview: {str(e)}")
+    
+    def _on_post_now(self, post_data):
+        """Handle post now request."""
+        try:
+            # TODO: Implement actual posting logic
+            platforms = post_data.get("platforms", [])
+            media_path = post_data.get("media_path", "")
+            
+            platform_names = ", ".join(platforms)
+            QMessageBox.information(
+                self, 
+                "Post Scheduled", 
+                f"Post will be published to {platform_names}\n\nMedia: {os.path.basename(media_path)}"
+            )
+            
+        except Exception as e:
+            logging.error(f"Error posting now: {e}")
+            QMessageBox.warning(self, "Error", f"Could not post now: {str(e)}")
+    
+    def _on_add_to_queue(self, post_data):
+        """Handle add to queue request."""
+        try:
+            # TODO: Implement actual queue logic
+            media_path = post_data.get("media_path", "")
+            
+            QMessageBox.information(
+                self, 
+                "Added to Queue", 
+                f"Post added to publishing queue\n\nMedia: {os.path.basename(media_path)}"
+            )
+            
+        except Exception as e:
+            logging.error(f"Error adding to queue: {e}")
+            QMessageBox.warning(self, "Error", f"Could not add to queue: {str(e)}")
+    
+    def _on_edit_post(self, post_data):
+        """Handle edit post request."""
+        try:
+            # Emit signal to main window to load this media for editing
+            media_path = post_data.get("media_path", "")
+            self.generate_post_requested.emit(media_path)
+            
+            # Close the library window to return to main window
+            self.close()
+            
+        except Exception as e:
+            logging.error(f"Error editing post: {e}")
+            QMessageBox.warning(self, "Error", f"Could not edit post: {str(e)}")
+    
+    def _on_delete_post(self, post_data):
+        """Handle delete post request."""
+        try:
+            # Remove from library
+            item_id = post_data.get("id", "")
+            if item_id and hasattr(self.library_manager, 'remove_item'):
+                success = self.library_manager.remove_item(item_id)
+                if success:
+                    QMessageBox.information(self, "Post Deleted", "Post has been deleted successfully.")
+                    self.refresh_library()  # Refresh to update the display
+                else:
+                    QMessageBox.warning(self, "Error", "Could not delete post from library.")
+            else:
+                QMessageBox.warning(self, "Error", "Could not find post to delete.")
+                
+        except Exception as e:
+            logging.error(f"Error deleting post: {e}")
+            QMessageBox.warning(self, "Error", f"Could not delete post: {str(e)}")
+    
     def _on_file_upload(self):
         """Handle file upload."""
         file_paths, _ = QFileDialog.getOpenFileNames(
@@ -473,10 +572,30 @@ class LibraryWindow(BaseMainWindow):
         
         if file_paths:
             try:
+                import shutil
                 uploaded = 0
+                media_library_dir = "media_library"
+                
+                # Ensure media_library directory exists
+                os.makedirs(media_library_dir, exist_ok=True)
+                
                 for file_path in file_paths:
-                    if self.library_manager.add_new_media_item(file_path):
+                    if os.path.exists(file_path):
+                        # Copy file to media_library directory
+                        filename = os.path.basename(file_path)
+                        dest_path = os.path.join(media_library_dir, filename)
+                        
+                        # Handle duplicate filenames
+                        counter = 1
+                        base_name, ext = os.path.splitext(filename)
+                        while os.path.exists(dest_path):
+                            new_filename = f"{base_name}_{counter}{ext}"
+                            dest_path = os.path.join(media_library_dir, new_filename)
+                            counter += 1
+                        
+                        shutil.copy2(file_path, dest_path)
                         uploaded += 1
+                        logging.info(f"Uploaded file: {filename} -> {dest_path}")
                 
                 self.status_label.setText(f"Uploaded {uploaded} file(s)")
                 self.refresh_library()

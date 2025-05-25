@@ -5,6 +5,7 @@ import logging
 import uuid
 import os
 import json
+from datetime import datetime
 from typing import Dict, Any, Optional, List
 from PySide6.QtCore import Qt, Signal, QObject, QEvent
 from PySide6.QtWidgets import (
@@ -724,7 +725,7 @@ class SchedulingPanel(QWidget):
         item.setData(Qt.ItemDataRole.UserRole, schedule_data)
 
     def _view_scheduled_posts(self) -> None:
-        """Show a dialog with posts generated for the active schedule (placeholder)."""
+        """Show a dialog with posts generated for the active schedule."""
         active_schedule = None
         schedules = self._get_schedules()
         for schedule in schedules:
@@ -733,11 +734,40 @@ class SchedulingPanel(QWidget):
                 break
         
         if active_schedule:
-            QMessageBox.information(
-                self, 
-                self.tr("View Posts"), 
-                self.tr("Showing posts for schedule: {schedule_name}\n(This is a placeholder feature.)").format(schedule_name=active_schedule.get("name", self.tr("Unnamed Schedule")))
-            )
+            # Get scheduled posts for this schedule
+            scheduled_posts = self.app_state.scheduled_posts
+            schedule_posts = [post for post in scheduled_posts if post.get("schedule_id") == active_schedule.get("id")]
+            
+            if schedule_posts:
+                # Create a detailed message with post information
+                post_info = []
+                for i, post in enumerate(schedule_posts[:10]):  # Show first 10 posts
+                    scheduled_time = post.get("scheduled_time", "")
+                    media_path = post.get("media_path", "")
+                    media_name = os.path.basename(media_path) if media_path else "Unknown"
+                    
+                    try:
+                        # Format the scheduled time
+                        dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                        formatted_time = dt.strftime("%Y-%m-%d %H:%M")
+                    except:
+                        formatted_time = scheduled_time
+                    
+                    post_info.append(f"{i+1}. {formatted_time} - {media_name}")
+                
+                message = self.tr("Scheduled posts for '{schedule_name}':\n\n{posts}").format(
+                    schedule_name=active_schedule.get("name", self.tr("Unnamed Schedule")),
+                    posts="\n".join(post_info)
+                )
+                
+                if len(schedule_posts) > 10:
+                    message += f"\n\n... and {len(schedule_posts) - 10} more posts"
+            else:
+                message = self.tr("No posts scheduled for '{schedule_name}' yet.\n\nThe scheduler will automatically create posts when it runs.").format(
+                    schedule_name=active_schedule.get("name", self.tr("Unnamed Schedule"))
+                )
+            
+            QMessageBox.information(self, self.tr("View Posts"), message)
         else:
             QMessageBox.warning(self, self.tr("View Posts"), self.tr("No active schedule selected to view posts."))
 
@@ -808,17 +838,52 @@ class SchedulingPanel(QWidget):
                 return
                 
             selected_item = selected_items[0]
-            schedule_id = selected_item.data(Qt.ItemDataRole.UserRole)
-            schedule_name = selected_item.text().strip()
+            schedule_data = selected_item.data(Qt.ItemDataRole.UserRole)
+            schedule_id = schedule_data.get("id") if schedule_data else None
+            schedule_name = schedule_data.get("name", "Unknown") if schedule_data else "Unknown"
             
-            # This is just a placeholder for now
-            QMessageBox.information(
-                self,
-                self.tr("View Posts"),
-                self.tr(f"Showing posts for schedule: {schedule_name}\n(This is a placeholder feature.)")
-            )
+            if not schedule_id:
+                QMessageBox.warning(self, self.tr("View Posts"), self.tr("No schedule selected."))
+                return
+            
+            # Get scheduled posts for this specific schedule
+            scheduled_posts = self.app_state.scheduled_posts
+            schedule_posts = [post for post in scheduled_posts if post.get("schedule_id") == schedule_id]
+            
+            if schedule_posts:
+                # Create a detailed message with post information
+                post_info = []
+                for i, post in enumerate(schedule_posts[:10]):  # Show first 10 posts
+                    scheduled_time = post.get("scheduled_time", "")
+                    media_path = post.get("media_path", "")
+                    media_name = os.path.basename(media_path) if media_path else "Unknown"
+                    
+                    try:
+                        # Format the scheduled time
+                        dt = datetime.fromisoformat(scheduled_time.replace('Z', '+00:00'))
+                        formatted_time = dt.strftime("%Y-%m-%d %H:%M")
+                    except:
+                        formatted_time = scheduled_time
+                    
+                    post_info.append(f"{i+1}. {formatted_time} - {media_name}")
+                
+                message = self.tr("Scheduled posts for '{schedule_name}':\n\n{posts}").format(
+                    schedule_name=schedule_name,
+                    posts="\n".join(post_info)
+                )
+                
+                if len(schedule_posts) > 10:
+                    message += f"\n\n... and {len(schedule_posts) - 10} more posts"
+            else:
+                message = self.tr("No posts scheduled for '{schedule_name}' yet.\n\nThe scheduler will automatically create posts when it runs.").format(
+                    schedule_name=schedule_name
+                )
+            
+            QMessageBox.information(self, self.tr("View Posts"), message)
+            
         except Exception as e:
             self.logger.exception(f"Failed to view posts: {e}")
+            QMessageBox.critical(self, self.tr("View Error"), self.tr(f"Failed to view posts: {e}"))
             
     def _on_selection_changed(self):
         """Handle selection change in the schedules list."""

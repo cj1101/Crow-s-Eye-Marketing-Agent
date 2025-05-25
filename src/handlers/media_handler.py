@@ -741,8 +741,21 @@ class MediaHandler:
             bool: True if successful, False otherwise
         """
         try:
-            # Create directory if it doesn't exist
-            os.makedirs(os.path.dirname(filepath), exist_ok=True)
+            # Validate the filepath
+            if not filepath or not isinstance(filepath, str):
+                self.logger.error("Invalid filepath provided")
+                return False
+            
+            # Get directory path
+            directory = os.path.dirname(filepath)
+            
+            # Check if directory path is valid and can be created
+            if directory:
+                try:
+                    os.makedirs(directory, exist_ok=True)
+                except (OSError, PermissionError) as e:
+                    self.logger.error(f"Cannot create directory {directory}: {e}")
+                    return False
             
             # Determine format from filename if not provided
             if not format:
