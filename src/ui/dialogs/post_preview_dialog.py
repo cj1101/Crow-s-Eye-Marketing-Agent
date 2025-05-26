@@ -248,6 +248,14 @@ class PostPreviewDialog(QDialog):
         self.ig_checkbox.setChecked(True)
         post_now_layout.addWidget(self.ig_checkbox)
         
+        self.linkedin_checkbox = QCheckBox("Post to LinkedIn")
+        self.linkedin_checkbox.setChecked(False)
+        post_now_layout.addWidget(self.linkedin_checkbox)
+        
+        self.x_checkbox = QCheckBox("Post to X")
+        self.x_checkbox.setChecked(False)
+        post_now_layout.addWidget(self.x_checkbox)
+        
         # Post Now button
         self.post_now_btn = AdjustableButton("Post Now")
         self.post_now_btn.setStyleSheet("""
@@ -366,7 +374,8 @@ class PostPreviewDialog(QDialog):
     
     def _on_post_now(self):
         """Handle post now button click."""
-        if not self.fb_checkbox.isChecked() and not self.ig_checkbox.isChecked():
+        if not (self.fb_checkbox.isChecked() or self.ig_checkbox.isChecked() or 
+                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked()):
             QMessageBox.warning(self, "Post Error", "Please select at least one platform to post to.")
             return
             
@@ -375,6 +384,10 @@ class PostPreviewDialog(QDialog):
             platforms.append("facebook")
         if self.ig_checkbox.isChecked():
             platforms.append("instagram")
+        if self.linkedin_checkbox.isChecked():
+            platforms.append("linkedin")
+        if self.x_checkbox.isChecked():
+            platforms.append("x")
             
         # Add platforms to post data
         post_data = self.post_data.copy()

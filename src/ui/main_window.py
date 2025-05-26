@@ -34,6 +34,7 @@ from .library_window import LibraryWindow
 from .scheduling_panel import SchedulingPanel
 from .dialogs.scheduling_dialog import ScheduleDialog
 from .dialogs.modern_login_dialog import ModernLoginDialog
+from .dialogs.unified_connection_dialog import UnifiedConnectionDialog
 from .preset_manager import PresetManager
 from .dialogs.compliance_dialog import ComplianceDialog
 from .dialogs.highlight_reel_dialog import HighlightReelDialog
@@ -476,17 +477,17 @@ class MainWindow(QMainWindow):
                     
                 return
             
-            # Create and show modern login dialog
-            dialog = ModernLoginDialog(self)
-            dialog.login_successful.connect(self._on_login_successful)
+            # Create and show unified connection dialog
+            dialog = UnifiedConnectionDialog(self)
+            dialog.connection_successful.connect(self._on_connection_successful)
             
             # The dialog will handle its own translation in __init__
             
             if dialog.exec():
-                self.logger.info("Login dialog accepted")
-                # Login successful signal will handle the rest
+                self.logger.info("Connection dialog accepted")
+                # Connection successful signal will handle the rest
             else:
-                self.logger.info("Login dialog canceled")
+                self.logger.info("Connection dialog canceled")
                 # Update status bar
                 self._check_auth_status()
                 
@@ -494,14 +495,43 @@ class MainWindow(QMainWindow):
             self.logger.exception(f"Error during login: {e}")
             self._show_error(self.tr("Login Error"), self.tr("An error occurred during login: {error_message}").format(error_message=str(e)))
     
+    def _on_connection_successful(self, platform_status):
+        """Handle successful platform connections."""
+        try:
+            connected_platforms = []
+            for platform, status in platform_status.items():
+                if status.get('connected', False):
+                    connected_platforms.append(platform.upper())
+            
+            if connected_platforms:
+                platforms_text = ", ".join(connected_platforms)
+                self.header_section.update_login_button(True, f"Connected: {platforms_text}")
+                self.status_bar.showMessage(self.tr("Connected to: {platforms}").format(platforms=platforms_text))
+            else:
+                self.header_section.update_login_button(False)
+                self.status_bar.showMessage(self.tr("No platforms connected"))
+            
+            # Update the app state with credentials
+            if hasattr(self.app_state, 'meta_credentials') and platform_status.get('meta', {}).get('connected', False):
+                # Load Meta credentials from file
+                try:
+                    with open(const.META_CREDENTIALS_FILE, "r", encoding="utf-8") as f:
+                        self.app_state.meta_credentials = json.load(f)
+                except FileNotFoundError:
+                    self.logger.warning("Meta credentials file not found after connection")
+                
+        except Exception as e:
+            self.logger.exception(f"Error handling connection success: {e}")
+            self._show_error(self.tr("Connection Error"), self.tr("An error occurred after connection: {error_message}").format(error_message=str(e)))
+    
     def _on_login_successful(self, account_data):
-        """Handle successful login."""
+        """Handle successful login (legacy method for compatibility)."""
         try:
             account_name = account_data.get('name', self.tr('Business Account'))
             self.header_section.update_login_button(True, account_name)
             self.status_bar.showMessage(self.tr("Logged in as {account_name}").format(account_name=account_name))
             
-                        # Update the app state with credentials
+            # Update the app state with credentials
             if hasattr(self.app_state, 'meta_credentials'):
                 # Load credentials from file
                 with open(const.META_CREDENTIALS_FILE, "r", encoding="utf-8") as f:

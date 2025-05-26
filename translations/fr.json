@@ -118,6 +118,8 @@
   "Post Now": "Publier maintenant",
   "Post to Facebook": "Publier sur Facebook",
   "Post to Instagram": "Publier sur Instagram",
+  "Post to LinkedIn": "Publier sur LinkedIn",
+  "Post to X": "Publier sur X",
   "Add to Queue": "Ajouter à la file d'attente",
   "Add this post to the next available slot in the queue.": "Ajouter cette publication au prochain créneau disponible dans la file d'attente.",
   "Other Actions": "Autres actions",
@@ -142,7 +144,7 @@
   "Post times:": "Heures de publication :",
   
   "Manage Posting Schedules": "Gérer les plannings de publication",
-  "Create and manage schedules to automatically post to Instagram and Facebook.\\nYou can set up multiple schedules with different posting frequencies and time slots.": "Créez et gérez des plannings pour publier automatiquement sur Instagram et Facebook.\\nVous pouvez configurer plusieurs plannings avec différentes fréquences et créneaux horaires.",
+  "Create and manage schedules to automatically post to Instagram, Facebook, LinkedIn, and X.\\nYou can set up multiple schedules with different posting frequencies and time slots.": "Créez et gérez des plannings pour publier automatiquement sur Instagram, Facebook, LinkedIn et X.\\nVous pouvez configurer plusieurs plannings avec différentes fréquences et créneaux horaires.",
   "No schedules yet!\\nClick 'Add Schedule' to create your first posting schedule.\\n\\nYou can set up automatic posting on specific days and times,\\nor create a queue to publish your posts in a specific order.": "Aucun planning encore !\\nCliquez sur 'Ajouter un planning' pour créer votre premier planning de publication.\\n\\nVous pouvez configurer la publication automatique à des jours et heures spécifiques,\\nou créer une file d'attente pour publier vos publications dans un ordre spécifique.",
   "Create First Schedule": "Créer le premier planning",
   "Add Schedule": "Ajouter un planning",

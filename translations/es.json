@@ -118,6 +118,8 @@
   "Post Now": "Publicar Ahora",
   "Post to Facebook": "Publicar en Facebook",
   "Post to Instagram": "Publicar en Instagram",
+  "Post to LinkedIn": "Publicar en LinkedIn",
+  "Post to X": "Publicar en X",
   "Add to Queue": "Agregar a Cola",
   "Add this post to the next available slot in the queue.": "Agregar esta publicación al siguiente espacio disponible en la cola.",
   "Other Actions": "Otras Acciones",
@@ -142,7 +144,7 @@
   "Post times:": "Horarios de publicación:",
   
   "Manage Posting Schedules": "Gestionar Programas de Publicación",
-  "Create and manage schedules to automatically post to Instagram and Facebook.\\nYou can set up multiple schedules with different posting frequencies and time slots.": "Crea y gestiona programas para publicar automáticamente en Instagram y Facebook.\\nPuedes configurar múltiples programas con diferentes frecuencias y horarios.",
+  "Create and manage schedules to automatically post to Instagram, Facebook, LinkedIn, and X.\\nYou can set up multiple schedules with different posting frequencies and time slots.": "Crea y gestiona programas para publicar automáticamente en Instagram, Facebook, LinkedIn y X.\\nPuedes configurar múltiples programas con diferentes frecuencias y horarios.",
   "No schedules yet!\\nClick 'Add Schedule' to create your first posting schedule.\\n\\nYou can set up automatic posting on specific days and times,\\nor create a queue to publish your posts in a specific order.": "¡Aún no hay programas!\\nHaz clic en 'Agregar Programa' para crear tu primer programa de publicación.\\n\\nPuedes configurar publicación automática en días y horarios específicos,\\no crear una cola para publicar tus posts en un orden específico.",
   "Create First Schedule": "Crear Primer Programa",
   "Add Schedule": "Agregar Programa",
