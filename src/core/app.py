@@ -22,6 +22,7 @@ logger = logging.getLogger("main")
 def create_required_directories():
     """Create required directories if they don't exist."""
     directories = [
+        "data",
         "media_library",
         "output",
         "knowledge_base",
@@ -91,9 +92,9 @@ def main(enable_scheduling=False):
     
     # Create application state
     from ..models.app_state import AppState
-    from ..features.media_processing.media_handler import MediaHandler
+    from ..handlers.media_handler import MediaHandler
     from ..handlers.library_handler import LibraryManager
-    from ..ui.main_window import MainWindow
+    from ..ui.app_controller import AppController
     
     app_state = AppState()
     
@@ -103,12 +104,16 @@ def main(enable_scheduling=False):
     # Create library manager
     library_manager = LibraryManager()
     
-    # Create main window
-    window = MainWindow(
+    # Create main window (now using app controller)
+    window = AppController(
         app_state=app_state,
         media_handler=media_handler,
         library_manager=library_manager
     )
+    
+    # Set window properties
+    window.setWindowTitle("Crow's Eye Marketing Agent")
+    window.setMinimumSize(1200, 800)
     
     window.show()
     

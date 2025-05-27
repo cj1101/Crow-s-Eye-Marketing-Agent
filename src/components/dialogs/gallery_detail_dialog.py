@@ -9,8 +9,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QEvent
 
-from ...api.ai.crowseye_handler import CrowsEyeHandler
-from ...features.media_processing.media_handler import MediaHandler
+from ...handlers.crowseye_handler import CrowsEyeHandler
+from ...handlers.media_handler import MediaHandler
 from ...features.media_processing.image_edit_handler import ImageEditHandler
 from ..components.gallery_preview_widget import GalleryImagePreviewWidget
 from ..base_dialog import BaseDialog

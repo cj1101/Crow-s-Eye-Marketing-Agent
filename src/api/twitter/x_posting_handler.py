@@ -11,7 +11,7 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal, QThread
 
-from ..config import constants as const
+from ...config import constants as const
 
 class XPostingSignals(QObject):
     """Signals for X API posting operations."""

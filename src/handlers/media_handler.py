@@ -24,7 +24,7 @@ from PySide6.QtGui import QPixmap, QImage
 # Application-Specific Imports
 from ..config import constants as const
 from ..models.app_state import AppState
-from ..handlers.auth_handler import auth_handler
+from ..features.authentication.auth_handler import auth_handler
 
 # --- Image Conversion Utilities ---
 def pil_to_qpixmap(pil_image: Image.Image) -> QPixmap:

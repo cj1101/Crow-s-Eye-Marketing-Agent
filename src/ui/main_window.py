@@ -19,10 +19,10 @@ from ..config import constants as const
 from ..models.app_state import AppState
 from ..handlers.media_handler import MediaHandler
 from ..handlers.library_handler import LibraryManager
-from ..handlers.ai_handler import AIHandler
-from ..handlers.auth_handler import auth_handler
+from ..api.ai.ai_handler import AIHandler
+from ..features.authentication.auth_handler import auth_handler
 from ..utils.api_key_manager import key_manager
-from ..handlers.image_edit_handler import ImageEditHandler
+from ..features.media_processing.image_edit_handler import ImageEditHandler
 
 from .ui_handler import UIHandler
 from .components.header_section import HeaderSection
@@ -1039,6 +1039,11 @@ class MainWindow(QMainWindow):
             
             video_menu.addSeparator()
             
+            # Add Veo video generator
+            veo_generator_action = video_menu.addAction('🎬 Veo Video Generator...')
+            veo_generator_action.setShortcut('Ctrl+V')
+            veo_generator_action.triggered.connect(self._on_open_veo_generator)
+            
             # Add audio overlay
             audio_overlay_action = video_menu.addAction('Audio Overlay...')
             audio_overlay_action.setShortcut('Ctrl+A')
@@ -1214,6 +1219,33 @@ class MainWindow(QMainWindow):
         except Exception as e:
             self.logger.error(f"Error opening thumbnail selector dialog: {e}")
             self._show_error("Thumbnail Selector Error", f"Could not open thumbnail selector: {str(e)}")
+    
+    def _on_open_veo_generator(self):
+        """Open the Veo video generator."""
+        try:
+            # For now, open the simple Veo widget in a message box style dialog
+            from PySide6.QtWidgets import QDialog, QVBoxLayout
+            from ..components.simple_veo_widget import SimpleVeoWidget
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("🎬 Veo Video Generator")
+            dialog.setFixedSize(600, 500)
+            dialog.setStyleSheet("""
+                QDialog {
+                    background-color: #1a1a1a;
+                    color: #FFFFFF;
+                }
+            """)
+            
+            layout = QVBoxLayout(dialog)
+            veo_widget = SimpleVeoWidget()
+            layout.addWidget(veo_widget)
+            
+            dialog.exec()
+            
+        except Exception as e:
+            self.logger.error(f"Error opening Veo generator: {e}")
+            self._show_error("Veo Generator Error", f"Could not open Veo video generator: {str(e)}")
     
     def _on_open_audio_overlay(self):
         """Open the audio overlay dialog."""

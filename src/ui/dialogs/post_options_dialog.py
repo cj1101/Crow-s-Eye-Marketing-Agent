@@ -130,22 +130,51 @@ class PostOptionsDialog(QDialog):
         self.post_now_group = QGroupBox() # Title set in retranslateUi
         post_now_layout = QVBoxLayout(self.post_now_group)
         
-        # Social media platforms checkboxes
+        # Social media platforms checkboxes - create grid layout
+        platform_grid = QGridLayout()
+        
+        # Row 1: Meta platforms
         self.fb_checkbox = QCheckBox() # Text set in retranslateUi
         self.fb_checkbox.setChecked(True)
-        post_now_layout.addWidget(self.fb_checkbox)
+        platform_grid.addWidget(self.fb_checkbox, 0, 0)
         
         self.ig_checkbox = QCheckBox() # Text set in retranslateUi
         self.ig_checkbox.setChecked(True)
-        post_now_layout.addWidget(self.ig_checkbox)
+        platform_grid.addWidget(self.ig_checkbox, 0, 1)
         
+        # Row 2: Professional platforms
         self.linkedin_checkbox = QCheckBox() # Text set in retranslateUi
         self.linkedin_checkbox.setChecked(False)
-        post_now_layout.addWidget(self.linkedin_checkbox)
+        platform_grid.addWidget(self.linkedin_checkbox, 1, 0)
         
         self.x_checkbox = QCheckBox() # Text set in retranslateUi
         self.x_checkbox.setChecked(False)
-        post_now_layout.addWidget(self.x_checkbox)
+        platform_grid.addWidget(self.x_checkbox, 1, 1)
+        
+        # Row 3: New platforms
+        self.tiktok_checkbox = QCheckBox() # Text set in retranslateUi
+        self.tiktok_checkbox.setChecked(False)
+        platform_grid.addWidget(self.tiktok_checkbox, 2, 0)
+        
+        self.pinterest_checkbox = QCheckBox() # Text set in retranslateUi
+        self.pinterest_checkbox.setChecked(False)
+        platform_grid.addWidget(self.pinterest_checkbox, 2, 1)
+        
+        # Row 4: Additional platforms
+        self.bluesky_checkbox = QCheckBox() # Text set in retranslateUi
+        self.bluesky_checkbox.setChecked(False)
+        platform_grid.addWidget(self.bluesky_checkbox, 3, 0)
+        
+        self.threads_checkbox = QCheckBox() # Text set in retranslateUi
+        self.threads_checkbox.setChecked(False)
+        platform_grid.addWidget(self.threads_checkbox, 3, 1)
+        
+        # Row 5: Business platforms
+        self.google_business_checkbox = QCheckBox() # Text set in retranslateUi
+        self.google_business_checkbox.setChecked(False)
+        platform_grid.addWidget(self.google_business_checkbox, 4, 0)
+        
+        post_now_layout.addLayout(platform_grid)
         
         self.post_now_btn = AdjustableButton() # Changed from QPushButton, text set in retranslateUi
         self.post_now_btn.setObjectName("postNowButton")
@@ -197,7 +226,10 @@ class PostOptionsDialog(QDialog):
     def _on_post_now(self):
         """Handle post now button click."""
         if not (self.fb_checkbox.isChecked() or self.ig_checkbox.isChecked() or 
-                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked()):
+                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked() or
+                self.tiktok_checkbox.isChecked() or self.pinterest_checkbox.isChecked() or
+                self.bluesky_checkbox.isChecked() or self.threads_checkbox.isChecked() or
+                self.google_business_checkbox.isChecked()):
             QMessageBox.warning(self, self.tr("Post Error"), self.tr("Please select at least one platform to post to."))
             return
             
@@ -210,6 +242,16 @@ class PostOptionsDialog(QDialog):
             platforms.append("linkedin")
         if self.x_checkbox.isChecked():
             platforms.append("x")
+        if self.tiktok_checkbox.isChecked():
+            platforms.append("tiktok")
+        if self.pinterest_checkbox.isChecked():
+            platforms.append("pinterest")
+        if self.bluesky_checkbox.isChecked():
+            platforms.append("bluesky")
+        if self.threads_checkbox.isChecked():
+            platforms.append("threads")
+        if self.google_business_checkbox.isChecked():
+            platforms.append("google_business")
             
         # Add platforms to post data
         post_data = self.post_data.copy() # Ensure we don't modify original dict directly if passed around
@@ -270,6 +312,16 @@ class PostOptionsDialog(QDialog):
             self.linkedin_checkbox.setText(self.tr("Post to LinkedIn"))
         if hasattr(self, 'x_checkbox') and self.x_checkbox: # Check if x_checkbox exists
             self.x_checkbox.setText(self.tr("Post to X"))
+        if hasattr(self, 'tiktok_checkbox') and self.tiktok_checkbox: # Check if tiktok_checkbox exists
+            self.tiktok_checkbox.setText(self.tr("Post to TikTok"))
+        if hasattr(self, 'pinterest_checkbox') and self.pinterest_checkbox: # Check if pinterest_checkbox exists
+            self.pinterest_checkbox.setText(self.tr("Post to Pinterest"))
+        if hasattr(self, 'bluesky_checkbox') and self.bluesky_checkbox: # Check if bluesky_checkbox exists
+            self.bluesky_checkbox.setText(self.tr("Post to BlueSky"))
+        if hasattr(self, 'threads_checkbox') and self.threads_checkbox: # Check if threads_checkbox exists
+            self.threads_checkbox.setText(self.tr("Post to Threads"))
+        if hasattr(self, 'google_business_checkbox') and self.google_business_checkbox: # Check if google_business_checkbox exists
+            self.google_business_checkbox.setText(self.tr("Post to Google My Business"))
         if self.post_now_btn: # Check if post_now_btn exists
             self.post_now_btn.setText(self.tr("Post Now"))
 

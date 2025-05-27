@@ -19,7 +19,7 @@ from PySide6.QtGui import QPixmap, QDrag, QPainter, QFont, QDragEnterEvent, QDro
 from PIL import Image as PILImage
 
 from ..base_dialog import BaseDialog
-from ...api.ai.crowseye_handler import CrowsEyeHandler
+from ...handlers.crowseye_handler import CrowsEyeHandler
 
 
 class DraggableImageWidget(QLabel):

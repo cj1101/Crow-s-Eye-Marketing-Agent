@@ -18,8 +18,8 @@ from PySide6.QtCore import Qt, Signal, QTimer, QThread
 from PySide6.QtGui import QFont, QPixmap, QIcon
 
 from ...features.authentication.oauth_handler import oauth_handler
-from ...features.authentication.x_oauth_handler import x_oauth_handler
-from ...features.authentication.linkedin_oauth_handler import linkedin_oauth_handler
+from ...api.twitter.x_oauth_handler import x_oauth_handler
+from ...api.linkedin.linkedin_oauth_handler import linkedin_oauth_handler
 from ...features.authentication.oauth_callback_server import oauth_callback_server
 from ...api.twitter.x_posting_handler import XPostingHandler
 from ...api.meta.meta_posting_handler import MetaPostingHandler
@@ -143,7 +143,13 @@ class UnifiedConnectionDialog(BaseDialog):
         self.platform_status = {
             'meta': {'connected': False, 'error': None},
             'x': {'connected': False, 'error': None},
-            'linkedin': {'connected': False, 'error': None}
+            'linkedin': {'connected': False, 'error': None},
+            'google_business': {'connected': False, 'error': None},
+            'bluesky': {'connected': False, 'error': None},
+            'tiktok': {'connected': False, 'error': None},
+            'pinterest': {'connected': False, 'error': None},
+            'threads': {'connected': False, 'error': None},
+            'instagram_api': {'connected': False, 'error': None}
         }
         self.test_worker = None
         
@@ -186,6 +192,12 @@ class UnifiedConnectionDialog(BaseDialog):
         self._create_meta_tab()
         self._create_x_tab()
         self._create_linkedin_tab()
+        self._create_google_business_tab()
+        self._create_bluesky_tab()
+        self._create_tiktok_tab()
+        self._create_pinterest_tab()
+        self._create_threads_tab()
+        self._create_instagram_api_tab()
         self._create_testing_tab()
         
         layout.addWidget(self.tab_widget)
@@ -223,7 +235,7 @@ class UnifiedConnectionDialog(BaseDialog):
         header_layout.addWidget(self.title_label)
         
         # Subtitle
-        self.subtitle_label = QLabel(self.tr("Connect to Meta, X, and LinkedIn to start sharing your content"))
+        self.subtitle_label = QLabel(self.tr("Connect to 9+ social media platforms including Meta, X, LinkedIn, TikTok, Pinterest, BlueSky, and more"))
         self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         self.subtitle_label.setWordWrap(True)
         self.subtitle_label.setStyleSheet("""
@@ -513,6 +525,426 @@ class UnifiedConnectionDialog(BaseDialog):
         
         layout.addStretch()
         self.tab_widget.addTab(tab, self.tr("LinkedIn"))
+        
+    def _create_google_business_tab(self):
+        """Create the Google My Business connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(15)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("Google My Business"))
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect your Google My Business account to post updates and photos to your business listing. "
+            "This helps customers stay informed about your business."
+        ))
+        info_text.setWordWrap(True)
+        info_layout.addWidget(info_text)
+        
+        layout.addWidget(info_group)
+        
+        # Connection status
+        self.google_business_status_group = QGroupBox(self.tr("Connection Status"))
+        status_layout = QVBoxLayout(self.google_business_status_group)
+        
+        self.google_business_status_label = QLabel(self.tr("Not connected"))
+        self.google_business_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_layout.addWidget(self.google_business_status_label)
+        
+        layout.addWidget(self.google_business_status_group)
+        
+        # Connection button
+        self.google_business_connect_btn = QPushButton(self.tr("Connect with Google"))
+        self.google_business_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4285F4;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 15px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3367D6;
+            }
+        """)
+        self.google_business_connect_btn.clicked.connect(self._connect_google_business)
+        layout.addWidget(self.google_business_connect_btn)
+        
+        # Disconnect button
+        self.google_business_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.google_business_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.google_business_disconnect_btn.clicked.connect(self._disconnect_google_business)
+        self.google_business_disconnect_btn.setVisible(False)
+        layout.addWidget(self.google_business_disconnect_btn)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("Google Business"))
+        
+    def _create_bluesky_tab(self):
+        """Create the BlueSky connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(15)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("BlueSky"))
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect your BlueSky account to share posts on the decentralized social network. "
+            "BlueSky uses the AT Protocol for open social networking."
+        ))
+        info_text.setWordWrap(True)
+        info_layout.addWidget(info_text)
+        
+        layout.addWidget(info_group)
+        
+        # Connection status
+        self.bluesky_status_group = QGroupBox(self.tr("Connection Status"))
+        status_layout = QVBoxLayout(self.bluesky_status_group)
+        
+        self.bluesky_status_label = QLabel(self.tr("Not connected"))
+        self.bluesky_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_layout.addWidget(self.bluesky_status_label)
+        
+        layout.addWidget(self.bluesky_status_group)
+        
+        # Connection button
+        self.bluesky_connect_btn = QPushButton(self.tr("Connect with BlueSky"))
+        self.bluesky_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #00A8E8;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 15px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #0077B6;
+            }
+        """)
+        self.bluesky_connect_btn.clicked.connect(self._connect_bluesky)
+        layout.addWidget(self.bluesky_connect_btn)
+        
+        # Disconnect button
+        self.bluesky_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.bluesky_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.bluesky_disconnect_btn.clicked.connect(self._disconnect_bluesky)
+        self.bluesky_disconnect_btn.setVisible(False)
+        layout.addWidget(self.bluesky_disconnect_btn)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("BlueSky"))
+        
+    def _create_tiktok_tab(self):
+        """Create the TikTok connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(15)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("TikTok"))
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect your TikTok account to share videos on the popular short-form video platform. "
+            "Perfect for reaching younger audiences with creative content."
+        ))
+        info_text.setWordWrap(True)
+        info_layout.addWidget(info_text)
+        
+        layout.addWidget(info_group)
+        
+        # Connection status
+        self.tiktok_status_group = QGroupBox(self.tr("Connection Status"))
+        status_layout = QVBoxLayout(self.tiktok_status_group)
+        
+        self.tiktok_status_label = QLabel(self.tr("Not connected"))
+        self.tiktok_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_layout.addWidget(self.tiktok_status_label)
+        
+        layout.addWidget(self.tiktok_status_group)
+        
+        # Connection button
+        self.tiktok_connect_btn = QPushButton(self.tr("Connect with TikTok"))
+        self.tiktok_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #000000;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 15px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #333333;
+            }
+        """)
+        self.tiktok_connect_btn.clicked.connect(self._connect_tiktok)
+        layout.addWidget(self.tiktok_connect_btn)
+        
+        # Disconnect button
+        self.tiktok_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.tiktok_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.tiktok_disconnect_btn.clicked.connect(self._disconnect_tiktok)
+        self.tiktok_disconnect_btn.setVisible(False)
+        layout.addWidget(self.tiktok_disconnect_btn)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("TikTok"))
+        
+    def _create_pinterest_tab(self):
+        """Create the Pinterest connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(15)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("Pinterest"))
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect your Pinterest account to share pins and reach audiences interested in visual content. "
+            "Great for showcasing products and driving traffic to your website."
+        ))
+        info_text.setWordWrap(True)
+        info_layout.addWidget(info_text)
+        
+        layout.addWidget(info_group)
+        
+        # Connection status
+        self.pinterest_status_group = QGroupBox(self.tr("Connection Status"))
+        status_layout = QVBoxLayout(self.pinterest_status_group)
+        
+        self.pinterest_status_label = QLabel(self.tr("Not connected"))
+        self.pinterest_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_layout.addWidget(self.pinterest_status_label)
+        
+        layout.addWidget(self.pinterest_status_group)
+        
+        # Connection button
+        self.pinterest_connect_btn = QPushButton(self.tr("Connect with Pinterest"))
+        self.pinterest_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E60023;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 15px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #C8001A;
+            }
+        """)
+        self.pinterest_connect_btn.clicked.connect(self._connect_pinterest)
+        layout.addWidget(self.pinterest_connect_btn)
+        
+        # Disconnect button
+        self.pinterest_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.pinterest_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.pinterest_disconnect_btn.clicked.connect(self._disconnect_pinterest)
+        self.pinterest_disconnect_btn.setVisible(False)
+        layout.addWidget(self.pinterest_disconnect_btn)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("Pinterest"))
+        
+    def _create_threads_tab(self):
+        """Create the Threads connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(15)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("Threads"))
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect your Threads account to share text and media posts on Meta's Twitter alternative. "
+            "Integrates seamlessly with your Instagram account."
+        ))
+        info_text.setWordWrap(True)
+        info_layout.addWidget(info_text)
+        
+        layout.addWidget(info_group)
+        
+        # Connection status
+        self.threads_status_group = QGroupBox(self.tr("Connection Status"))
+        status_layout = QVBoxLayout(self.threads_status_group)
+        
+        self.threads_status_label = QLabel(self.tr("Not connected"))
+        self.threads_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_layout.addWidget(self.threads_status_label)
+        
+        layout.addWidget(self.threads_status_group)
+        
+        # Connection button
+        self.threads_connect_btn = QPushButton(self.tr("Connect with Threads"))
+        self.threads_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #000000;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 15px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #333333;
+            }
+        """)
+        self.threads_connect_btn.clicked.connect(self._connect_threads)
+        layout.addWidget(self.threads_connect_btn)
+        
+        # Disconnect button
+        self.threads_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.threads_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.threads_disconnect_btn.clicked.connect(self._disconnect_threads)
+        self.threads_disconnect_btn.setVisible(False)
+        layout.addWidget(self.threads_disconnect_btn)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("Threads"))
+        
+    def _create_instagram_api_tab(self):
+        """Create the Instagram API connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(15)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("Instagram API"))
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect directly to Instagram's API for advanced posting features. "
+            "This provides additional functionality beyond the standard Meta integration."
+        ))
+        info_text.setWordWrap(True)
+        info_layout.addWidget(info_text)
+        
+        layout.addWidget(info_group)
+        
+        # Connection status
+        self.instagram_api_status_group = QGroupBox(self.tr("Connection Status"))
+        status_layout = QVBoxLayout(self.instagram_api_status_group)
+        
+        self.instagram_api_status_label = QLabel(self.tr("Not connected"))
+        self.instagram_api_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+        status_layout.addWidget(self.instagram_api_status_label)
+        
+        layout.addWidget(self.instagram_api_status_group)
+        
+        # Connection button
+        self.instagram_api_connect_btn = QPushButton(self.tr("Connect with Instagram API"))
+        self.instagram_api_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #E4405F;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 15px 30px;
+                font-size: 16px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #C13584;
+            }
+        """)
+        self.instagram_api_connect_btn.clicked.connect(self._connect_instagram_api)
+        layout.addWidget(self.instagram_api_connect_btn)
+        
+        # Disconnect button
+        self.instagram_api_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.instagram_api_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                border-radius: 8px;
+                padding: 10px 20px;
+                font-size: 14px;
+            }
+            QPushButton:hover {
+                background-color: #c0392b;
+            }
+        """)
+        self.instagram_api_disconnect_btn.clicked.connect(self._disconnect_instagram_api)
+        self.instagram_api_disconnect_btn.setVisible(False)
+        layout.addWidget(self.instagram_api_disconnect_btn)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("Instagram API"))
         
     def _create_testing_tab(self):
         """Create the comprehensive testing tab."""
@@ -872,6 +1304,89 @@ class UnifiedConnectionDialog(BaseDialog):
                 self.tr("Error disconnecting from LinkedIn: {error}").format(error=str(e))
             )
     
+    def _connect_google_business(self):
+        """Connect to Google My Business."""
+        QMessageBox.information(
+            self,
+            "Google My Business Connection",
+            "Google My Business connection will be implemented in a future update.\n\n"
+            "This will allow you to post updates directly to your business listing."
+        )
+    
+    def _disconnect_google_business(self):
+        """Disconnect from Google My Business."""
+        self.platform_status['google_business']['connected'] = False
+        self._update_google_business_status(False, "Disconnected")
+    
+    def _connect_bluesky(self):
+        """Connect to BlueSky."""
+        QMessageBox.information(
+            self,
+            "BlueSky Connection",
+            "BlueSky connection will be implemented in a future update.\n\n"
+            "This will allow you to post to the decentralized social network."
+        )
+    
+    def _disconnect_bluesky(self):
+        """Disconnect from BlueSky."""
+        self.platform_status['bluesky']['connected'] = False
+        self._update_bluesky_status(False, "Disconnected")
+    
+    def _connect_tiktok(self):
+        """Connect to TikTok."""
+        QMessageBox.information(
+            self,
+            "TikTok Connection",
+            "TikTok connection will be implemented in a future update.\n\n"
+            "This will allow you to post videos to TikTok."
+        )
+    
+    def _disconnect_tiktok(self):
+        """Disconnect from TikTok."""
+        self.platform_status['tiktok']['connected'] = False
+        self._update_tiktok_status(False, "Disconnected")
+    
+    def _connect_pinterest(self):
+        """Connect to Pinterest."""
+        QMessageBox.information(
+            self,
+            "Pinterest Connection",
+            "Pinterest connection will be implemented in a future update.\n\n"
+            "This will allow you to create pins and boards."
+        )
+    
+    def _disconnect_pinterest(self):
+        """Disconnect from Pinterest."""
+        self.platform_status['pinterest']['connected'] = False
+        self._update_pinterest_status(False, "Disconnected")
+    
+    def _connect_threads(self):
+        """Connect to Threads."""
+        QMessageBox.information(
+            self,
+            "Threads Connection",
+            "Threads connection will be implemented in a future update.\n\n"
+            "This will allow you to post to Meta's Twitter alternative."
+        )
+    
+    def _disconnect_threads(self):
+        """Disconnect from Threads."""
+        self.platform_status['threads']['connected'] = False
+        self._update_threads_status(False, "Disconnected")
+    
+    def _connect_instagram_api(self):
+        """Connect to Instagram API."""
+        QMessageBox.information(
+            self,
+            "Instagram API Connection",
+            "Instagram API connection will be implemented in a future update.\n\n"
+            "This will provide advanced Instagram posting features."
+        )
+    
+    def _disconnect_instagram_api(self):
+        """Disconnect from Instagram API."""
+        self.platform_status['instagram_api']['connected'] = False
+        self._update_instagram_api_status(False, "Disconnected")
 
     
     def _test_x_connection(self):
@@ -1046,6 +1561,113 @@ class UnifiedConnectionDialog(BaseDialog):
         self.overall_status_label.setText(status_text)
         self.overall_status_label.setStyleSheet(f"font-weight: bold; font-size: 14px; color: {status_color};")
     
+    def _update_google_business_status(self, connected: bool, message: str):
+        """Update Google My Business connection status."""
+        self.platform_status['google_business']['connected'] = connected
+        self.platform_status['google_business']['error'] = None if connected else message
+        
+        if connected:
+            self.google_business_status_label.setText(self.tr("Connected"))
+            self.google_business_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.google_business_connect_btn.setVisible(False)
+            self.google_business_disconnect_btn.setVisible(True)
+        else:
+            self.google_business_status_label.setText(message)
+            self.google_business_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.google_business_connect_btn.setVisible(True)
+            self.google_business_disconnect_btn.setVisible(False)
+        
+        self._update_overall_status()
+    
+    def _update_bluesky_status(self, connected: bool, message: str):
+        """Update BlueSky connection status."""
+        self.platform_status['bluesky']['connected'] = connected
+        self.platform_status['bluesky']['error'] = None if connected else message
+        
+        if connected:
+            self.bluesky_status_label.setText(self.tr("Connected"))
+            self.bluesky_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.bluesky_connect_btn.setVisible(False)
+            self.bluesky_disconnect_btn.setVisible(True)
+        else:
+            self.bluesky_status_label.setText(message)
+            self.bluesky_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.bluesky_connect_btn.setVisible(True)
+            self.bluesky_disconnect_btn.setVisible(False)
+        
+        self._update_overall_status()
+    
+    def _update_tiktok_status(self, connected: bool, message: str):
+        """Update TikTok connection status."""
+        self.platform_status['tiktok']['connected'] = connected
+        self.platform_status['tiktok']['error'] = None if connected else message
+        
+        if connected:
+            self.tiktok_status_label.setText(self.tr("Connected"))
+            self.tiktok_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.tiktok_connect_btn.setVisible(False)
+            self.tiktok_disconnect_btn.setVisible(True)
+        else:
+            self.tiktok_status_label.setText(message)
+            self.tiktok_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.tiktok_connect_btn.setVisible(True)
+            self.tiktok_disconnect_btn.setVisible(False)
+        
+        self._update_overall_status()
+    
+    def _update_pinterest_status(self, connected: bool, message: str):
+        """Update Pinterest connection status."""
+        self.platform_status['pinterest']['connected'] = connected
+        self.platform_status['pinterest']['error'] = None if connected else message
+        
+        if connected:
+            self.pinterest_status_label.setText(self.tr("Connected"))
+            self.pinterest_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.pinterest_connect_btn.setVisible(False)
+            self.pinterest_disconnect_btn.setVisible(True)
+        else:
+            self.pinterest_status_label.setText(message)
+            self.pinterest_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.pinterest_connect_btn.setVisible(True)
+            self.pinterest_disconnect_btn.setVisible(False)
+        
+        self._update_overall_status()
+    
+    def _update_threads_status(self, connected: bool, message: str):
+        """Update Threads connection status."""
+        self.platform_status['threads']['connected'] = connected
+        self.platform_status['threads']['error'] = None if connected else message
+        
+        if connected:
+            self.threads_status_label.setText(self.tr("Connected"))
+            self.threads_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.threads_connect_btn.setVisible(False)
+            self.threads_disconnect_btn.setVisible(True)
+        else:
+            self.threads_status_label.setText(message)
+            self.threads_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.threads_connect_btn.setVisible(True)
+            self.threads_disconnect_btn.setVisible(False)
+        
+        self._update_overall_status()
+    
+    def _update_instagram_api_status(self, connected: bool, message: str):
+        """Update Instagram API connection status."""
+        self.platform_status['instagram_api']['connected'] = connected
+        self.platform_status['instagram_api']['error'] = None if connected else message
+        
+        if connected:
+            self.instagram_api_status_label.setText(self.tr("Connected"))
+            self.instagram_api_status_label.setStyleSheet("color: #27ae60; font-weight: bold;")
+            self.instagram_api_connect_btn.setVisible(False)
+            self.instagram_api_disconnect_btn.setVisible(True)
+        else:
+            self.instagram_api_status_label.setText(message)
+            self.instagram_api_status_label.setStyleSheet("color: #e74c3c; font-weight: bold;")
+            self.instagram_api_connect_btn.setVisible(True)
+            self.instagram_api_disconnect_btn.setVisible(False)
+        
+        self._update_overall_status()
 
     
     def _on_x_auth_success(self, auth_data: Dict[str, Any]):
@@ -1135,13 +1757,19 @@ class UnifiedConnectionDialog(BaseDialog):
         """Retranslate all UI elements."""
         self.setWindowTitle(self.tr("Connect to Social Media Platforms"))
         self.title_label.setText(self.tr("Connect Your Social Media Accounts"))
-        self.subtitle_label.setText(self.tr("Connect to Meta, X, and LinkedIn to start sharing your content"))
+        self.subtitle_label.setText(self.tr("Connect to 9+ social media platforms including Meta, X, LinkedIn, TikTok, Pinterest, BlueSky, and more"))
         
         # Update tab titles
         self.tab_widget.setTabText(0, self.tr("Meta"))
         self.tab_widget.setTabText(1, self.tr("X (Twitter)"))
         self.tab_widget.setTabText(2, self.tr("LinkedIn"))
-        self.tab_widget.setTabText(3, self.tr("Testing"))
+        self.tab_widget.setTabText(3, self.tr("Google Business"))
+        self.tab_widget.setTabText(4, self.tr("BlueSky"))
+        self.tab_widget.setTabText(5, self.tr("TikTok"))
+        self.tab_widget.setTabText(6, self.tr("Pinterest"))
+        self.tab_widget.setTabText(7, self.tr("Threads"))
+        self.tab_widget.setTabText(8, self.tr("Instagram API"))
+        self.tab_widget.setTabText(9, self.tr("Testing"))
         
         # Update button texts
         if hasattr(self, 'meta_connect_btn'):

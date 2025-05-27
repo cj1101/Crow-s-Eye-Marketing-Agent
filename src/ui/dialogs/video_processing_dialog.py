@@ -351,17 +351,19 @@ class VideoProcessingDialog(BaseDialog):
             item = QListWidgetItem(f"{len(self.processing_steps)}. Audio Overlay")
             self.queue_list.addItem(item)
         
-        # Enable/disable process button
-        self.process_btn.setEnabled(len(self.processing_steps) > 0)
+        # Always enable process button (allow processing with no services selected)
+        self.process_btn.setEnabled(True)
         
         if len(self.processing_steps) == 0:
-            self.progress_label.setText("Select at least one service to process")
+            self.progress_label.setText("No services selected - video will be saved as-is")
         else:
             self.progress_label.setText(f"Ready to process {len(self.processing_steps)} step(s)")
     
     def _start_processing(self):
         """Start the video processing pipeline."""
         if not self.processing_steps:
+            # No processing steps - just save the original video to library
+            self._save_original_video()
             return
         
         # Disable UI during processing
@@ -381,6 +383,40 @@ class VideoProcessingDialog(BaseDialog):
         self.worker.step_completed.connect(self._on_step_completed)
         self.worker.finished.connect(self._on_processing_finished)
         self.worker.start()
+    
+    def _save_original_video(self):
+        """Save the original video without processing."""
+        try:
+            from ...config import constants as const
+            from datetime import datetime
+            import shutil
+            
+            # Create output directory if it doesn't exist
+            os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+            
+            # Copy original video to output directory
+            base_name = os.path.splitext(os.path.basename(self.video_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"{base_name}_original_{timestamp}.mp4"
+            output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+            
+            shutil.copy2(self.video_path, output_path)
+            
+            self.progress_label.setText(f"Original video saved: {os.path.basename(output_path)}")
+            
+            # Show success message
+            QMessageBox.information(
+                self,
+                "Video Saved",
+                f"Original video saved successfully!\n\nSaved as: {os.path.basename(output_path)}\n\nThe video will now be loaded into the main interface."
+            )
+            
+            self.video_processed.emit(output_path)
+            self.accept()
+            
+        except Exception as e:
+            self.progress_label.setText(f"Failed to save original video: {str(e)}")
+            QMessageBox.warning(self, "Save Failed", f"Failed to save original video:\n{str(e)}")
     
     def _update_progress(self, message: str):
         """Update progress display."""

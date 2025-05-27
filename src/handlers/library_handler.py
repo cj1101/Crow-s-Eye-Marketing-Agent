@@ -198,42 +198,39 @@ class LibraryManager:
             is_post_ready: Flag to mark item as post-ready photo
             
         Returns:
-            str: ID of the added item, or None on failure
+            str: Item ID if successful, None otherwise
         """
         try:
-            item_id = str(uuid.uuid4())
-            filename = f"{item_id}.png" 
-            file_path = self.images_dir / filename
-            original_mode = image.mode
-
-            if original_mode == 'RGBA':
-                image.save(file_path, format="PNG", compress_level=0)
-            else:
-                if original_mode != 'RGB':
-                    image = image.convert('RGB')
-                image.save(file_path, format="PNG", compress_level=0)
+            # Determine item type based on is_post_ready
+            item_type = "post_ready_photo" if is_post_ready else "raw_photo"
             
+            # Generate unique ID and filename
+            item_id = str(uuid.uuid4())
+            filename = f"{item_id}.png"  # Save as PNG to preserve quality
+            dest_path = self.images_dir / filename
+            
+            # Save image
+            image.save(dest_path, "PNG")
+            
+            # Get image dimensions
             width, height = image.size
-            item_metadata = {"original_mode": original_mode}
-
+            
+            # Prepare metadata
+            item_metadata = {"original_mode": image.mode}
             if metadata and isinstance(metadata, dict):
                 item_metadata.update(metadata)
             
-            # Determine item_type based on is_post_ready
-            item_type = "post_ready_photo" if is_post_ready else "raw_photo"
-            if is_post_ready and not caption:
-                self.logger.warning(f"Adding post-ready image item {filename} without a caption.")
-
+            # Create item data
             item_data = {
                 "id": item_id,
-                "type": item_type, # Updated type field
+                "type": item_type,
                 "filename": filename,
-                "path": str(file_path.absolute()),
+                "path": str(dest_path.absolute()),
                 "caption": caption,
                 "date_added": date_added or datetime.now().isoformat(),
                 "tags": [],
                 "dimensions": [width, height],
-                "size_str": f"{os.path.getsize(file_path) / 1024:.1f} KB",
+                "size_str": f"{os.path.getsize(dest_path) / 1024:.1f} KB",
                 "metadata": item_metadata
             }
             
@@ -244,10 +241,28 @@ class LibraryManager:
             self._save_library_data(self.library_data)
             
             return item_id
-            
+                
         except Exception as e:
             self.logger.error(f"Error adding item to library: {e}")
             return None
+
+    def add_image_item(self, image: Image.Image, caption: str = "", 
+                      date_added: str = None, metadata: dict = None, 
+                      is_post_ready: bool = False) -> Optional[str]:
+        """
+        Add an image item to the library (alias for add_item for backward compatibility).
+        
+        Args:
+            image: PIL Image object
+            caption: Caption text for the image
+            date_added: ISO format date string (defaults to now)
+            metadata: Additional metadata for the item
+            is_post_ready: Flag to mark item as post-ready photo
+            
+        Returns:
+            str: Item ID if successful, None otherwise
+        """
+        return self.add_item(image, caption, date_added, metadata, is_post_ready)
             
     def get_item(self, item_id: str) -> Optional[Dict[str, Any]]:
         """

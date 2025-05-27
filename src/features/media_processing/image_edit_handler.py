@@ -12,7 +12,7 @@ import numpy as np
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
-from ..config import constants as const
+from ...config import constants as const
 
 # Constants
 GEMINI_VISION_MODEL = "gemini-1.5-flash"  # Using flash model which is better suited for image processing
@@ -51,7 +51,8 @@ class ImageEditHandler:
             # Check if GEMINI_API_KEY is configured
             gemini_key = os.environ.get("GEMINI_API_KEY")
             if not gemini_key:
-                return False, "", "Gemini API key not configured. Set the GEMINI_API_KEY environment variable."
+                self.logger.warning("Gemini API key not configured. Using enhanced fallback editing.")
+                return self._apply_basic_edit(image_path, edit_instructions)
             
             # Configure Gemini API
             genai.configure(api_key=gemini_key)
@@ -165,25 +166,27 @@ class ImageEditHandler:
                                 })
                                 
                                 self.logger.info(f"Successfully saved edited image to {edited_file_path}")
-                                return True, edited_file_path, "Image successfully edited"
+                                return True, edited_file_path, "Image successfully edited with Gemini"
                                 
                             except Exception as img_error:
                                 self.logger.error(f"Error verifying edited image: {img_error}")
-                                return False, "", f"Invalid image data received: {str(img_error)}"
+                                # Continue to fallback instead of returning error
+                                break
                                 
                         except Exception as decode_error:
                             self.logger.error(f"Error decoding image data: {decode_error}")
                             continue
             
-            # If we get here, we didn't find an image in the response
-            self.logger.warning("No valid image found in Gemini response")
+            # If we get here, we didn't find a valid image in the response
+            self.logger.warning("No valid image found in Gemini response, using enhanced fallback editing")
             
             # Let's implement a fallback to basic image filters if Gemini didn't return an image
             return self._apply_basic_edit(image_path, edit_instructions)
             
         except Exception as e:
             self.logger.error(f"Error editing image with Gemini: {e}")
-            # Fall back to basic edits
+            # Fall back to enhanced editing
+            self.logger.info("Falling back to enhanced image editing")
             return self._apply_basic_edit(image_path, edit_instructions)
             
     def _apply_basic_edit(self, image_path: str, edit_instructions: str) -> Tuple[bool, str, str]:
@@ -208,6 +211,9 @@ class ImageEditHandler:
             # Open the image
             img = Image.open(image_path).convert("RGB")
             original_img = img.copy()
+            
+            # Store original image path
+            self.original_image_path = image_path
             
             # ARTISTIC STYLE TRANSFORMATIONS
             if any(keyword in instructions_lower for keyword in ["studio ghibli", "ghibli", "anime", "animated"]):
@@ -346,7 +352,8 @@ class ImageEditHandler:
             })
             
             effects_str = ", ".join(applied_effects)
-            return True, edited_file_path, f"Applied effects: {effects_str}"
+            success_message = f"Image successfully edited with enhanced processing. Applied effects: {effects_str}"
+            return True, edited_file_path, success_message
             
         except Exception as e:
             self.logger.error(f"Error in enhanced editing: {e}")

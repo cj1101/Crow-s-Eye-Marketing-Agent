@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QVBoxLayout, QLabel, QCheckBox
 from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QCursor
 
-from ...features.media_processing.media_handler import MediaHandler, pil_to_qpixmap
+from ...handlers.media_handler import MediaHandler, pil_to_qpixmap
 from ..base_widget import BaseWidget
 
 

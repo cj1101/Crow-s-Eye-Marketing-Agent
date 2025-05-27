@@ -14,6 +14,7 @@ Crow's Eye is a comprehensive social media marketing tool focused on visual cont
 - **🌍 Multi-Language Support**: 11 languages including Spanish, French, German, and more
 
 ### 💎 Pro Tier ($5/month)
+- **🎬 Veo Video Generator**: Google Veo 3 AI video generation with quality presets
 - **🎞 Highlight Reel Generator**: AI-powered video editing and highlight creation
 - **🎧 Audio Importer**: Natural language audio editing and overlay
 - **🎥 Story Assistant**: Automatic story formatting and optimization
@@ -104,9 +105,13 @@ The application supports multiple social media platforms:
 Create a `.env` file or set environment variables:
 ```bash
 GEMINI_API_KEY=your_gemini_api_key
+GOOGLE_API_KEY=your_google_api_key_for_veo
 META_APP_ID=your_meta_app_id
 META_APP_SECRET=your_meta_app_secret
 ```
+
+### 🎬 Veo Video Generation
+For detailed setup and usage of the Veo video generation feature, see the [Veo Integration Guide](VEO_INTEGRATION_GUIDE.md).
 
 ## 🧪 Testing
 

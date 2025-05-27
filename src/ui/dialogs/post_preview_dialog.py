@@ -135,7 +135,7 @@ class PostPreviewDialog(QDialog):
                 pil_image = self.media_handler.load_image(media_path)
                 if pil_image:
                     # Convert PIL to QPixmap
-                    from ...features.media_processing.media_handler import pil_to_qpixmap
+                    from ...handlers.media_handler import pil_to_qpixmap
                     pixmap = pil_to_qpixmap(pil_image)
                     
                     if pixmap and not pixmap.isNull():
@@ -239,22 +239,51 @@ class PostPreviewDialog(QDialog):
         post_now_group = QGroupBox("Post Now")
         post_now_layout = QVBoxLayout(post_now_group)
         
-        # Platform checkboxes
+        # Create a grid layout for better organization
+        platform_grid = QGridLayout()
+        
+        # Row 1: Meta platforms
         self.fb_checkbox = QCheckBox("Post to Facebook")
         self.fb_checkbox.setChecked(True)
-        post_now_layout.addWidget(self.fb_checkbox)
+        platform_grid.addWidget(self.fb_checkbox, 0, 0)
         
         self.ig_checkbox = QCheckBox("Post to Instagram")
         self.ig_checkbox.setChecked(True)
-        post_now_layout.addWidget(self.ig_checkbox)
+        platform_grid.addWidget(self.ig_checkbox, 0, 1)
         
+        # Row 2: Professional platforms
         self.linkedin_checkbox = QCheckBox("Post to LinkedIn")
         self.linkedin_checkbox.setChecked(False)
-        post_now_layout.addWidget(self.linkedin_checkbox)
+        platform_grid.addWidget(self.linkedin_checkbox, 1, 0)
         
         self.x_checkbox = QCheckBox("Post to X")
         self.x_checkbox.setChecked(False)
-        post_now_layout.addWidget(self.x_checkbox)
+        platform_grid.addWidget(self.x_checkbox, 1, 1)
+        
+        # Row 3: New platforms
+        self.tiktok_checkbox = QCheckBox("Post to TikTok")
+        self.tiktok_checkbox.setChecked(False)
+        platform_grid.addWidget(self.tiktok_checkbox, 2, 0)
+        
+        self.pinterest_checkbox = QCheckBox("Post to Pinterest")
+        self.pinterest_checkbox.setChecked(False)
+        platform_grid.addWidget(self.pinterest_checkbox, 2, 1)
+        
+        # Row 4: Additional platforms
+        self.bluesky_checkbox = QCheckBox("Post to BlueSky")
+        self.bluesky_checkbox.setChecked(False)
+        platform_grid.addWidget(self.bluesky_checkbox, 3, 0)
+        
+        self.threads_checkbox = QCheckBox("Post to Threads")
+        self.threads_checkbox.setChecked(False)
+        platform_grid.addWidget(self.threads_checkbox, 3, 1)
+        
+        # Row 5: Business platforms
+        self.google_business_checkbox = QCheckBox("Post to Google My Business")
+        self.google_business_checkbox.setChecked(False)
+        platform_grid.addWidget(self.google_business_checkbox, 4, 0)
+        
+        post_now_layout.addLayout(platform_grid)
         
         # Post Now button
         self.post_now_btn = AdjustableButton("Post Now")
@@ -375,7 +404,10 @@ class PostPreviewDialog(QDialog):
     def _on_post_now(self):
         """Handle post now button click."""
         if not (self.fb_checkbox.isChecked() or self.ig_checkbox.isChecked() or 
-                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked()):
+                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked() or
+                self.tiktok_checkbox.isChecked() or self.pinterest_checkbox.isChecked() or
+                self.bluesky_checkbox.isChecked() or self.threads_checkbox.isChecked() or
+                self.google_business_checkbox.isChecked()):
             QMessageBox.warning(self, "Post Error", "Please select at least one platform to post to.")
             return
             
@@ -388,6 +420,16 @@ class PostPreviewDialog(QDialog):
             platforms.append("linkedin")
         if self.x_checkbox.isChecked():
             platforms.append("x")
+        if self.tiktok_checkbox.isChecked():
+            platforms.append("tiktok")
+        if self.pinterest_checkbox.isChecked():
+            platforms.append("pinterest")
+        if self.bluesky_checkbox.isChecked():
+            platforms.append("bluesky")
+        if self.threads_checkbox.isChecked():
+            platforms.append("threads")
+        if self.google_business_checkbox.isChecked():
+            platforms.append("google_business")
             
         # Add platforms to post data
         post_data = self.post_data.copy()

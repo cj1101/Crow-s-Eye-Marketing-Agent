@@ -213,22 +213,51 @@ class CustomMediaUploadDialog(BaseDialog):
         platform_group = QGroupBox("Select Platforms")
         platform_layout = QVBoxLayout(platform_group)
         
+        # Create a grid layout for better organization
+        platform_grid = QGridLayout()
+        
+        # Row 1: Meta platforms
         self.instagram_checkbox = QCheckBox("Instagram")
         self.instagram_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
-        platform_layout.addWidget(self.instagram_checkbox)
+        platform_grid.addWidget(self.instagram_checkbox, 0, 0)
         
         self.facebook_checkbox = QCheckBox("Facebook")
         self.facebook_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
-        platform_layout.addWidget(self.facebook_checkbox)
+        platform_grid.addWidget(self.facebook_checkbox, 0, 1)
         
+        # Row 2: Professional platforms
         self.linkedin_checkbox = QCheckBox("LinkedIn")
         self.linkedin_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
-        platform_layout.addWidget(self.linkedin_checkbox)
+        platform_grid.addWidget(self.linkedin_checkbox, 1, 0)
         
         self.x_checkbox = QCheckBox("X (Twitter)")
         self.x_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
-        platform_layout.addWidget(self.x_checkbox)
+        platform_grid.addWidget(self.x_checkbox, 1, 1)
         
+        # Row 3: New platforms
+        self.tiktok_checkbox = QCheckBox("TikTok")
+        self.tiktok_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_grid.addWidget(self.tiktok_checkbox, 2, 0)
+        
+        self.pinterest_checkbox = QCheckBox("Pinterest")
+        self.pinterest_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_grid.addWidget(self.pinterest_checkbox, 2, 1)
+        
+        # Row 4: Additional platforms
+        self.bluesky_checkbox = QCheckBox("BlueSky")
+        self.bluesky_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_grid.addWidget(self.bluesky_checkbox, 3, 0)
+        
+        self.threads_checkbox = QCheckBox("Threads")
+        self.threads_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_grid.addWidget(self.threads_checkbox, 3, 1)
+        
+        # Row 5: Business platforms
+        self.google_business_checkbox = QCheckBox("Google My Business")
+        self.google_business_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_grid.addWidget(self.google_business_checkbox, 4, 0)
+        
+        platform_layout.addLayout(platform_grid)
         layout.addWidget(platform_group)
         
         # Progress section
@@ -307,6 +336,11 @@ class CustomMediaUploadDialog(BaseDialog):
         self.facebook_checkbox.toggled.connect(self._validate_form)
         self.linkedin_checkbox.toggled.connect(self._validate_form)
         self.x_checkbox.toggled.connect(self._validate_form)
+        self.tiktok_checkbox.toggled.connect(self._validate_form)
+        self.pinterest_checkbox.toggled.connect(self._validate_form)
+        self.bluesky_checkbox.toggled.connect(self._validate_form)
+        self.threads_checkbox.toggled.connect(self._validate_form)
+        self.google_business_checkbox.toggled.connect(self._validate_form)
         
         # Unified handler signals
         self.unified_handler.signals.upload_started.connect(self._on_upload_started)
@@ -461,26 +495,36 @@ class CustomMediaUploadDialog(BaseDialog):
         has_platform = (self.instagram_checkbox.isChecked() or 
                        self.facebook_checkbox.isChecked() or 
                        self.linkedin_checkbox.isChecked() or 
-                       self.x_checkbox.isChecked())
+                       self.x_checkbox.isChecked() or
+                       self.tiktok_checkbox.isChecked() or
+                       self.pinterest_checkbox.isChecked() or
+                       self.bluesky_checkbox.isChecked() or
+                       self.threads_checkbox.isChecked() or
+                       self.google_business_checkbox.isChecked())
         
-        # Check if any text-only platforms are selected (LinkedIn, X, Facebook)
+        # Check if any text-only platforms are selected
         text_only_platforms = (self.linkedin_checkbox.isChecked() or 
                               self.x_checkbox.isChecked() or 
-                              self.facebook_checkbox.isChecked())
+                              self.facebook_checkbox.isChecked() or
+                              self.bluesky_checkbox.isChecked() or
+                              self.threads_checkbox.isChecked() or
+                              self.google_business_checkbox.isChecked())
         
-        # Instagram requires media, but other platforms can be text-only
-        instagram_selected = self.instagram_checkbox.isChecked()
+        # Platforms that require media
+        media_required_platforms = (self.instagram_checkbox.isChecked() or
+                                   self.tiktok_checkbox.isChecked() or
+                                   self.pinterest_checkbox.isChecked())
         
         # Form is valid if:
         # 1. At least one platform is selected
-        # 2. If Instagram is selected, media must be provided
+        # 2. If media-required platforms are selected, media must be provided
         # 3. If only text-only platforms are selected, caption must be provided
         caption = self.caption_text.toPlainText().strip()
         caption_valid = len(caption) <= const.IG_MAX_CAPTION_LENGTH
         
         form_valid = (has_platform and caption_valid and 
-                     ((instagram_selected and has_media) or 
-                      (not instagram_selected and (has_media or (text_only_platforms and caption)))))
+                     ((media_required_platforms and has_media) or 
+                      (not media_required_platforms and (has_media or (text_only_platforms and caption)))))
         
         self.upload_button.setEnabled(form_valid)
     
@@ -489,28 +533,30 @@ class CustomMediaUploadDialog(BaseDialog):
         available_platforms = self.unified_handler.get_available_platforms()
         platform_errors = self.unified_handler.get_platform_errors()
         
+        # Platform checkbox mapping
+        platform_checkboxes = {
+            'instagram': (self.instagram_checkbox, "Instagram"),
+            'facebook': (self.facebook_checkbox, "Facebook"),
+            'linkedin': (self.linkedin_checkbox, "LinkedIn"),
+            'x': (self.x_checkbox, "X (Twitter)"),
+            'tiktok': (self.tiktok_checkbox, "TikTok"),
+            'pinterest': (self.pinterest_checkbox, "Pinterest"),
+            'bluesky': (self.bluesky_checkbox, "BlueSky"),
+            'threads': (self.threads_checkbox, "Threads"),
+            'google_business': (self.google_business_checkbox, "Google My Business")
+        }
+        
         # Set platform availability
-        self.instagram_checkbox.setEnabled(available_platforms.get('instagram', False))
-        self.facebook_checkbox.setEnabled(available_platforms.get('facebook', False))
-        self.linkedin_checkbox.setEnabled(available_platforms.get('linkedin', False))
-        self.x_checkbox.setEnabled(available_platforms.get('x', False))
-        
-        # Update labels for unavailable platforms
-        if not available_platforms.get('instagram', False):
-            self.instagram_checkbox.setText("Instagram (Not Available)")
-            self.instagram_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
-        
-        if not available_platforms.get('facebook', False):
-            self.facebook_checkbox.setText("Facebook (Not Available)")
-            self.facebook_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
-        
-        if not available_platforms.get('linkedin', False):
-            self.linkedin_checkbox.setText("LinkedIn (Not Available)")
-            self.linkedin_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
-        
-        if not available_platforms.get('x', False):
-            self.x_checkbox.setText("X (Not Available)")
-            self.x_checkbox.setStyleSheet("QCheckBox { color: #999999; }")
+        for platform_key, (checkbox, display_name) in platform_checkboxes.items():
+            is_available = available_platforms.get(platform_key, False)
+            checkbox.setEnabled(is_available)
+            
+            if not is_available:
+                checkbox.setText(f"{display_name} (Not Available)")
+                checkbox.setStyleSheet("QCheckBox { color: #999999; font-size: 14px; }")
+            else:
+                checkbox.setText(display_name)
+                checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
         
         # Show error message if any platforms are unavailable
         error_messages = []
@@ -537,6 +583,16 @@ class CustomMediaUploadDialog(BaseDialog):
             platforms.append("LinkedIn")
         if self.x_checkbox.isChecked():
             platforms.append("X")
+        if self.tiktok_checkbox.isChecked():
+            platforms.append("TikTok")
+        if self.pinterest_checkbox.isChecked():
+            platforms.append("Pinterest")
+        if self.bluesky_checkbox.isChecked():
+            platforms.append("BlueSky")
+        if self.threads_checkbox.isChecked():
+            platforms.append("Threads")
+        if self.google_business_checkbox.isChecked():
+            platforms.append("Google My Business")
         
         if not platforms:
             QMessageBox.warning(self, "No Platforms", "Please select at least one platform.")
@@ -545,13 +601,14 @@ class CustomMediaUploadDialog(BaseDialog):
         # Get caption
         caption = self.caption_text.toPlainText().strip()
         
-        # Check if Instagram is selected and requires media
-        if "Instagram" in platforms and not self.selected_media_path:
-            QMessageBox.warning(self, "No Media", "Instagram requires a media file. Please select a media file or uncheck Instagram.")
+        # Check if media-required platforms are selected and require media
+        media_required_platforms = [p for p in platforms if p in ["Instagram", "TikTok", "Pinterest"]]
+        if media_required_platforms and not self.selected_media_path:
+            QMessageBox.warning(self, "No Media", f"{', '.join(media_required_platforms)} require(s) a media file. Please select a media file or uncheck these platforms.")
             return
         
         # Check if we have either media or caption for text-only platforms
-        text_only_platforms = [p for p in platforms if p in ["LinkedIn", "X", "Facebook"]]
+        text_only_platforms = [p for p in platforms if p in ["LinkedIn", "X", "Facebook", "BlueSky", "Threads", "Google My Business"]]
         if text_only_platforms and not self.selected_media_path and not caption:
             QMessageBox.warning(self, "No Content", "Please provide either a media file or caption text.")
             return

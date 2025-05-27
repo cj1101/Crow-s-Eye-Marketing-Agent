@@ -16,7 +16,7 @@ from PySide6.QtGui import QPixmap, QImage
 
 from PIL import Image as PILImage
 
-from ...api.ai.crowseye_handler import CrowsEyeHandler
+from ...handlers.crowseye_handler import CrowsEyeHandler
 from ..base_dialog import BaseDialog
 
 

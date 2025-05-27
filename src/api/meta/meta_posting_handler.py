@@ -11,8 +11,8 @@ from typing import Dict, Any, Optional, List, Tuple
 from datetime import datetime
 from PySide6.QtCore import QObject, Signal, QThread
 
-from ..config import constants as const
-from ..handlers.media_handler import load_meta_credentials
+from ...config import constants as const
+from ...handlers.media_handler import load_meta_credentials
 
 class MetaPostingSignals(QObject):
     """Signals for Meta API posting operations."""

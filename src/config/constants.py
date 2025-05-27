@@ -11,6 +11,7 @@ APP_VERSION = "5.0.0"
 
 # Directories
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
+DATA_DIR = os.path.join(ROOT_DIR, 'data')
 MEDIA_LIBRARY_DIR = os.path.join(ROOT_DIR, 'media_library')
 OUTPUT_DIR = os.path.join(ROOT_DIR, 'output')
 KNOWLEDGE_BASE_DIR = os.path.join(ROOT_DIR, 'knowledge_base')

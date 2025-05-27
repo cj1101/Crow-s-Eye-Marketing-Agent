@@ -200,6 +200,62 @@
             "metadata": {
                 "original_mode": "RGB"
             }
+        },
+        "6eca767a-c82d-4bd5-98fb-bb5aefe8a017": {
+            "id": "6eca767a-c82d-4bd5-98fb-bb5aefe8a017",
+            "type": "post_ready_photo",
+            "filename": "6eca767a-c82d-4bd5-98fb-bb5aefe8a017.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\6eca767a-c82d-4bd5-98fb-bb5aefe8a017.png",
+            "caption": "Test image",
+            "date_added": "2025-05-27T00:04:12.804462",
+            "tags": [],
+            "dimensions": [
+                100,
+                100
+            ],
+            "size_str": "0.3 KB",
+            "metadata": {
+                "original_mode": "RGB",
+                "test": true
+            }
+        },
+        "f6cf980d-8b9b-448d-9e72-6e433f9b1743": {
+            "id": "f6cf980d-8b9b-448d-9e72-6e433f9b1743",
+            "type": "post_ready_photo",
+            "filename": "f6cf980d-8b9b-448d-9e72-6e433f9b1743.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\f6cf980d-8b9b-448d-9e72-6e433f9b1743.png",
+            "caption": "",
+            "date_added": "2025-05-27T00:07:25.151788",
+            "tags": [],
+            "dimensions": [
+                5712,
+                4284
+            ],
+            "size_str": "20922.5 KB",
+            "metadata": {
+                "original_mode": "RGB",
+                "original_path": "C:/Users/charl/Downloads/IMG_4051.jpg",
+                "edit_instructions": "Transform this image into a watercolor painting with soft edges and flowing colors."
+            }
+        },
+        "0ff0394a-3fff-46f4-b30d-367b33209fe4": {
+            "id": "0ff0394a-3fff-46f4-b30d-367b33209fe4",
+            "type": "post_ready_photo",
+            "filename": "0ff0394a-3fff-46f4-b30d-367b33209fe4.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\0ff0394a-3fff-46f4-b30d-367b33209fe4.png",
+            "caption": "",
+            "date_added": "2025-05-27T00:17:08.518848",
+            "tags": [],
+            "dimensions": [
+                225,
+                225
+            ],
+            "size_str": "42.6 KB",
+            "metadata": {
+                "original_mode": "RGB",
+                "original_path": "C:/Users/charl/Downloads/sourdough.jpeg",
+                "edit_instructions": "Apply an oil painting artistic effect with painterly textures and enhanced colors."
+            }
         }
     },
     "last_updated": "2025-04-21T20:56:19.275364",

@@ -292,5 +292,22 @@
   "Error disconnecting from X: {error}": "Error disconnecting from X: {error}",
   "Error disconnecting from LinkedIn: {error}": "Error disconnecting from LinkedIn: {error}",
   "Successfully connected to X!": "Successfully connected to X!",
-  "Successfully connected to LinkedIn!": "Successfully connected to LinkedIn!"
+  "Successfully connected to LinkedIn!": "Successfully connected to LinkedIn!",
+  
+  "Edit Image with Gemini": "Edit Image with Gemini",
+  "Image Editing Instructions": "Image Editing Instructions",
+  "Enter instructions for how you want to edit the image. Gemini can perform various edits like adjusting colors, applying filters, removing objects, changing backgrounds, etc.\n\nYou can also skip editing and save the original image directly to your library.": "Enter instructions for how you want to edit the image. Gemini can perform various edits like adjusting colors, applying filters, removing objects, changing backgrounds, etc.\n\nYou can also skip editing and save the original image directly to your library.",
+  "Preset:": "Preset:",
+  "Type your editing instructions here...\n\nExamples:\n- Convert this image to black and white\n- Increase brightness and contrast\n- Add a vintage filter\n- Enhance colors and sharpen details\n- Remove the background and replace with a blue gradient\n- Add a subtle vignette effect": "Type your editing instructions here...\n\nExamples:\n- Convert this image to black and white\n- Increase brightness and contrast\n- Add a vintage filter\n- Enhance colors and sharpen details\n- Remove the background and replace with a blue gradient\n- Add a subtle vignette effect",
+  "<b>Tips:</b><br>• Be specific about what changes you want<br>• Mention areas of the image you want to focus on<br>• Describe the style or mood you're aiming for<br>• For best results, keep instructions clear and concise": "<b>Tips:</b><br>• Be specific about what changes you want<br>• Mention areas of the image you want to focus on<br>• Describe the style or mood you're aiming for<br>• For best results, keep instructions clear and concise",
+  "Cancel": "Cancel",
+  "Skip Editing": "Skip Editing",
+  "Apply Edit": "Apply Edit",
+  "-- Select Preset --": "-- Select Preset --",
+  
+  "Crow's Eye Marketing Agent": "Crow's Eye Marketing Agent",
+  "🏠 Home": "🏠 Home",
+  "Choose an action to get started": "Choose an action to get started",
+  "Quick Access Presets": "Quick Access Presets",
+  "Saved presets and campaign-linked presets will appear here": "Saved presets and campaign-linked presets will appear here"
 } 

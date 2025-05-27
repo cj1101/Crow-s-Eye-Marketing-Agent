@@ -18,7 +18,7 @@ from PySide6.QtWidgets import QDialog, QVBoxLayout, QHBoxLayout, QPushButton, QL
 from PySide6.QtCore import Qt
 import webbrowser
 
-from ..config import constants as const
+from ...config import constants as const
 
 logger = logging.getLogger(__name__)
 

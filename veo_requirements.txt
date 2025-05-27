@@ -1,0 +1,13 @@
+# Veo 3 Video Generation Dependencies
+# Add these to your main requirements.txt
+
+# Google Gen AI SDK for Veo
+google-genai>=1.10.0
+
+# Additional dependencies that might be needed
+google-cloud-aiplatform>=1.40.0
+google-auth>=2.15.0
+
+# For video processing (if not already included)
+opencv-python>=4.8.0
+moviepy>=1.0.3 

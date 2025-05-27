@@ -11,8 +11,8 @@ import requests
 from PySide6.QtCore import QObject, Signal
 from dotenv import load_dotenv
 
-from ..config import constants as const
-from ..utils.api_key_manager import key_manager
+from ...config import constants as const
+from ...utils.api_key_manager import key_manager
 
 logger = logging.getLogger(__name__)
 

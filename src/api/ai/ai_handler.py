@@ -11,9 +11,9 @@ from PIL import Image, ImageStat, ImageFilter
 import google.generativeai as genai
 from dotenv import load_dotenv
 
-from ..config import constants as const
-from ..models.app_state import AppState
-from ..utils.file_reader import extract_context_from_files
+from ...config import constants as const
+from ...models.app_state import AppState
+from ...utils.file_reader import extract_context_from_files
 
 # Load API key from environment variables
 load_dotenv()

@@ -10,7 +10,7 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, Signal, QEvent
 
-from ...api.ai.crowseye_handler import CrowsEyeHandler
+from ...handlers.crowseye_handler import CrowsEyeHandler
 from ..components.media_thumbnail_widget import MediaThumbnailWidget
 from ..base_dialog import BaseDialog
 

@@ -275,7 +275,15 @@ class ComplianceHandler:
                 "presets.json",
                 "media_status.json",
                 "meta_credentials.json",
-                "cloud_storage_config.json"
+                "cloud_storage_config.json",
+                "linkedin_credentials.json",
+                "x_credentials.json",
+                "instagram_credentials.json",
+                "tiktok_credentials.json",
+                "google_business_credentials.json",
+                "bluesky_credentials.json",
+                "pinterest_credentials.json",
+                "threads_credentials.json"
             ]
             
             for file_name in config_files:
@@ -289,6 +297,35 @@ class ComplianceHandler:
             }
             with open("meta_credentials.json", 'w', encoding='utf-8') as f:
                 json.dump(default_credentials, f, indent=4)
+            
+            # Call logout methods for all platform handlers to ensure complete cleanup
+            try:
+                from ..features.posting.unified_posting_handler import UnifiedPostingHandler
+                unified_handler = UnifiedPostingHandler()
+                
+                # Logout from all platforms
+                if hasattr(unified_handler, 'linkedin_handler'):
+                    unified_handler.linkedin_handler.logout()
+                if hasattr(unified_handler, 'x_handler'):
+                    unified_handler.x_handler.logout()
+                if hasattr(unified_handler, 'instagram_handler'):
+                    unified_handler.instagram_handler.logout()
+                if hasattr(unified_handler, 'tiktok_handler'):
+                    unified_handler.tiktok_handler.logout()
+                if hasattr(unified_handler, 'google_business_handler'):
+                    unified_handler.google_business_handler.logout()
+                if hasattr(unified_handler, 'bluesky_handler'):
+                    unified_handler.bluesky_handler.logout()
+                if hasattr(unified_handler, 'pinterest_handler'):
+                    unified_handler.pinterest_handler.logout()
+                if hasattr(unified_handler, 'threads_handler'):
+                    unified_handler.threads_handler.logout()
+                
+                self.logger.info("All platform handlers logged out successfully")
+                
+            except Exception as e:
+                self.logger.warning(f"Error during platform logout: {e}")
+                # Continue with factory reset even if logout fails
             
             # Update factory reset status
             reset_record["status"] = "completed"

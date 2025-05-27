@@ -15,7 +15,7 @@ from moviepy.editor import VideoFileClip, concatenate_videoclips, CompositeVideo
 from moviepy.video.fx import resize, crop
 from PIL import Image
 
-from ..config import constants as const
+from ...config import constants as const
 
 
 class VideoHandler:
@@ -28,7 +28,7 @@ class VideoHandler:
         
         # Initialize analytics handler
         try:
-            from .analytics_handler import AnalyticsHandler
+            from ...handlers.analytics_handler import AnalyticsHandler
             self.analytics_handler = AnalyticsHandler()
         except Exception as e:
             self.logger.warning(f"Could not initialize analytics handler: {e}")

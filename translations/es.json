@@ -163,5 +163,22 @@
   "<b>Message:</b>": "<b>Mensaje:</b>",
   "<b>Suggested Response:</b>": "<b>Respuesta Sugerida:</b>",
   "Approve": "Aprobar",
-  "Edit & Approve": "Editar y Aprobar"
+  "Edit & Approve": "Editar y Aprobar",
+  
+  "Edit Image with Gemini": "Editar Imagen con Gemini",
+  "Image Editing Instructions": "Instrucciones de Edición de Imagen",
+  "Enter instructions for how you want to edit the image. Gemini can perform various edits like adjusting colors, applying filters, removing objects, changing backgrounds, etc.\n\nYou can also skip editing and save the original image directly to your library.": "Ingrese instrucciones sobre cómo desea editar la imagen. Gemini puede realizar varias ediciones como ajustar colores, aplicar filtros, eliminar objetos, cambiar fondos, etc.\n\nTambién puede omitir la edición y guardar la imagen original directamente en su biblioteca.",
+  "Preset:": "Preestablecido:",
+  "Type your editing instructions here...\n\nExamples:\n- Convert this image to black and white\n- Increase brightness and contrast\n- Add a vintage filter\n- Enhance colors and sharpen details\n- Remove the background and replace with a blue gradient\n- Add a subtle vignette effect": "Escriba sus instrucciones de edición aquí...\n\nEjemplos:\n- Convertir esta imagen a blanco y negro\n- Aumentar brillo y contraste\n- Agregar un filtro vintage\n- Mejorar colores y afilar detalles\n- Eliminar el fondo y reemplazar con un degradado azul\n- Agregar un efecto de viñeta sutil",
+  "<b>Tips:</b><br>• Be specific about what changes you want<br>• Mention areas of the image you want to focus on<br>• Describe the style or mood you're aiming for<br>• For best results, keep instructions clear and concise": "<b>Consejos:</b><br>• Sea específico sobre los cambios que desea<br>• Mencione las áreas de la imagen en las que quiere enfocarse<br>• Describa el estilo o ambiente que busca<br>• Para mejores resultados, mantenga las instrucciones claras y concisas",
+  "Cancel": "Cancelar",
+  "Skip Editing": "Omitir Edición",
+  "Apply Edit": "Aplicar Edición",
+  "-- Select Preset --": "-- Seleccionar Preestablecido --",
+  
+  "Crow's Eye Marketing Agent": "Agente de Marketing Crow's Eye",
+  "🏠 Home": "🏠 Inicio",
+  "Choose an action to get started": "Elija una acción para comenzar",
+  "Quick Access Presets": "Preestablecidos de Acceso Rápido",
+  "Saved presets and campaign-linked presets will appear here": "Los preestablecidos guardados y vinculados a campañas aparecerán aquí"
 } 

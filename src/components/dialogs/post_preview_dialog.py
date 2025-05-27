@@ -135,7 +135,7 @@ class PostPreviewDialog(QDialog):
                 pil_image = self.media_handler.load_image(media_path)
                 if pil_image:
                     # Convert PIL to QPixmap
-                    from ...features.media_processing.media_handler import pil_to_qpixmap
+                    from ...handlers.media_handler import pil_to_qpixmap
                     pixmap = pil_to_qpixmap(pil_image)
                     
                     if pixmap and not pixmap.isNull():

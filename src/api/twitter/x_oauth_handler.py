@@ -14,7 +14,7 @@ import requests
 from PySide6.QtCore import QObject, Signal
 import webbrowser
 
-from ..config import constants as const
+from ...config import constants as const
 
 logger = logging.getLogger(__name__)
 
