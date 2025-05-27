@@ -171,19 +171,19 @@ class CampaignManager(QWidget):
         header_layout = QHBoxLayout()
         
         # Title
-        title_label = QLabel("Campaign Manager")
+        self.title_label = QLabel(self.tr("Campaign Manager"))
         title_font = QFont()
         title_font.setPointSize(20)
         title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setStyleSheet("color: #000000;")
-        header_layout.addWidget(title_label)
+        self.title_label.setFont(title_font)
+        self.title_label.setStyleSheet("color: #000000;")
+        header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
         
         # Add Campaign button
-        add_btn = QPushButton("+ Add Campaign")
-        add_btn.setStyleSheet("""
+        self.add_btn = QPushButton(self.tr("+ Add Campaign"))
+        self.add_btn.setStyleSheet("""
             QPushButton {
                 background-color: #28a745;
                 color: white;
@@ -197,15 +197,15 @@ class CampaignManager(QWidget):
                 background-color: #218838;
             }
         """)
-        add_btn.clicked.connect(self.add_campaign_requested.emit)
-        header_layout.addWidget(add_btn)
+        self.add_btn.clicked.connect(self.add_campaign_requested.emit)
+        header_layout.addWidget(self.add_btn)
         
         main_layout.addLayout(header_layout)
         
         # Subtitle
-        subtitle_label = QLabel("Manage your posting campaigns and schedules")
-        subtitle_label.setStyleSheet("color: #666666; font-size: 14px;")
-        main_layout.addWidget(subtitle_label)
+        self.subtitle_label = QLabel(self.tr("Manage your posting campaigns and schedules"))
+        self.subtitle_label.setStyleSheet("color: #666666; font-size: 14px;")
+        main_layout.addWidget(self.subtitle_label)
         
     def _create_campaigns_list(self, main_layout: QVBoxLayout):
         """Create the campaigns list area."""
@@ -241,13 +241,13 @@ class CampaignManager(QWidget):
         empty_layout.addWidget(icon_label)
         
         # Text
-        text_label = QLabel("No campaigns yet")
+        text_label = QLabel(self.tr("No campaigns yet"))
         text_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         text_label.setStyleSheet("color: #666666; font-size: 16px; margin: 10px;")
         empty_layout.addWidget(text_label)
         
         # Description
-        desc_label = QLabel("Create your first campaign to start organizing your posts")
+        desc_label = QLabel(self.tr("Create your first campaign to start organizing your posts"))
         desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet("color: #999999; font-size: 12px;")
@@ -304,5 +304,9 @@ class CampaignManager(QWidget):
         
     def retranslateUi(self):
         """Update UI text for internationalization."""
-        # TODO: Implement when i18n is needed
-        pass 
+        if hasattr(self, 'title_label'):
+            self.title_label.setText(self.tr("Campaign Manager"))
+        if hasattr(self, 'add_btn'):
+            self.add_btn.setText(self.tr("+ Add Campaign"))
+        if hasattr(self, 'subtitle_label'):
+            self.subtitle_label.setText(self.tr("Manage your posting campaigns and schedules")) 

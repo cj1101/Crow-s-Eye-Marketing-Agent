@@ -80,6 +80,7 @@ class VideoTools(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.tool_cards = []
         
         self._setup_ui()
         
@@ -90,39 +91,39 @@ class VideoTools(QWidget):
         layout.setSpacing(10)
         
         # Title
-        title_label = QLabel("Video Tools")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #000000; margin-bottom: 10px;")
-        layout.addWidget(title_label)
+        self.title_label = QLabel(self.tr("Video Tools"))
+        self.title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #000000; margin-bottom: 10px;")
+        layout.addWidget(self.title_label)
         
         # Tools
         tools_data = [
             {
-                'title': 'Highlight Reel Generator',
-                'description': 'Create highlight reels from longer videos',
+                'title': self.tr('Highlight Reel Generator'),
+                'description': self.tr('Create highlight reels from longer videos'),
                 'icon': '🎬',
                 'tool_name': 'highlight_reel'
             },
             {
-                'title': 'Story Assistant',
-                'description': 'AI-powered story creation and editing',
+                'title': self.tr('Story Assistant'),
+                'description': self.tr('AI-powered story creation and editing'),
                 'icon': '📖',
                 'tool_name': 'story_assistant'
             },
             {
-                'title': 'Thumbnail Selector',
-                'description': 'Choose the best thumbnail for your reels',
+                'title': self.tr('Thumbnail Selector'),
+                'description': self.tr('Choose the best thumbnail for your reels'),
                 'icon': '🖼️',
                 'tool_name': 'thumbnail_selector'
             },
             {
-                'title': 'Veo Video Generator',
-                'description': 'Generate videos using Veo AI',
+                'title': self.tr('Veo Video Generator'),
+                'description': self.tr('Generate videos using Veo AI'),
                 'icon': '✨',
                 'tool_name': 'veo_generator'
             },
             {
-                'title': 'Audio Overlay',
-                'description': 'Add audio tracks to your videos',
+                'title': self.tr('Audio Overlay'),
+                'description': self.tr('Add audio tracks to your videos'),
                 'icon': '🎵',
                 'tool_name': 'audio_overlay'
             }
@@ -137,6 +138,7 @@ class VideoTools(QWidget):
             )
             card.clicked.connect(self._on_tool_clicked)
             layout.addWidget(card)
+            self.tool_cards.append(card)
             
         layout.addStretch()
         
@@ -153,4 +155,12 @@ class VideoTools(QWidget):
         elif tool_name == 'veo_generator':
             self.veo_generator_requested.emit()
         elif tool_name == 'audio_overlay':
-            self.audio_overlay_requested.emit() 
+            self.audio_overlay_requested.emit()
+            
+    def retranslateUi(self):
+        """Update UI text for internationalization."""
+        if hasattr(self, 'title_label'):
+            self.title_label.setText(self.tr("Video Tools"))
+        
+        # Recreate the tools with updated translations
+        self._setup_ui() 

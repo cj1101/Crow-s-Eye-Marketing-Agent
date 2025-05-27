@@ -504,7 +504,7 @@ class AppController(QWidget):
         from .dialogs.post_options_dialog import PostOptionsDialog
         
         # Open post options dialog for text post
-        dialog = PostOptionsDialog(post_type="text", parent=self)
+        dialog = PostOptionsDialog(parent=self)
         if dialog.exec():
             self.logger.info("Text post creation completed")
         else:

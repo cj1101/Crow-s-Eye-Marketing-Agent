@@ -42,7 +42,7 @@ class LibraryWindow(BaseMainWindow):
         self.media_thumbnails = {}
         
         super().__init__(parent)
-        self.setWindowTitle("Crow's Eye - Media Library")
+        self.setWindowTitle(self.tr("Crow's Eye - Media Library"))
         self.setMinimumSize(1000, 700)
         
         # Create UI first
@@ -64,13 +64,13 @@ class LibraryWindow(BaseMainWindow):
         
         # Header
         header_layout = QHBoxLayout()
-        title_label = QLabel("Media Library")
-        title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF;")
-        header_layout.addWidget(title_label)
+        self.title_label = QLabel(self.tr("Media Library"))
+        self.title_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF;")
+        header_layout.addWidget(self.title_label)
         header_layout.addStretch()
         
         # Upload button
-        self.upload_button = QPushButton("File(s) Upload")
+        self.upload_button = QPushButton(self.tr("File(s) Upload"))
         self.upload_button.clicked.connect(self._on_file_upload)
         self.upload_button.setStyleSheet("""
             QPushButton {
@@ -88,7 +88,7 @@ class LibraryWindow(BaseMainWindow):
         layout.addWidget(self.tab_widget)
         
         # Status bar
-        self.status_label = QLabel("Ready")
+        self.status_label = QLabel(self.tr("Ready"))
         self.status_label.setStyleSheet("color: #CCCCCC; padding: 5px;")
         layout.addWidget(self.status_label)
     
@@ -97,18 +97,20 @@ class LibraryWindow(BaseMainWindow):
         # Media tab
         self.media_tab = QWidget()
         self._setup_media_tab()
-        self.tab_widget.addTab(self.media_tab, "Media")
+        self.tab_widget.addTab(self.media_tab, self.tr("Media"))
         
         # Other tabs
-        for tab_name, setup_method in [
+        tab_configs = [
             ("Finished Posts", self._setup_posts_tab),
             ("Finished Galleries", self._setup_galleries_tab),
             ("Finished Reels", self._setup_reels_tab)
-        ]:
+        ]
+        
+        for tab_name, setup_method in tab_configs:
             tab = QWidget()
             setattr(self, f"{tab_name.lower().replace(' ', '_')}_tab", tab)
             setup_method(tab)
-            self.tab_widget.addTab(tab, tab_name)
+            self.tab_widget.addTab(tab, self.tr(tab_name))
     
     def _setup_media_tab(self):
         """Set up the Media tab with gallery generation."""
@@ -117,10 +119,10 @@ class LibraryWindow(BaseMainWindow):
         # Header controls
         header_layout = QHBoxLayout()
         self.media_search = QLineEdit()
-        self.media_search.setPlaceholderText("Search media...")
+        self.media_search.setPlaceholderText(self.tr("Search media..."))
         header_layout.addWidget(self.media_search)
         
-        self.generate_gallery_button = QPushButton("Generate Gallery")
+        self.generate_gallery_button = QPushButton(self.tr("Generate Gallery"))
         self.generate_gallery_button.clicked.connect(self._on_generate_gallery)
         self.generate_gallery_button.setStyleSheet("""
             QPushButton { background-color: #7c3aed; color: white; border: none;
@@ -134,29 +136,29 @@ class LibraryWindow(BaseMainWindow):
         self.gallery_controls = QWidget()
         controls_layout = QHBoxLayout(self.gallery_controls)
         
-        self.selection_info = QLabel("No items selected")
+        self.selection_info = QLabel(self.tr("No items selected"))
         self.selection_info.setStyleSheet("color: #FFFFFF; font-size: 12px;")
         controls_layout.addWidget(self.selection_info)
         controls_layout.addStretch()
         
         # Clear and Create buttons
-        clear_btn = QPushButton("Clear Selection")
-        clear_btn.clicked.connect(self._clear_selection)
-        clear_btn.setStyleSheet("""
+        self.clear_btn = QPushButton(self.tr("Clear Selection"))
+        self.clear_btn.clicked.connect(self._clear_selection)
+        self.clear_btn.setStyleSheet("""
             QPushButton { background-color: #6b7280; color: white; border: none;
                          padding: 6px 12px; border-radius: 4px; font-size: 11px; }
             QPushButton:hover { background-color: #6b7280cc; }
         """)
-        controls_layout.addWidget(clear_btn)
+        controls_layout.addWidget(self.clear_btn)
         
-        create_btn = QPushButton("Create Gallery")
-        create_btn.clicked.connect(self._on_create_gallery_from_selection)
-        create_btn.setStyleSheet("""
+        self.create_btn = QPushButton(self.tr("Create Gallery"))
+        self.create_btn.clicked.connect(self._on_create_gallery_from_selection)
+        self.create_btn.setStyleSheet("""
             QPushButton { background-color: #059669; color: white; border: none;
                          padding: 6px 12px; border-radius: 4px; font-size: 11px; }
             QPushButton:hover { background-color: #059669cc; }
         """)
-        controls_layout.addWidget(create_btn)
+        controls_layout.addWidget(self.create_btn)
         
         self.gallery_controls.hide()
         layout.addWidget(self.gallery_controls)
@@ -176,10 +178,9 @@ class LibraryWindow(BaseMainWindow):
         """Set up posts tab."""
         layout = QVBoxLayout(tab)
         
-        search = QLineEdit()
-        search.setPlaceholderText("Search finished posts...")
-        layout.addWidget(search)
-        self.posts_search = search
+        self.posts_search = QLineEdit()
+        self.posts_search.setPlaceholderText(self.tr("Search finished posts..."))
+        layout.addWidget(self.posts_search)
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -196,25 +197,28 @@ class LibraryWindow(BaseMainWindow):
     def _setup_galleries_tab(self, tab):
         """Set up galleries tab."""
         layout = QVBoxLayout(tab)
-        header = QLabel("Saved Galleries")
-        header.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
-        layout.addWidget(header)
+        self.galleries_header = QLabel(self.tr("Saved Galleries"))
+        self.galleries_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
+        layout.addWidget(self.galleries_header)
         
-        self.galleries_scroll = QScrollArea()
-        self.galleries_scroll.setWidgetResizable(True)
-        self.galleries_container = QWidget()
-        self.galleries_layout = QVBoxLayout(self.galleries_container)
-        self.galleries_scroll.setWidget(self.galleries_container)
-        layout.addWidget(self.galleries_scroll)
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        container = QWidget()
+        grid = QGridLayout(container)
+        grid.setSpacing(10)
+        scroll.setWidget(container)
+        layout.addWidget(scroll)
+        
+        self.galleries_scroll = scroll
+        self.galleries_container = container
+        self.galleries_layout = grid
     
     def _setup_reels_tab(self, tab):
         """Set up reels tab."""
         layout = QVBoxLayout(tab)
-        
-        search = QLineEdit()
-        search.setPlaceholderText("Search finished reels...")
-        layout.addWidget(search)
-        self.reels_search = search
+        self.reels_header = QLabel(self.tr("Finished Reels"))
+        self.reels_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF;")
+        layout.addWidget(self.reels_header)
         
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
@@ -231,15 +235,15 @@ class LibraryWindow(BaseMainWindow):
     def refresh_library(self):
         """Refresh all library content."""
         try:
-            self.status_label.setText("Refreshing...")
+            self.status_label.setText(self.tr("Refreshing..."))
             self._load_media_tab()
             self._load_finished_posts()
             self._load_finished_galleries()
-            self.status_label.setText("Library refreshed")
+            self.status_label.setText(self.tr("Library refreshed"))
         except Exception as e:
             logging.error(f"Error refreshing: {e}")
             if hasattr(self, 'status_label'):
-                self.status_label.setText("Error refreshing")
+                self.status_label.setText(self.tr("Error refreshing"))
     
     def _load_media_tab(self):
         """Load media into the media tab."""
@@ -341,10 +345,10 @@ class LibraryWindow(BaseMainWindow):
         """Update selection display."""
         count = len(self.selected_media)
         if count == 0:
-            self.selection_info.setText("No items selected")
+            self.selection_info.setText(self.tr("No items selected"))
             self.gallery_controls.hide()
         else:
-            self.selection_info.setText(f"{count} item{'s' if count != 1 else ''} selected")
+            self.selection_info.setText(self.tr("{count} item(s) selected").format(count=count))
             self.gallery_controls.show()
     
     def _clear_selection(self):
@@ -384,12 +388,12 @@ class LibraryWindow(BaseMainWindow):
             # Switch to galleries tab and refresh
             self.tab_widget.setCurrentIndex(2)
             self.refresh_library()
-            self.status_label.setText("Gallery generated!")
+            self.status_label.setText(self.tr("Gallery generated!"))
     
     def _on_create_gallery_from_selection(self):
         """Create gallery from selection."""
         if not self.selected_media:
-            QMessageBox.warning(self, "No Selection", "Please select media items first.")
+            QMessageBox.warning(self, self.tr("No Selection"), self.tr("Please select media items first."))
             return
         
         from .dialogs.save_gallery_dialog import SaveGalleryDialog
@@ -399,7 +403,7 @@ class LibraryWindow(BaseMainWindow):
             self._clear_selection()
             self._load_finished_galleries()
             self.tab_widget.setCurrentIndex(2)
-            self.status_label.setText("Gallery created!")
+            self.status_label.setText(self.tr("Gallery created!"))
     
 
     def _on_add_media_to_gallery_clicked(self, gallery_data):
@@ -415,7 +419,7 @@ class LibraryWindow(BaseMainWindow):
             
             if not all_media_paths:
                 from PySide6.QtWidgets import QMessageBox
-                QMessageBox.information(self, "No Media", "No media available to add. Please upload some media first.")
+                QMessageBox.information(self, self.tr("No Media"), self.tr("No media available to add. Please upload some media first."))
                 return
             
             # Open media selection dialog
@@ -429,19 +433,19 @@ class LibraryWindow(BaseMainWindow):
                         success = self.crowseye_handler.add_media_to_gallery(gallery_filename, selected_media)
                         if success:
                             self._load_finished_galleries()  # Refresh galleries
-                            self.status_label.setText(f"Added {len(selected_media)} media item(s) to gallery")
+                            self.status_label.setText(self.tr("Added {count} media item(s) to gallery").format(count=len(selected_media)))
                         else:
                             from PySide6.QtWidgets import QMessageBox
-                            QMessageBox.warning(self, "Error", "Failed to add media to gallery.")
+                            QMessageBox.warning(self, self.tr("Error"), self.tr("Failed to add media to gallery."))
                     else:
                         from PySide6.QtWidgets import QMessageBox
-                        QMessageBox.warning(self, "Error", "Gallery filename not found.")
+                        QMessageBox.warning(self, self.tr("Error"), self.tr("Gallery filename not found."))
                 
         except Exception as e:
             import logging
             logging.error(f"Error adding media to gallery: {e}")
             from PySide6.QtWidgets import QMessageBox
-            QMessageBox.critical(self, "Error", f"Failed to add media to gallery: {str(e)}")
+            QMessageBox.critical(self, self.tr("Error"), self.tr("Failed to add media to gallery: {error}").format(error=str(e)))
 
     def _on_view_edit_gallery_clicked(self, gallery_data):
         """View/edit gallery."""
@@ -453,7 +457,7 @@ class LibraryWindow(BaseMainWindow):
     
     def _on_gallery_generated(self, media_paths):
         """Handle gallery generation completion."""
-        self.status_label.setText(f"Gallery generated with {len(media_paths)} items")
+        self.status_label.setText(self.tr("Gallery generated with {count} items").format(count=len(media_paths)))
     
     def _on_generate_post_requested(self, media_path):
         """Handle request to generate post with specific media."""
@@ -466,7 +470,7 @@ class LibraryWindow(BaseMainWindow):
             
         except Exception as e:
             logging.error(f"Error handling generate post request: {e}")
-            QMessageBox.warning(self, "Error", f"Could not load media for post generation: {str(e)}")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not load media for post generation: {error}").format(error=str(e)))
     
     def _on_finished_post_clicked(self, media_path, item_data):
         """Handle finished post click to show post preview dialog."""
@@ -494,7 +498,7 @@ class LibraryWindow(BaseMainWindow):
             
         except Exception as e:
             logging.error(f"Error showing post preview for {media_path}: {e}")
-            QMessageBox.warning(self, "Error", f"Could not show post preview: {str(e)}")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not show post preview: {error}").format(error=str(e)))
     
     def _on_post_now(self, post_data):
         """Handle post now request."""
@@ -506,13 +510,16 @@ class LibraryWindow(BaseMainWindow):
             platform_names = ", ".join(platforms)
             QMessageBox.information(
                 self, 
-                "Post Scheduled", 
-                f"Post will be published to {platform_names}\n\nMedia: {os.path.basename(media_path)}"
+                self.tr("Post Scheduled"), 
+                self.tr("Post will be published to {platforms}\n\nMedia: {media}").format(
+                    platforms=platform_names, 
+                    media=os.path.basename(media_path)
+                )
             )
             
         except Exception as e:
             logging.error(f"Error posting now: {e}")
-            QMessageBox.warning(self, "Error", f"Could not post now: {str(e)}")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not post now: {error}").format(error=str(e)))
     
     def _on_add_to_queue(self, post_data):
         """Handle add to queue request."""
@@ -522,13 +529,13 @@ class LibraryWindow(BaseMainWindow):
             
             QMessageBox.information(
                 self, 
-                "Added to Queue", 
-                f"Post added to publishing queue\n\nMedia: {os.path.basename(media_path)}"
+                self.tr("Added to Queue"), 
+                self.tr("Post added to publishing queue\n\nMedia: {media}").format(media=os.path.basename(media_path))
             )
             
         except Exception as e:
             logging.error(f"Error adding to queue: {e}")
-            QMessageBox.warning(self, "Error", f"Could not add to queue: {str(e)}")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not add to queue: {error}").format(error=str(e)))
     
     def _on_edit_post(self, post_data):
         """Handle edit post request."""
@@ -542,7 +549,7 @@ class LibraryWindow(BaseMainWindow):
             
         except Exception as e:
             logging.error(f"Error editing post: {e}")
-            QMessageBox.warning(self, "Error", f"Could not edit post: {str(e)}")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not edit post: {error}").format(error=str(e)))
     
     def _on_delete_post(self, post_data):
         """Handle delete post request."""
@@ -552,22 +559,22 @@ class LibraryWindow(BaseMainWindow):
             if item_id and hasattr(self.library_manager, 'remove_item'):
                 success = self.library_manager.remove_item(item_id)
                 if success:
-                    QMessageBox.information(self, "Post Deleted", "Post has been deleted successfully.")
+                    QMessageBox.information(self, self.tr("Post Deleted"), self.tr("Post has been deleted successfully."))
                     self.refresh_library()  # Refresh to update the display
                 else:
-                    QMessageBox.warning(self, "Error", "Could not delete post from library.")
+                    QMessageBox.warning(self, self.tr("Error"), self.tr("Could not delete post from library."))
             else:
-                QMessageBox.warning(self, "Error", "Could not find post to delete.")
+                QMessageBox.warning(self, self.tr("Error"), self.tr("Could not find post to delete."))
                 
         except Exception as e:
             logging.error(f"Error deleting post: {e}")
-            QMessageBox.warning(self, "Error", f"Could not delete post: {str(e)}")
+            QMessageBox.warning(self, self.tr("Error"), self.tr("Could not delete post: {error}").format(error=str(e)))
     
     def _on_file_upload(self):
         """Handle file upload."""
         file_paths, _ = QFileDialog.getOpenFileNames(
-            self, "Select Media Files", "",
-            "Image and Video Files (*.jpg *.jpeg *.png *.gif *.bmp *.mp4 *.mov *.avi *.mkv *.wmv);;All Files (*)"
+            self, self.tr("Select Media Files"), "",
+            self.tr("Image and Video Files (*.jpg *.jpeg *.png *.gif *.bmp *.mp4 *.mov *.avi *.mkv *.wmv);;All Files (*)")
         )
         
         if file_paths:
@@ -597,12 +604,12 @@ class LibraryWindow(BaseMainWindow):
                         uploaded += 1
                         logging.info(f"Uploaded file: {filename} -> {dest_path}")
                 
-                self.status_label.setText(f"Uploaded {uploaded} file(s)")
+                self.status_label.setText(self.tr("Uploaded {count} file(s)").format(count=uploaded))
                 self.refresh_library()
                 
             except Exception as e:
                 logging.error(f"Upload error: {e}")
-                QMessageBox.critical(self, "Upload Error", f"Failed to upload: {str(e)}")
+                QMessageBox.critical(self, self.tr("Upload Error"), self.tr("Failed to upload: {error}").format(error=str(e)))
     
     def set_theme(self, is_dark: bool) -> None:
         """Set theme."""
@@ -613,5 +620,58 @@ class LibraryWindow(BaseMainWindow):
         event.accept()
     
     def retranslateUi(self):
-        """Retranslate UI."""
-        pass 
+        """Retranslate UI elements when language changes."""
+        # Window title
+        self.setWindowTitle(self.tr("Crow's Eye - Media Library"))
+        
+        # Header elements
+        if hasattr(self, 'title_label'):
+            self.title_label.setText(self.tr("Media Library"))
+        if hasattr(self, 'upload_button'):
+            self.upload_button.setText(self.tr("File(s) Upload"))
+        
+        # Tab names
+        if hasattr(self, 'tab_widget'):
+            self.tab_widget.setTabText(0, self.tr("Media"))
+            self.tab_widget.setTabText(1, self.tr("Finished Posts"))
+            self.tab_widget.setTabText(2, self.tr("Finished Galleries"))
+            self.tab_widget.setTabText(3, self.tr("Finished Reels"))
+        
+        # Media tab elements
+        if hasattr(self, 'media_search'):
+            self.media_search.setPlaceholderText(self.tr("Search media..."))
+        if hasattr(self, 'generate_gallery_button'):
+            self.generate_gallery_button.setText(self.tr("Generate Gallery"))
+        if hasattr(self, 'clear_btn'):
+            self.clear_btn.setText(self.tr("Clear Selection"))
+        if hasattr(self, 'create_btn'):
+            self.create_btn.setText(self.tr("Create Gallery"))
+        
+        # Posts tab elements
+        if hasattr(self, 'posts_search'):
+            self.posts_search.setPlaceholderText(self.tr("Search finished posts..."))
+        
+        # Galleries tab elements
+        if hasattr(self, 'galleries_header'):
+            self.galleries_header.setText(self.tr("Saved Galleries"))
+        
+        # Reels tab elements
+        if hasattr(self, 'reels_header'):
+            self.reels_header.setText(self.tr("Finished Reels"))
+        
+        # Update selection display
+        self._update_selection_display()
+        
+        # Status label - only update if it shows a static message
+        if hasattr(self, 'status_label') and self.status_label.text() in [
+            "Ready", "Refreshing...", "Library refreshed", "Error refreshing"
+        ]:
+            current_text = self.status_label.text()
+            if current_text == "Ready":
+                self.status_label.setText(self.tr("Ready"))
+            elif current_text == "Refreshing...":
+                self.status_label.setText(self.tr("Refreshing..."))
+            elif current_text == "Library refreshed":
+                self.status_label.setText(self.tr("Library refreshed"))
+            elif current_text == "Error refreshing":
+                self.status_label.setText(self.tr("Error refreshing")) 

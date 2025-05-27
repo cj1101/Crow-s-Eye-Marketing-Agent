@@ -2,7 +2,7 @@
 
 > *A smart marketing automation platform for creators and small businesses*
 
-Crow's Eye is a comprehensive social media marketing tool focused on visual content for Instagram, Facebook, LinkedIn, and X (Twitter). Built with a critical lens on social media, it provides industry-best tools to help creators survive in the current landscape while encouraging healthier media habits.
+Crow's Eye is a comprehensive social media marketing tool focused on visual content for Instagram, Facebook, and other major social platforms. Built with a critical lens on social media, it provides industry-best tools to help creators survive in the current landscape while encouraging healthier media habits.
 
 ## ✨ Features
 
@@ -67,8 +67,7 @@ crow-eye-marketing/
 │   │   └── gallery/            # Gallery generation
 │   ├── 📁 api/                 # External API integrations
 │   │   ├── meta/               # Facebook/Instagram API
-│   │   ├── twitter/            # X (Twitter) API
-│   │   ├── linkedin/           # LinkedIn API
+
 │   │   └── ai/                 # AI service integrations
 │   ├── 📁 utils/               # Utility functions
 │   ├── 📁 models/              # Data models
@@ -97,9 +96,7 @@ crow-eye-marketing/
 The application supports multiple social media platforms:
 
 1. **Meta (Facebook/Instagram)**: OAuth 2.0 authentication
-2. **X (Twitter)**: API v2 with OAuth 2.0
-3. **LinkedIn**: OAuth 2.0 authentication
-4. **AI Services**: Gemini API for content generation
+2. **AI Services**: Gemini API for content generation
 
 ### API Keys Setup
 

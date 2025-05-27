@@ -39,21 +39,21 @@ class CreatePostOptionTile(QFrame):
         layout.addWidget(icon_label)
         
         # Title
-        title_label = QLabel(title)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setWordWrap(True)
+        self.title_label = QLabel(title)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setWordWrap(True)
         title_font = QFont()
         title_font.setPointSize(14)
         title_font.setBold(True)
-        title_label.setFont(title_font)
-        layout.addWidget(title_label)
+        self.title_label.setFont(title_font)
+        layout.addWidget(self.title_label)
         
         # Description
-        desc_label = QLabel(description)
-        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #666666; font-size: 11px;")
-        layout.addWidget(desc_label)
+        self.desc_label = QLabel(description)
+        self.desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.desc_label.setWordWrap(True)
+        self.desc_label.setStyleSheet("color: #666666; font-size: 11px;")
+        layout.addWidget(self.desc_label)
         
         # Styling
         self.setStyleSheet("""
@@ -76,6 +76,11 @@ class CreatePostOptionTile(QFrame):
         # Set fixed size for consistent grid
         self.setFixedSize(200, 180)
         
+    def update_text(self, title: str, description: str):
+        """Update the tile's title and description text."""
+        self.title_label.setText(title)
+        self.desc_label.setText(description)
+    
     def mousePressEvent(self, event):
         """Handle mouse press to emit clicked signal."""
         if event.button() == Qt.MouseButton.LeftButton:
@@ -102,6 +107,7 @@ class CreatePostDialog(BaseDialog):
         
         self._setup_ui()
         self._connect_signals()
+        self.retranslateUi()  # Apply initial translations
         
         self.logger.info("Create Post dialog initialized")
     
@@ -133,20 +139,20 @@ class CreatePostDialog(BaseDialog):
     def _create_header(self, main_layout: QVBoxLayout):
         """Create the header section."""
         # Title
-        title_label = QLabel("Create a Post")
+        self.title_label = QLabel()  # Text set in retranslateUi
         title_font = QFont()
         title_font.setPointSize(20)
         title_font.setBold(True)
-        title_label.setFont(title_font)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("color: #000000; margin-bottom: 10px;")
-        main_layout.addWidget(title_label)
+        self.title_label.setFont(title_font)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setStyleSheet("color: #000000; margin-bottom: 10px;")
+        main_layout.addWidget(self.title_label)
         
         # Subtitle
-        subtitle_label = QLabel("Choose how you'd like to create your post")
-        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        subtitle_label.setStyleSheet("color: #666666; font-size: 14px; margin-bottom: 20px;")
-        main_layout.addWidget(subtitle_label)
+        self.subtitle_label = QLabel()  # Text set in retranslateUi
+        self.subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.subtitle_label.setStyleSheet("color: #666666; font-size: 14px; margin-bottom: 20px;")
+        main_layout.addWidget(self.subtitle_label)
     
     def _create_options_grid(self, main_layout: QVBoxLayout):
         """Create the options grid."""
@@ -156,49 +162,53 @@ class CreatePostDialog(BaseDialog):
         options_layout.setSpacing(15)
         options_layout.setContentsMargins(0, 0, 0, 0)
         
-        # Define options
-        options_data = [
+        # Define options with translation keys
+        self.options_data = [
             {
-                'title': 'Upload Photo',
-                'description': 'Upload an existing photo from your device or library',
+                'title_key': 'Upload Photo',
+                'description_key': 'Upload an existing photo from your device or library',
                 'icon': '📷',
                 'option_type': 'upload_photo'
             },
             {
-                'title': 'Upload Video',
-                'description': 'Upload an existing video with optional processing',
+                'title_key': 'Upload Video',
+                'description_key': 'Upload an existing video with optional processing',
                 'icon': '🎥',
                 'option_type': 'upload_video'
             },
             {
-                'title': 'Create Media',
-                'description': 'Generate new content using AI (Imagen/Veo)',
+                'title_key': 'Create Media',
+                'description_key': 'Generate new content using AI (Imagen/Veo)',
                 'icon': '✨',
                 'option_type': 'create_media'
             },
             {
-                'title': 'Create Gallery',
-                'description': 'Create a gallery from existing photos and videos',
+                'title_key': 'Create Gallery',
+                'description_key': 'Create a gallery from existing photos and videos',
                 'icon': '🖼️',
                 'option_type': 'create_gallery'
             },
             {
-                'title': 'Text Post',
-                'description': 'Create a text-only post with AI assistance',
+                'title_key': 'Text Post',
+                'description_key': 'Create a text-only post with AI assistance',
                 'icon': '📝',
                 'option_type': 'text_post'
             }
         ]
         
+        # Store option tiles for translation updates
+        self.option_tiles = []
+        
         # Create option tiles in a grid (3 columns for 5 options)
-        for i, option_data in enumerate(options_data):
+        for i, option_data in enumerate(self.options_data):
             tile = CreatePostOptionTile(
-                title=option_data['title'],
-                description=option_data['description'],
+                title=self.tr(option_data['title_key']),
+                description=self.tr(option_data['description_key']),
                 icon=option_data['icon'],
                 option_type=option_data['option_type']
             )
             tile.clicked.connect(self._on_option_selected)
+            self.option_tiles.append(tile)
             
             row = i // 3
             col = i % 3
@@ -215,8 +225,8 @@ class CreatePostDialog(BaseDialog):
         button_layout = QHBoxLayout()
         button_layout.addStretch()
         
-        cancel_button = QPushButton("Cancel")
-        cancel_button.setStyleSheet("""
+        self.cancel_button = QPushButton()  # Text set in retranslateUi
+        self.cancel_button.setStyleSheet("""
             QPushButton {
                 background-color: #6c757d;
                 color: white;
@@ -231,8 +241,8 @@ class CreatePostDialog(BaseDialog):
                 background-color: #5a6268;
             }
         """)
-        cancel_button.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_button)
+        self.cancel_button.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_button)
         
         main_layout.addLayout(button_layout)
     
@@ -315,5 +325,23 @@ class CreatePostDialog(BaseDialog):
     
     def retranslateUi(self):
         """Update UI text for internationalization."""
-        # TODO: Implement when i18n is needed
-        pass 
+        self.setWindowTitle(self.tr("Create a Post"))
+        
+        if hasattr(self, 'title_label'):
+            self.title_label.setText(self.tr("Create a Post"))
+        
+        if hasattr(self, 'subtitle_label'):
+            self.subtitle_label.setText(self.tr("Choose how you'd like to create your post"))
+        
+        if hasattr(self, 'cancel_button'):
+            self.cancel_button.setText(self.tr("Cancel"))
+        
+        # Update option tiles
+        if hasattr(self, 'option_tiles') and hasattr(self, 'options_data'):
+            for i, tile in enumerate(self.option_tiles):
+                if i < len(self.options_data):
+                    option_data = self.options_data[i]
+                    tile.update_text(
+                        self.tr(option_data['title_key']),
+                        self.tr(option_data['description_key'])
+                    ) 

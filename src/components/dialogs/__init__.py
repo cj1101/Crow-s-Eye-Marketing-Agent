@@ -7,7 +7,7 @@ from .compliance_dialog import ComplianceDialog
 from .modern_login_dialog import ModernLoginDialog
 from .scheduling_dialog import ScheduleDialog
 from .login_dialog import LoginDialog
-from .post_options_dialog import PostOptionsDialog
+# PostOptionsDialog moved to src/ui/dialogs/
 from .image_edit_dialog import ImageEditDialog
 from .highlight_reel_dialog import HighlightReelDialog
 from .story_assistant_dialog import StoryAssistantDialog
@@ -21,7 +21,6 @@ __all__ = [
     'ModernLoginDialog',
     'ScheduleDialog',
     'LoginDialog',
-    'PostOptionsDialog',
     'ImageEditDialog',
     'HighlightReelDialog',
     'StoryAssistantDialog',

@@ -74,10 +74,11 @@ class PostCreationDialog(BaseDialog):
         self._setup_ui()
         if self.media_path:
             self._load_media_preview()
+        self.retranslateUi()  # Apply initial translations
             
     def _setup_ui(self):
         """Set up the dialog UI."""
-        self.setWindowTitle("Create Post")
+        self.setWindowTitle("Create Post")  # Will be updated in retranslateUi
         self.setMinimumSize(1200, 800)
         self.setModal(True)
         
@@ -85,9 +86,9 @@ class PostCreationDialog(BaseDialog):
         main_layout = QVBoxLayout(self)
         
         # Title
-        title_label = QLabel("Create Post")
-        title_label.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 15px;")
-        main_layout.addWidget(title_label)
+        self.title_label = QLabel()  # Text set in retranslateUi
+        self.title_label.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 15px;")
+        main_layout.addWidget(self.title_label)
         
         # Create main splitter
         main_splitter = QSplitter(Qt.Orientation.Horizontal)
@@ -114,18 +115,18 @@ class PostCreationDialog(BaseDialog):
         
         # Media selection button
         if not self.media_path:
-            select_media_btn = QPushButton("Select Media")
-            select_media_btn.clicked.connect(self._select_media)
-            button_layout.addWidget(select_media_btn)
+            self.select_media_btn = QPushButton()  # Text set in retranslateUi
+            self.select_media_btn.clicked.connect(self._select_media)
+            button_layout.addWidget(self.select_media_btn)
         else:
-            change_media_btn = QPushButton("Change Media")
-            change_media_btn.clicked.connect(self._select_media)
-            button_layout.addWidget(change_media_btn)
+            self.change_media_btn = QPushButton()  # Text set in retranslateUi
+            self.change_media_btn.clicked.connect(self._select_media)
+            button_layout.addWidget(self.change_media_btn)
         
         # Generate button (for both images and videos)
         if self.media_path:
-            generate_btn = QPushButton("Generate")
-            generate_btn.setStyleSheet("""
+            self.generate_btn = QPushButton()  # Text set in retranslateUi
+            self.generate_btn.setStyleSheet("""
                 QPushButton {
                     background-color: #7c3aed;
                     color: white;
@@ -139,14 +140,14 @@ class PostCreationDialog(BaseDialog):
                     background-color: #6d28d9;
                 }
             """)
-            generate_btn.clicked.connect(self._generate_content)
-            button_layout.addWidget(generate_btn)
+            self.generate_btn.clicked.connect(self._generate_content)
+            button_layout.addWidget(self.generate_btn)
         
         button_layout.addStretch()
         
         # Add to Library button
-        add_to_library_btn = QPushButton("Add to Library")
-        add_to_library_btn.setStyleSheet("""
+        self.add_to_library_btn = QPushButton()  # Text set in retranslateUi
+        self.add_to_library_btn.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
                 color: white;
@@ -159,23 +160,23 @@ class PostCreationDialog(BaseDialog):
                 background-color: #45a049;
             }
         """)
-        add_to_library_btn.clicked.connect(self._add_to_library)
-        button_layout.addWidget(add_to_library_btn)
+        self.add_to_library_btn.clicked.connect(self._add_to_library)
+        button_layout.addWidget(self.add_to_library_btn)
         
         # Cancel button
-        cancel_btn = QPushButton("Cancel")
-        cancel_btn.clicked.connect(self.reject)
-        button_layout.addWidget(cancel_btn)
+        self.cancel_btn = QPushButton()  # Text set in retranslateUi
+        self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_btn)
         
         main_layout.addLayout(button_layout)
         
     def _create_media_preview_widget(self):
         """Create the media preview widget."""
-        group = QGroupBox("Media Preview")
-        layout = QVBoxLayout(group)
+        self.media_preview_group = QGroupBox()  # Title set in retranslateUi
+        layout = QVBoxLayout(self.media_preview_group)
         
         # Toggle button for original/edited view (initially hidden)
-        self.toggle_button = QPushButton("Show Edited Version")
+        self.toggle_button = QPushButton()  # Text set in retranslateUi
         self.toggle_button.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -217,7 +218,8 @@ class PostCreationDialog(BaseDialog):
         """)
         
         if not self.media_path:
-            self.media_preview.setText("No media selected\n\nClick 'Select Media' to choose a file")
+            # Text will be set in retranslateUi
+            pass
         
         scroll_area.setWidget(self.media_preview)
         layout.addWidget(scroll_area)
@@ -227,7 +229,7 @@ class PostCreationDialog(BaseDialog):
         self.media_info_label.setStyleSheet("font-size: 12px; color: #666666; margin-top: 10px;")
         layout.addWidget(self.media_info_label)
         
-        return group
+        return self.media_preview_group
         
     def _create_content_editing_widget(self):
         """Create the content editing widget."""
@@ -235,54 +237,42 @@ class PostCreationDialog(BaseDialog):
         layout = QVBoxLayout(widget)
         
         # Caption section with keep caption toggle
-        caption_group = QGroupBox("Caption")
-        caption_layout = QVBoxLayout(caption_group)
+        self.caption_group = QGroupBox()  # Title set in retranslateUi
+        caption_layout = QVBoxLayout(self.caption_group)
         
         # Keep caption toggle
-        self.keep_caption_checkbox = QCheckBox("Keep existing caption (don't generate new one)")
+        self.keep_caption_checkbox = QCheckBox()  # Text set in retranslateUi
         self.keep_caption_checkbox.setStyleSheet("color: #666666; font-size: 12px; margin-bottom: 5px;")
         caption_layout.addWidget(self.keep_caption_checkbox)
         
         self.caption_edit = QTextEdit()
-        self.caption_edit.setPlaceholderText(
-            "Write your post caption here...\n\n"
-            "Tips:\n"
-            "• Keep it engaging and relevant to your audience\n"
-            "• Use hashtags strategically\n"
-            "• Include a call-to-action if appropriate"
-        )
+        # Placeholder text set in retranslateUi
         self.caption_edit.setMaximumHeight(150)
         caption_layout.addWidget(self.caption_edit)
         
-        layout.addWidget(caption_group)
+        layout.addWidget(self.caption_group)
         
         # Instructions section
-        instructions_group = QGroupBox("General Instructions")
-        instructions_layout = QVBoxLayout(instructions_group)
+        self.instructions_group = QGroupBox()  # Title set in retranslateUi
+        instructions_layout = QVBoxLayout(self.instructions_group)
         
         self.instructions_edit = QTextEdit()
-        self.instructions_edit.setPlaceholderText(
-            "Enter general instructions for this post...\n\n"
-            "Examples:\n"
-            "• Target audience: food enthusiasts\n"
-            "• Tone: casual and friendly\n"
-            "• Focus on the artisanal bread-making process"
-        )
+        # Placeholder text set in retranslateUi
         self.instructions_edit.setMaximumHeight(120)
         instructions_layout.addWidget(self.instructions_edit)
         
-        layout.addWidget(instructions_group)
+        layout.addWidget(self.instructions_group)
         
         # Image/Video editing instructions section with presets
-        editing_group = QGroupBox("Image/Video Editing Instructions")
-        editing_layout = QVBoxLayout(editing_group)
+        self.editing_group = QGroupBox()  # Title set in retranslateUi
+        editing_layout = QVBoxLayout(self.editing_group)
         
         # Preset buttons for image editing (only show for images)
         if not self.is_video:
             presets_layout = QHBoxLayout()
-            presets_label = QLabel("Marketing Presets:")
-            presets_label.setStyleSheet("font-weight: bold; color: #333333; margin-bottom: 5px;")
-            editing_layout.addWidget(presets_label)
+            self.presets_label = QLabel()  # Text set in retranslateUi
+            self.presets_label.setStyleSheet("font-weight: bold; color: #333333; margin-bottom: 5px;")
+            editing_layout.addWidget(self.presets_label)
             
             # Create preset buttons
             presets = [
@@ -353,7 +343,7 @@ class PostCreationDialog(BaseDialog):
         
         # Add toggle for AI image enhancement (only for images)
         if not self.is_video:
-            self.imagen_overwrite_checkbox = QCheckBox("✨ Fully enhance with AI (creates stunning new version)")
+            self.imagen_overwrite_checkbox = QCheckBox()  # Text set in retranslateUi
             self.imagen_overwrite_checkbox.setStyleSheet("""
                 QCheckBox {
                     color: #2c3e50; 
@@ -376,19 +366,16 @@ class PostCreationDialog(BaseDialog):
                     border-radius: 3px;
                 }
             """)
-            self.imagen_overwrite_checkbox.setToolTip(
-                "When checked: AI will create a stunning new version of your image based on your instructions\n"
-                "When unchecked: Traditional editing will be applied (brightness, contrast, filters, etc.)"
-            )
+            # Tooltip text set in retranslateUi
             editing_layout.addWidget(self.imagen_overwrite_checkbox)
         else:
             self.imagen_overwrite_checkbox = None
         
-        layout.addWidget(editing_group)
+        layout.addWidget(self.editing_group)
         
         # Context files section
-        context_group = QGroupBox("Context Files")
-        context_layout = QVBoxLayout(context_group)
+        self.context_group = QGroupBox()  # Title set in retranslateUi
+        context_layout = QVBoxLayout(self.context_group)
         
         # Context files list
         self.context_files_list = QListWidget()
@@ -398,22 +385,22 @@ class PostCreationDialog(BaseDialog):
         # Context files buttons
         context_buttons_layout = QHBoxLayout()
         
-        add_file_btn = QPushButton("Add File")
-        add_file_btn.clicked.connect(self._add_context_file)
-        context_buttons_layout.addWidget(add_file_btn)
+        self.add_file_btn = QPushButton()  # Text set in retranslateUi
+        self.add_file_btn.clicked.connect(self._add_context_file)
+        context_buttons_layout.addWidget(self.add_file_btn)
         
-        remove_file_btn = QPushButton("Remove Selected")
-        remove_file_btn.clicked.connect(self._remove_context_file)
-        context_buttons_layout.addWidget(remove_file_btn)
+        self.remove_file_btn = QPushButton()  # Text set in retranslateUi
+        self.remove_file_btn.clicked.connect(self._remove_context_file)
+        context_buttons_layout.addWidget(self.remove_file_btn)
         
-        clear_files_btn = QPushButton("Clear All")
-        clear_files_btn.clicked.connect(self._clear_context_files)
-        context_buttons_layout.addWidget(clear_files_btn)
+        self.clear_files_btn = QPushButton()  # Text set in retranslateUi
+        self.clear_files_btn.clicked.connect(self._clear_context_files)
+        context_buttons_layout.addWidget(self.clear_files_btn)
         
         context_buttons_layout.addStretch()
         
         context_layout.addLayout(context_buttons_layout)
-        layout.addWidget(context_group)
+        layout.addWidget(self.context_group)
         
         return widget
         
@@ -913,4 +900,118 @@ Ready for processing"""
             "editing_instructions": self.editing_instructions_edit.toPlainText().strip(),
             "context_files": self.context_files.copy(),
             "is_video": self.is_video
-        } 
+        }
+    
+    def retranslateUi(self):
+        """Update UI text for internationalization."""
+        self.setWindowTitle(self.tr("Create Post"))
+        
+        if hasattr(self, 'title_label'):
+            self.title_label.setText(self.tr("Create Post"))
+        
+        # Media preview section
+        if hasattr(self, 'media_preview_group'):
+            self.media_preview_group.setTitle(self.tr("Media Preview"))
+        
+        if hasattr(self, 'toggle_button'):
+            if self.showing_original:
+                self.toggle_button.setText(self.tr("Show Edited Version"))
+            else:
+                self.toggle_button.setText(self.tr("Show Original Version"))
+        
+        # Set media preview text if no media
+        if not self.media_path and hasattr(self, 'media_preview'):
+            self.media_preview.setText(self.tr("No media selected\n\nClick 'Select Media' to choose a file"))
+        
+        # Caption section
+        if hasattr(self, 'caption_group'):
+            self.caption_group.setTitle(self.tr("Caption"))
+        
+        if hasattr(self, 'keep_caption_checkbox'):
+            self.keep_caption_checkbox.setText(self.tr("Keep existing caption (don't generate new one)"))
+        
+        if hasattr(self, 'caption_edit'):
+            self.caption_edit.setPlaceholderText(
+                self.tr("Write your post caption here...\n\n"
+                       "Tips:\n"
+                       "• Keep it engaging and relevant to your audience\n"
+                       "• Use hashtags strategically\n"
+                       "• Include a call-to-action if appropriate")
+            )
+        
+        # Instructions section
+        if hasattr(self, 'instructions_group'):
+            self.instructions_group.setTitle(self.tr("General Instructions"))
+        
+        if hasattr(self, 'instructions_edit'):
+            self.instructions_edit.setPlaceholderText(
+                self.tr("Enter general instructions for this post...\n\n"
+                       "Examples:\n"
+                       "• Target audience: food enthusiasts\n"
+                       "• Tone: casual and friendly\n"
+                       "• Focus on the artisanal bread-making process")
+            )
+        
+        # Editing section
+        if hasattr(self, 'editing_group'):
+            self.editing_group.setTitle(self.tr("Image/Video Editing Instructions"))
+        
+        if hasattr(self, 'presets_label'):
+            self.presets_label.setText(self.tr("Marketing Presets:"))
+        
+        if hasattr(self, 'editing_instructions_edit'):
+            if self.is_video:
+                placeholder = self.tr(
+                    "Enter video editing instructions...\n\n"
+                    "Examples:\n"
+                    "• Add warm color grading\n"
+                    "• Increase brightness slightly\n"
+                    "• Add subtle background music\n"
+                    "• Create a 15-second highlight reel"
+                )
+            else:
+                placeholder = self.tr(
+                    "Enter image editing instructions or use presets above...\n\n"
+                    "Examples:\n"
+                    "• Enhance colors and contrast\n"
+                    "• Add a warm filter\n"
+                    "• Sharpen details\n"
+                    "• Apply food photography enhancement"
+                )
+            self.editing_instructions_edit.setPlaceholderText(placeholder)
+        
+        if hasattr(self, 'imagen_overwrite_checkbox') and self.imagen_overwrite_checkbox:
+            self.imagen_overwrite_checkbox.setText(self.tr("✨ Fully enhance with AI (creates stunning new version)"))
+            self.imagen_overwrite_checkbox.setToolTip(
+                self.tr("When checked: AI will create a stunning new version of your image based on your instructions\n"
+                       "When unchecked: Traditional editing will be applied (brightness, contrast, filters, etc.)")
+            )
+        
+        # Context files section
+        if hasattr(self, 'context_group'):
+            self.context_group.setTitle(self.tr("Context Files"))
+        
+        if hasattr(self, 'add_file_btn'):
+            self.add_file_btn.setText(self.tr("Add File"))
+        
+        if hasattr(self, 'remove_file_btn'):
+            self.remove_file_btn.setText(self.tr("Remove Selected"))
+        
+        if hasattr(self, 'clear_files_btn'):
+            self.clear_files_btn.setText(self.tr("Clear All"))
+        
+        # Buttons
+        if hasattr(self, 'select_media_btn'):
+            self.select_media_btn.setText(self.tr("Select Media"))
+        
+        if hasattr(self, 'change_media_btn'):
+            self.change_media_btn.setText(self.tr("Change Media"))
+        
+        if hasattr(self, 'generate_btn'):
+            self.generate_btn.setText(self.tr("Generate"))
+        
+        if hasattr(self, 'add_to_library_btn'):
+            self.add_to_library_btn.setText(self.tr("Add to Library"))
+        
+        if hasattr(self, 'cancel_btn'):
+            self.cancel_btn.setText(self.tr("Cancel")) 

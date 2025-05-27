@@ -30,6 +30,7 @@ from .components.media_section import MediaSection
 from .components.text_sections import TextSections
 from .components.button_section import ButtonSection
 from .components.status_bar import StatusBarWidget
+from .base_window import BaseMainWindow
 from .library_window import LibraryWindow
 from .scheduling_panel import SchedulingPanel
 from .dialogs.scheduling_dialog import ScheduleDialog
@@ -43,7 +44,7 @@ from .dialogs.thumbnail_selector_dialog import ThumbnailSelectorDialog
 from .dialogs.audio_overlay_dialog import AudioOverlayDialog
 from .dialogs.custom_media_upload_dialog import CustomMediaUploadDialog
 
-class MainWindow(QMainWindow):
+class MainWindow(BaseMainWindow):
     """Main application window."""
     
     def __init__(self, app_state: AppState, 
@@ -978,6 +979,10 @@ class MainWindow(QMainWindow):
         if self.library_window and self.library_window.isVisible():
             self.library_window.retranslateUi() # Assuming LibraryWindow has retranslateUi
         
+        # Recreate menu bar with translated text
+        if hasattr(self, 'menuBar'):
+            self._create_menu_bar()
+        
         # Add any other direct text updates for MainWindow itself here
         # Example: self.some_main_window_label.setText(self.tr("Main Window Specific Text"))
 
@@ -988,98 +993,99 @@ class MainWindow(QMainWindow):
         """Create the menu bar with compliance features."""
         try:
             menubar = self.menuBar()
+            menubar.clear()  # Clear existing menus for retranslation
             
             # File menu
-            file_menu = menubar.addMenu('&File')
+            file_menu = menubar.addMenu(self.tr('&File'))
             
             # Add export action
-            export_action = file_menu.addAction('Export Data...')
+            export_action = file_menu.addAction(self.tr('Export Data...'))
             export_action.setShortcut('Ctrl+E')
             export_action.triggered.connect(self._quick_export_data)
             
             file_menu.addSeparator()
             
             # Add exit action
-            exit_action = file_menu.addAction('E&xit')
+            exit_action = file_menu.addAction(self.tr('E&xit'))
             exit_action.setShortcut('Ctrl+Q')
             exit_action.triggered.connect(self.close)
             
             # Social Media menu
-            social_menu = menubar.addMenu('&Social Media')
+            social_menu = menubar.addMenu(self.tr('&Social Media'))
             
             # Add custom media upload action
-            upload_action = social_menu.addAction('Upload Custom Media...')
+            upload_action = social_menu.addAction(self.tr('Upload Custom Media...'))
             upload_action.setShortcut('Ctrl+U')
             upload_action.triggered.connect(self._on_open_custom_upload)
             
             social_menu.addSeparator()
             
             # Add post to platforms action (for current media)
-            post_current_action = social_menu.addAction('Post Current Media...')
+            post_current_action = social_menu.addAction(self.tr('Post Current Media...'))
             post_current_action.setShortcut('Ctrl+Shift+P')
             post_current_action.triggered.connect(self._on_post_current_media)
             
             # Video menu
-            video_menu = menubar.addMenu('&Video')
+            video_menu = menubar.addMenu(self.tr('&Video'))
             
             # Add highlight reel generator
-            highlight_reel_action = video_menu.addAction('Highlight Reel Generator...')
+            highlight_reel_action = video_menu.addAction(self.tr('Highlight Reel Generator...'))
             highlight_reel_action.setShortcut('Ctrl+H')
             highlight_reel_action.triggered.connect(self._on_open_highlight_reel)
             
             # Add story assistant
-            story_assistant_action = video_menu.addAction('Story Assistant...')
+            story_assistant_action = video_menu.addAction(self.tr('Story Assistant...'))
             story_assistant_action.setShortcut('Ctrl+S')
             story_assistant_action.triggered.connect(self._on_open_story_assistant)
             
             # Add thumbnail selector
-            thumbnail_selector_action = video_menu.addAction('Reel Thumbnail Selector...')
+            thumbnail_selector_action = video_menu.addAction(self.tr('Reel Thumbnail Selector...'))
             thumbnail_selector_action.setShortcut('Ctrl+T')
             thumbnail_selector_action.triggered.connect(self._on_open_thumbnail_selector)
             
             video_menu.addSeparator()
             
             # Add Veo video generator
-            veo_generator_action = video_menu.addAction('🎬 Veo Video Generator...')
+            veo_generator_action = video_menu.addAction(self.tr('🎬 Veo Video Generator...'))
             veo_generator_action.setShortcut('Ctrl+V')
             veo_generator_action.triggered.connect(self._on_open_veo_generator)
             
             # Add audio overlay
-            audio_overlay_action = video_menu.addAction('Audio Overlay...')
+            audio_overlay_action = video_menu.addAction(self.tr('Audio Overlay...'))
             audio_overlay_action.setShortcut('Ctrl+A')
             audio_overlay_action.triggered.connect(self._on_open_audio_overlay)
             
             # Analytics menu
-            analytics_menu = menubar.addMenu('&Analytics')
+            analytics_menu = menubar.addMenu(self.tr('&Analytics'))
             
             # Add analytics dashboard
-            analytics_action = analytics_menu.addAction('Performance Dashboard...')
+            analytics_action = analytics_menu.addAction(self.tr('Performance Dashboard...'))
             analytics_action.setShortcut('Ctrl+D')
             analytics_action.triggered.connect(self._on_open_analytics_dashboard)
             
             # Privacy menu
-            privacy_menu = menubar.addMenu('&Privacy')
+            privacy_menu = menubar.addMenu(self.tr('&Privacy'))
             
             # Add compliance dialog action
-            compliance_action = privacy_menu.addAction('Privacy & Compliance...')
+            compliance_action = privacy_menu.addAction(self.tr('Privacy & Compliance...'))
             compliance_action.setShortcut('Ctrl+P')
             compliance_action.triggered.connect(self._on_open_compliance)
             
             privacy_menu.addSeparator()
             
             # Add quick factory reset action
-            factory_reset_action = privacy_menu.addAction('Factory Reset...')
+            factory_reset_action = privacy_menu.addAction(self.tr('Factory Reset...'))
             factory_reset_action.triggered.connect(self._quick_factory_reset)
             
             # Help menu
-            help_menu = menubar.addMenu('&Help')
+            help_menu = menubar.addMenu(self.tr('&Help'))
             
             # Add privacy policy action
-            privacy_policy_action = help_menu.addAction('Privacy Policy')
+            privacy_policy_action = help_menu.addAction(self.tr('Privacy Policy'))
             privacy_policy_action.triggered.connect(self._open_privacy_policy)
             
             # Add about action
-            about_action = help_menu.addAction('About')
+            about_action = help_menu.addAction(self.tr('About'))
             about_action.triggered.connect(self._show_about)
             
             self.logger.info("Menu bar created successfully")

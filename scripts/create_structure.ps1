@@ -13,8 +13,7 @@ $directories = @(
     "src\features\media_processing",
     "src\api",
     "src\api\meta",
-    "src\api\twitter", 
-    "src\api\linkedin",
+
     "src\api\ai",
     "assets",
     "assets\icons",

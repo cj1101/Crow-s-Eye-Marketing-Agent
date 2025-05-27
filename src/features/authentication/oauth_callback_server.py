@@ -1,6 +1,6 @@
 """
 Simple OAuth callback server for handling authentication redirects.
-This server runs locally to capture OAuth callback URLs from X and LinkedIn.
+This server runs locally to capture OAuth callback URLs from Meta platforms.
 """
 import os
 import json
@@ -23,11 +23,7 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
             query_params = urllib.parse.parse_qs(parsed_url.query)
             
             # Determine which platform this callback is for
-            if '/auth/x/callback' in self.path:
-                self._handle_x_callback(query_params)
-            elif '/auth/linkedin/callback' in self.path:
-                self._handle_linkedin_callback(query_params)
-            elif '/auth/callback' in self.path:
+            if '/auth/callback' in self.path:
                 self._handle_meta_callback(query_params)
             else:
                 self._send_error_response("Unknown callback path")
@@ -35,46 +31,6 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         except Exception as e:
             logger.error(f"Error handling OAuth callback: {e}")
             self._send_error_response(f"Error: {str(e)}")
-    
-    def _handle_x_callback(self, query_params):
-        """Handle X OAuth callback."""
-        try:
-            from .x_oauth_handler import x_oauth_handler
-            
-            # Reconstruct the full callback URL
-            callback_url = f"https://localhost:8080{self.path}"
-            
-            # Handle the callback
-            success = x_oauth_handler.handle_callback(callback_url)
-            
-            if success:
-                self._send_success_response("X", "Successfully connected to X! You can close this window.")
-            else:
-                self._send_error_response("Failed to connect to X. Please try again.")
-                
-        except Exception as e:
-            logger.error(f"Error handling X callback: {e}")
-            self._send_error_response(f"X connection error: {str(e)}")
-    
-    def _handle_linkedin_callback(self, query_params):
-        """Handle LinkedIn OAuth callback."""
-        try:
-            from .linkedin_oauth_handler import linkedin_oauth_handler
-            
-            # Reconstruct the full callback URL
-            callback_url = f"https://localhost:8080{self.path}"
-            
-            # Handle the callback
-            success = linkedin_oauth_handler.handle_callback(callback_url)
-            
-            if success:
-                self._send_success_response("LinkedIn", "Successfully connected to LinkedIn! You can close this window.")
-            else:
-                self._send_error_response("Failed to connect to LinkedIn. Please try again.")
-                
-        except Exception as e:
-            logger.error(f"Error handling LinkedIn callback: {e}")
-            self._send_error_response(f"LinkedIn connection error: {str(e)}")
     
     def _handle_meta_callback(self, query_params):
         """Handle Meta OAuth callback."""
@@ -202,9 +158,15 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         <body>
             <div class="container">
                 <div class="error-icon">❌</div>
-                <h1>Connection Failed</h1>
+                <h1>Connection Error</h1>
                 <p>{error_message}</p>
             </div>
+            <script>
+                // Auto-close after 5 seconds
+                setTimeout(() => {{
+                    window.close();
+                }}, 5000);
+            </script>
         </body>
         </html>
         """
@@ -215,46 +177,41 @@ class OAuthCallbackHandler(BaseHTTPRequestHandler):
         self.wfile.write(html_content.encode('utf-8'))
     
     def log_message(self, format, *args):
-        """Override to reduce log noise."""
+        """Override to suppress default logging."""
         pass
 
 class OAuthCallbackServer:
     """Simple OAuth callback server."""
     
     def __init__(self, port: int = 8080):
-        """Initialize the callback server."""
         self.port = port
         self.server = None
         self.server_thread = None
-        self.running = False
-    
+        
     def start(self):
         """Start the callback server."""
-        if self.running:
+        if self.server is not None:
+            logger.warning("OAuth callback server is already running")
             return
-        
+            
         try:
             self.server = HTTPServer(('localhost', self.port), OAuthCallbackHandler)
             self.server_thread = threading.Thread(target=self.server.serve_forever, daemon=True)
             self.server_thread.start()
-            self.running = True
             logger.info(f"OAuth callback server started on port {self.port}")
         except Exception as e:
             logger.error(f"Failed to start OAuth callback server: {e}")
-    
+            
     def stop(self):
         """Stop the callback server."""
-        if not self.running:
-            return
-        
-        try:
-            if self.server:
-                self.server.shutdown()
-                self.server.server_close()
-            self.running = False
+        if self.server is not None:
+            self.server.shutdown()
+            self.server.server_close()
+            self.server = None
+            if self.server_thread:
+                self.server_thread.join(timeout=1)
+                self.server_thread = None
             logger.info("OAuth callback server stopped")
-        except Exception as e:
-            logger.error(f"Error stopping OAuth callback server: {e}")
 
-# Global server instance
+# Global instance
 oauth_callback_server = OAuthCallbackServer() 

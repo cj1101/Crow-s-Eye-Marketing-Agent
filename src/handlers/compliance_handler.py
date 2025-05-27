@@ -276,8 +276,6 @@ class ComplianceHandler:
                 "media_status.json",
                 "meta_credentials.json",
                 "cloud_storage_config.json",
-                "linkedin_credentials.json",
-                "x_credentials.json",
                 "instagram_credentials.json",
                 "tiktok_credentials.json",
                 "google_business_credentials.json",
@@ -304,10 +302,6 @@ class ComplianceHandler:
                 unified_handler = UnifiedPostingHandler()
                 
                 # Logout from all platforms
-                if hasattr(unified_handler, 'linkedin_handler'):
-                    unified_handler.linkedin_handler.logout()
-                if hasattr(unified_handler, 'x_handler'):
-                    unified_handler.x_handler.logout()
                 if hasattr(unified_handler, 'instagram_handler'):
                     unified_handler.instagram_handler.logout()
                 if hasattr(unified_handler, 'tiktok_handler'):

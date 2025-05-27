@@ -142,37 +142,30 @@ class PostOptionsDialog(QDialog):
         self.ig_checkbox.setChecked(True)
         platform_grid.addWidget(self.ig_checkbox, 0, 1)
         
-        # Row 2: Professional platforms
-        self.linkedin_checkbox = QCheckBox() # Text set in retranslateUi
-        self.linkedin_checkbox.setChecked(False)
-        platform_grid.addWidget(self.linkedin_checkbox, 1, 0)
+
         
-        self.x_checkbox = QCheckBox() # Text set in retranslateUi
-        self.x_checkbox.setChecked(False)
-        platform_grid.addWidget(self.x_checkbox, 1, 1)
-        
-        # Row 3: New platforms
+        # Row 2: New platforms
         self.tiktok_checkbox = QCheckBox() # Text set in retranslateUi
         self.tiktok_checkbox.setChecked(False)
-        platform_grid.addWidget(self.tiktok_checkbox, 2, 0)
+        platform_grid.addWidget(self.tiktok_checkbox, 1, 0)
         
         self.pinterest_checkbox = QCheckBox() # Text set in retranslateUi
         self.pinterest_checkbox.setChecked(False)
-        platform_grid.addWidget(self.pinterest_checkbox, 2, 1)
+        platform_grid.addWidget(self.pinterest_checkbox, 1, 1)
         
-        # Row 4: Additional platforms
+        # Row 3: Additional platforms
         self.bluesky_checkbox = QCheckBox() # Text set in retranslateUi
         self.bluesky_checkbox.setChecked(False)
-        platform_grid.addWidget(self.bluesky_checkbox, 3, 0)
+        platform_grid.addWidget(self.bluesky_checkbox, 2, 0)
         
         self.threads_checkbox = QCheckBox() # Text set in retranslateUi
         self.threads_checkbox.setChecked(False)
-        platform_grid.addWidget(self.threads_checkbox, 3, 1)
+        platform_grid.addWidget(self.threads_checkbox, 2, 1)
         
-        # Row 5: Business platforms
+        # Row 4: Business platforms
         self.google_business_checkbox = QCheckBox() # Text set in retranslateUi
         self.google_business_checkbox.setChecked(False)
-        platform_grid.addWidget(self.google_business_checkbox, 4, 0)
+        platform_grid.addWidget(self.google_business_checkbox, 3, 0)
         
         post_now_layout.addLayout(platform_grid)
         
@@ -226,7 +219,6 @@ class PostOptionsDialog(QDialog):
     def _on_post_now(self):
         """Handle post now button click."""
         if not (self.fb_checkbox.isChecked() or self.ig_checkbox.isChecked() or 
-                self.linkedin_checkbox.isChecked() or self.x_checkbox.isChecked() or
                 self.tiktok_checkbox.isChecked() or self.pinterest_checkbox.isChecked() or
                 self.bluesky_checkbox.isChecked() or self.threads_checkbox.isChecked() or
                 self.google_business_checkbox.isChecked()):
@@ -238,10 +230,6 @@ class PostOptionsDialog(QDialog):
             platforms.append("facebook")
         if self.ig_checkbox.isChecked():
             platforms.append("instagram")
-        if self.linkedin_checkbox.isChecked():
-            platforms.append("linkedin")
-        if self.x_checkbox.isChecked():
-            platforms.append("x")
         if self.tiktok_checkbox.isChecked():
             platforms.append("tiktok")
         if self.pinterest_checkbox.isChecked():
@@ -308,10 +296,7 @@ class PostOptionsDialog(QDialog):
             self.fb_checkbox.setText(self.tr("Post to Facebook"))
         if hasattr(self, 'ig_checkbox') and self.ig_checkbox: # Check if ig_checkbox exists
             self.ig_checkbox.setText(self.tr("Post to Instagram"))
-        if hasattr(self, 'linkedin_checkbox') and self.linkedin_checkbox: # Check if linkedin_checkbox exists
-            self.linkedin_checkbox.setText(self.tr("Post to LinkedIn"))
-        if hasattr(self, 'x_checkbox') and self.x_checkbox: # Check if x_checkbox exists
-            self.x_checkbox.setText(self.tr("Post to X"))
+
         if hasattr(self, 'tiktok_checkbox') and self.tiktok_checkbox: # Check if tiktok_checkbox exists
             self.tiktok_checkbox.setText(self.tr("Post to TikTok"))
         if hasattr(self, 'pinterest_checkbox') and self.pinterest_checkbox: # Check if pinterest_checkbox exists

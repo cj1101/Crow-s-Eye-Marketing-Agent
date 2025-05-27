@@ -8,7 +8,7 @@ from typing import Dict, Any, Optional
 
 from PySide6.QtWidgets import (
     QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
-    QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy, QSpacerItem
+    QLabel, QPushButton, QFrame, QScrollArea, QSizePolicy, QSpacerItem, QComboBox
 )
 from PySide6.QtCore import Qt, Signal, QEvent
 from PySide6.QtGui import QFont, QPixmap, QIcon
@@ -17,6 +17,7 @@ from .base_window import BaseMainWindow
 from ..models.app_state import AppState
 from ..handlers.media_handler import MediaHandler
 from ..handlers.library_handler import LibraryManager
+from ..i18n import i18n
 
 class DashboardTile(QFrame):
     """Individual tile widget for dashboard features."""
@@ -50,21 +51,21 @@ class DashboardTile(QFrame):
             layout.addWidget(icon_label)
         
         # Title
-        title_label = QLabel(title)
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setWordWrap(True)
+        self.title_label = QLabel(title)
+        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.title_label.setWordWrap(True)
         title_font = QFont()
         title_font.setPointSize(16)
         title_font.setBold(True)
-        title_label.setFont(title_font)
-        layout.addWidget(title_label)
+        self.title_label.setFont(title_font)
+        layout.addWidget(self.title_label)
         
         # Description
-        desc_label = QLabel(description)
-        desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        desc_label.setWordWrap(True)
-        desc_label.setStyleSheet("color: #666666; font-size: 12px;")
-        layout.addWidget(desc_label)
+        self.desc_label = QLabel(description)
+        self.desc_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.desc_label.setWordWrap(True)
+        self.desc_label.setStyleSheet("color: #666666; font-size: 12px;")
+        layout.addWidget(self.desc_label)
         
         # Styling
         self.setStyleSheet("""
@@ -86,6 +87,11 @@ class DashboardTile(QFrame):
         
         # Set fixed size for consistent grid
         self.setFixedSize(250, 200)
+    
+    def update_translations(self, title: str, description: str):
+        """Update the tile with new translated text."""
+        self.title_label.setText(title)
+        self.desc_label.setText(description)
         
     def _get_default_icon(self, feature_name: str) -> str:
         """Get default emoji icon for feature."""
@@ -127,6 +133,10 @@ class DashboardWindow(BaseMainWindow):
         self.library_manager = library_manager
         self.logger = logging.getLogger(self.__class__.__name__)
         
+        # Connect to i18n system
+        self.i18n = i18n
+        self.i18n.language_changed.connect(self.retranslateUi)
+        
         self.setWindowTitle("Crow's Eye Marketing Agent")
         self.setMinimumSize(1200, 800)
         
@@ -134,6 +144,19 @@ class DashboardWindow(BaseMainWindow):
         self._connect_signals()
         
         self.logger.info("Dashboard window initialized")
+    
+    def tr(self, text, **kwargs):
+        """
+        Translate text using the I18N system.
+        
+        Args:
+            text: The text to translate
+            **kwargs: Format arguments for string formatting
+            
+        Returns:
+            str: The translated text
+        """
+        return self.i18n.t(text, **kwargs)
     
     def _setup_ui(self):
         """Set up the dashboard UI."""
@@ -156,9 +179,6 @@ class DashboardWindow(BaseMainWindow):
         
         # Dashboard tiles
         self._create_dashboard_tiles(main_layout)
-        
-        # Presets panel (always visible)
-        self._create_presets_panel(main_layout)
         
         # Apply high contrast styling
         self.setStyleSheet("""
@@ -184,6 +204,55 @@ class DashboardWindow(BaseMainWindow):
         header_layout.addWidget(self.title_label)
         
         header_layout.addStretch()
+        
+        # Language selection dropdown
+        self.language_combo = QComboBox()
+        self.language_combo.setObjectName("languageCombo")
+        self.language_combo.setFixedWidth(150)
+        self.language_combo.setStyleSheet("""
+            QComboBox {
+                background-color: #e0e0e0;
+                color: #000000;
+                border: 2px solid #505050;
+                padding: 5px;
+                font-weight: bold;
+                border-radius: 4px;
+            }
+            QComboBox::drop-down {
+                border: none;
+            }
+            QComboBox::down-arrow {
+                image: none;
+                border: none;
+            }
+        """)
+        
+        # Language data: [("Native Name", "code"), ...]
+        self.languages = [
+            ("English", "en"),
+            ("Español", "es"),
+            ("中文", "zh"),
+            ("हिन्दी", "hi"),
+            ("Français", "fr"),
+            ("العربية", "ar"),
+            ("Português", "pt"),
+            ("Русский", "ru"),
+            ("日本語", "ja"),
+            ("Deutsch", "de")
+        ]
+        
+        for lang_name, lang_code in self.languages:
+            self.language_combo.addItem(lang_name, userData=lang_code)
+            
+        # Set current language
+        current_lang = self.i18n.get_current_language()
+        for i, (_, lang_code) in enumerate(self.languages):
+            if lang_code == current_lang:
+                self.language_combo.setCurrentIndex(i)
+                break
+                
+        self.language_combo.currentIndexChanged.connect(self._on_language_changed)
+        header_layout.addWidget(self.language_combo)
         
         # Home button (always visible)
         self.home_button = QPushButton(self.tr("🏠 Home"))
@@ -226,41 +295,44 @@ class DashboardWindow(BaseMainWindow):
         tiles_layout.setSpacing(20)
         tiles_layout.setContentsMargins(0, 0, 0, 0)
         
+        # Store tiles for translation updates
+        self.tiles = []
+        
         # Define tiles
         tiles_data = [
             {
-                'title': 'Create a Post',
-                'description': 'Primary entry for content creation with AI assistance',
+                'title': self.tr('Create a Post'),
+                'description': self.tr('Primary entry for content creation with AI assistance'),
                 'feature_name': 'create_post'
             },
             {
-                'title': 'Library',
-                'description': 'Manage raw media & finished posts',
+                'title': self.tr('Library'),
+                'description': self.tr('Manage raw media & finished posts'),
                 'feature_name': 'library'
             },
             {
-                'title': 'Campaign Manager',
-                'description': 'Handle campaigns & scheduling queues',
+                'title': self.tr('Campaign Manager'),
+                'description': self.tr('Handle campaigns & scheduling queues'),
                 'feature_name': 'campaign_manager'
             },
             {
-                'title': 'Customer Handler',
-                'description': 'Knowledge-base responder system',
+                'title': self.tr('Customer Handler'),
+                'description': self.tr('Knowledge-base responder system'),
                 'feature_name': 'customer_handler'
             },
             {
-                'title': 'Data',
-                'description': 'Analytics & compliance monitoring',
+                'title': self.tr('Data'),
+                'description': self.tr('Analytics & compliance monitoring'),
                 'feature_name': 'data'
             },
             {
-                'title': 'Tools',
-                'description': 'Access video tools, analytics, and utilities',
+                'title': self.tr('Tools'),
+                'description': self.tr('Access video tools, analytics, and utilities'),
                 'feature_name': 'tools'
             },
             {
-                'title': 'Presets',
-                'description': 'Manage saved presets and campaign settings',
+                'title': self.tr('Presets'),
+                'description': self.tr('Manage saved presets and campaign settings'),
                 'feature_name': 'presets'
             }
         ]
@@ -273,6 +345,7 @@ class DashboardWindow(BaseMainWindow):
                 feature_name=tile_data['feature_name']
             )
             tile.clicked.connect(self._on_tile_clicked)
+            self.tiles.append(tile)
             
             row = i // 3
             col = i % 3
@@ -285,36 +358,53 @@ class DashboardWindow(BaseMainWindow):
         scroll_area.setWidget(tiles_container)
         main_layout.addWidget(scroll_area, 1)  # Give it stretch factor
     
-    def _create_presets_panel(self, main_layout: QVBoxLayout):
-        """Create the presets panel."""
-        presets_frame = QFrame()
-        presets_frame.setFrameStyle(QFrame.Shape.Box)
-        presets_frame.setLineWidth(1)
-        presets_frame.setStyleSheet("""
-            QFrame {
-                background-color: #f8f9fa;
-                border: 1px solid #dee2e6;
-                border-radius: 8px;
-                padding: 15px;
+    def _update_tiles_translations(self):
+        """Update all tiles with new translations."""
+        # Define the translation keys for each tile
+        tiles_translation_data = [
+            {
+                'title': self.tr('Create a Post'),
+                'description': self.tr('Primary entry for content creation with AI assistance'),
+                'feature_name': 'create_post'
+            },
+            {
+                'title': self.tr('Library'),
+                'description': self.tr('Manage raw media & finished posts'),
+                'feature_name': 'library'
+            },
+            {
+                'title': self.tr('Campaign Manager'),
+                'description': self.tr('Handle campaigns & scheduling queues'),
+                'feature_name': 'campaign_manager'
+            },
+            {
+                'title': self.tr('Customer Handler'),
+                'description': self.tr('Knowledge-base responder system'),
+                'feature_name': 'customer_handler'
+            },
+            {
+                'title': self.tr('Data'),
+                'description': self.tr('Analytics & compliance monitoring'),
+                'feature_name': 'data'
+            },
+            {
+                'title': self.tr('Tools'),
+                'description': self.tr('Access video tools, analytics, and utilities'),
+                'feature_name': 'tools'
+            },
+            {
+                'title': self.tr('Presets'),
+                'description': self.tr('Manage saved presets and campaign settings'),
+                'feature_name': 'presets'
             }
-        """)
+        ]
         
-        presets_layout = QVBoxLayout(presets_frame)
-        presets_layout.setContentsMargins(15, 15, 15, 15)
-        
-        # Presets title
-        self.presets_title = QLabel(self.tr("Quick Access Presets"))
-        self.presets_title.setStyleSheet("font-size: 16px; font-weight: bold; color: #000000; margin-bottom: 10px;")
-        presets_layout.addWidget(self.presets_title)
-        
-        # Presets info
-        self.presets_info = QLabel(self.tr("Saved presets and campaign-linked presets will appear here"))
-        self.presets_info.setStyleSheet("color: #666666; font-size: 12px;")
-        presets_layout.addWidget(self.presets_info)
-        
-        # Set fixed height for presets panel
-        presets_frame.setFixedHeight(100)
-        main_layout.addWidget(presets_frame)
+        # Update each tile with new translations
+        for i, tile in enumerate(self.tiles):
+            if i < len(tiles_translation_data):
+                tile_data = tiles_translation_data[i]
+                tile.update_translations(tile_data['title'], tile_data['description'])
+
     
     def _connect_signals(self):
         """Connect internal signals."""
@@ -344,10 +434,18 @@ class DashboardWindow(BaseMainWindow):
         """Handle home button click - should return to dashboard."""
         self.logger.info("Home button clicked")
     
+    def _on_language_changed(self, index: int):
+        """Handle language selection change."""
+        if index >= 0:
+            selected_lang_code = self.language_combo.itemData(index)
+            if selected_lang_code and selected_lang_code != self.i18n.get_current_language():
+                self.logger.info(f"Language changed to: {selected_lang_code}")
+                self.i18n.switch(selected_lang_code)
+    
     def _show_api_key_info(self):
         """Show information about API key usage."""
         from PySide6.QtWidgets import QMessageBox
-        from ...config.shared_api_keys import is_using_shared_key
+        from ..config.shared_api_keys import is_using_shared_key
         
         using_shared_gemini = is_using_shared_key("gemini")
         using_shared_google = is_using_shared_key("google")
@@ -409,5 +507,6 @@ The app will automatically use your keys if provided!"""
         self.title_label.setText(self.tr("Crow's Eye Marketing Agent"))
         self.home_button.setText(self.tr("🏠 Home"))
         self.subtitle_label.setText(self.tr("Choose an action to get started"))
-        self.presets_title.setText(self.tr("Quick Access Presets"))
-        self.presets_info.setText(self.tr("Saved presets and campaign-linked presets will appear here")) 
+        
+        # Update tiles by recreating them with new translations
+        self._update_tiles_translations() 

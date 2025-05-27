@@ -97,7 +97,7 @@ class SocialTools(QWidget):
         tools_data = [
             {
                 'title': 'Connect Accounts',
-                'description': 'Connect to Instagram, Facebook, X (Twitter), and LinkedIn',
+                'description': 'Connect to Instagram, Facebook, and other social platforms',
                 'icon': '🔗',
                 'tool_name': 'connect_accounts'
             },

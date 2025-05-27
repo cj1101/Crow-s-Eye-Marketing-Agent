@@ -11,8 +11,6 @@ from datetime import datetime
 from PySide6.QtCore import QObject, Signal, QThread
 
 from ...api.meta.meta_posting_handler import MetaPostingHandler
-from ...api.linkedin.linkedin_posting_handler import LinkedInPostingHandler
-from ...api.twitter.x_posting_handler import XPostingHandler
 from ...api.instagram.instagram_api_handler import InstagramAPIHandler
 from ...api.tiktok.tiktok_api_handler import TikTokAPIHandler
 from ...api.google_business.google_business_api_handler import GoogleBusinessAPIHandler
@@ -39,8 +37,6 @@ class UnifiedPostingHandler:
         
         # Initialize platform handlers
         self.meta_handler = MetaPostingHandler()
-        self.linkedin_handler = LinkedInPostingHandler()
-        self.x_handler = XPostingHandler()
         self.instagram_handler = InstagramAPIHandler()
         self.tiktok_handler = TikTokAPIHandler()
         self.google_business_handler = GoogleBusinessAPIHandler()
@@ -60,19 +56,7 @@ class UnifiedPostingHandler:
         self.meta_handler.signals.upload_error.connect(self.signals.upload_error)
         self.meta_handler.signals.status_update.connect(self.signals.status_update)
         
-        # LinkedIn signals
-        self.linkedin_handler.signals.upload_started.connect(self.signals.upload_started)
-        self.linkedin_handler.signals.upload_progress.connect(self.signals.upload_progress)
-        self.linkedin_handler.signals.upload_success.connect(self.signals.upload_success)
-        self.linkedin_handler.signals.upload_error.connect(self.signals.upload_error)
-        self.linkedin_handler.signals.status_update.connect(self.signals.status_update)
-        
-        # X signals
-        self.x_handler.signals.upload_started.connect(self.signals.upload_started)
-        self.x_handler.signals.upload_progress.connect(self.signals.upload_progress)
-        self.x_handler.signals.upload_success.connect(self.signals.upload_success)
-        self.x_handler.signals.upload_error.connect(self.signals.upload_error)
-        self.x_handler.signals.status_update.connect(self.signals.status_update)
+
         
         # Instagram signals
         self.instagram_handler.signals.upload_started.connect(self.signals.upload_started)
@@ -145,14 +129,7 @@ class UnifiedPostingHandler:
                         success, message = self.meta_handler.post_to_facebook(
                             media_path, caption, is_video
                         )
-                elif platform_lower == 'linkedin':
-                    success, message = self.linkedin_handler.post_to_linkedin(
-                        media_path, caption, is_video
-                    )
-                elif platform_lower in ['x', 'twitter']:
-                    success, message = self.x_handler.post_to_x(
-                        media_path, caption, is_video
-                    )
+
                 elif platform_lower == 'instagram_api':
                     success, message = self.instagram_handler.post_media(
                         media_path, caption, is_video
@@ -200,8 +177,6 @@ class UnifiedPostingHandler:
     def get_available_platforms(self) -> Dict[str, bool]:
         """Get availability status for all platforms."""
         meta_status = self.meta_handler.get_posting_status()
-        linkedin_status = self.linkedin_handler.get_posting_status()
-        x_status = self.x_handler.get_posting_status()
         instagram_status = self.instagram_handler.get_posting_status()
         tiktok_status = self.tiktok_handler.get_posting_status()
         google_business_status = self.google_business_handler.get_posting_status()
@@ -212,8 +187,6 @@ class UnifiedPostingHandler:
         return {
             'instagram': meta_status.get('instagram_available', False),
             'facebook': meta_status.get('facebook_available', False),
-            'linkedin': linkedin_status.get('linkedin_available', False),
-            'x': x_status.get('x_available', False),
             'instagram_api': instagram_status.get('instagram_available', False),
             'tiktok': tiktok_status.get('tiktok_available', False),
             'google_business': google_business_status.get('google_business_available', False),
@@ -225,8 +198,6 @@ class UnifiedPostingHandler:
     def get_platform_errors(self) -> Dict[str, str]:
         """Get error messages for unavailable platforms."""
         meta_status = self.meta_handler.get_posting_status()
-        linkedin_status = self.linkedin_handler.get_posting_status()
-        x_status = self.x_handler.get_posting_status()
         instagram_status = self.instagram_handler.get_posting_status()
         tiktok_status = self.tiktok_handler.get_posting_status()
         google_business_status = self.google_business_handler.get_posting_status()
@@ -239,12 +210,6 @@ class UnifiedPostingHandler:
         if not meta_status.get('credentials_loaded', False):
             errors['instagram'] = meta_status.get('error_message', 'Meta credentials not configured')
             errors['facebook'] = meta_status.get('error_message', 'Meta credentials not configured')
-        
-        if not linkedin_status.get('credentials_loaded', False):
-            errors['linkedin'] = linkedin_status.get('error_message', 'LinkedIn credentials not configured')
-        
-        if not x_status.get('credentials_loaded', False):
-            errors['x'] = x_status.get('error_message', 'X credentials not configured')
         
         if not instagram_status.get('credentials_loaded', False):
             errors['instagram_api'] = instagram_status.get('error_message', 'Instagram API credentials not configured')
@@ -275,10 +240,7 @@ class UnifiedPostingHandler:
             
             if platform_lower in ['instagram', 'facebook']:
                 success, message = self.meta_handler.validate_media_file(media_path)
-            elif platform_lower == 'linkedin':
-                success, message = self.linkedin_handler.validate_media_file(media_path)
-            elif platform_lower in ['x', 'twitter']:
-                success, message = self.x_handler.validate_media_file(media_path)
+
             elif platform_lower == 'instagram_api':
                 success, message = self.instagram_handler.validate_media_file(media_path)
             elif platform_lower == 'tiktok':
@@ -315,20 +277,7 @@ class UnifiedPostingHandler:
                 'max_video_duration': 240,  # seconds
                 'requires_media': False
             },
-            'linkedin': {
-                'max_caption_length': 3000,
-                'max_image_size': 20 * 1024 * 1024,  # 20MB
-                'max_video_size': 5 * 1024 * 1024 * 1024,  # 5GB
-                'max_video_duration': 600,  # seconds
-                'requires_media': False
-            },
-            'x': {
-                'max_caption_length': 280,
-                'max_image_size': 5 * 1024 * 1024,  # 5MB
-                'max_video_size': 512 * 1024 * 1024,  # 512MB
-                'max_video_duration': 140,  # seconds
-                'requires_media': False
-            },
+
             'instagram_api': {
                 'max_caption_length': 2200,
                 'max_image_size': 8 * 1024 * 1024,  # 8MB
@@ -412,14 +361,7 @@ class UnifiedPostingWorker(QThread):
                         success, message = self.handler.meta_handler.post_to_facebook(
                             self.media_path, self.caption, self.is_video
                         )
-                elif platform_lower == 'linkedin':
-                    success, message = self.handler.linkedin_handler.post_to_linkedin(
-                        self.media_path, self.caption, self.is_video
-                    )
-                elif platform_lower in ['x', 'twitter']:
-                    success, message = self.handler.x_handler.post_to_x(
-                        self.media_path, self.caption, self.is_video
-                    )
+
                 elif platform_lower == 'instagram_api':
                     success, message = self.handler.instagram_handler.post_media(
                         self.media_path, self.caption, self.is_video

@@ -94,6 +94,7 @@ class CreateMediaDialog(BaseDialog):
         
         self._setup_ui()
         self._connect_signals()
+        self.retranslateUi()  # Apply initial translations
         
         self.logger.info("Create Media dialog initialized")
     
@@ -215,5 +216,7 @@ class CreateMediaDialog(BaseDialog):
     
     def retranslateUi(self):
         """Update UI text for internationalization."""
-        # TODO: Implement when i18n is needed
-        pass 
+        self.setWindowTitle(self.tr("Create Media with AI"))
+        # Note: This dialog uses hardcoded tiles, so full translation would require
+        # storing references to the tiles and updating them dynamically.
+        # For now, the window title is translated. 
