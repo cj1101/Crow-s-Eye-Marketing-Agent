@@ -101,14 +101,27 @@ The application supports multiple social media platforms:
 3. **LinkedIn**: OAuth 2.0 authentication
 4. **AI Services**: Gemini API for content generation
 
-### Environment Variables
-Create a `.env` file or set environment variables:
+### API Keys Setup
+
+**🎉 No Setup Required!** This application comes with shared API keys so you can start using it immediately without any configuration.
+
+#### Shared API Keys (Default)
+- **Gemini AI**: Included for caption generation and image editing
+- **Google Veo**: Included for video generation
+- **Ready to use**: Just download and run!
+
+#### Optional: Use Your Own API Keys
+If you want to use your own API keys (for higher usage limits or billing control), you can set environment variables:
+
 ```bash
+# Optional - only if you want to use your own keys
 GEMINI_API_KEY=your_gemini_api_key
 GOOGLE_API_KEY=your_google_api_key_for_veo
 META_APP_ID=your_meta_app_id
 META_APP_SECRET=your_meta_app_secret
 ```
+
+The application will automatically use your keys if provided, otherwise it falls back to the shared keys.
 
 ### 🎬 Veo Video Generation
 For detailed setup and usage of the Veo video generation feature, see the [Veo Integration Guide](VEO_INTEGRATION_GUIDE.md).

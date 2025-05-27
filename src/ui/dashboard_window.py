@@ -148,6 +148,12 @@ class DashboardWindow(BaseMainWindow):
         # Header
         self._create_header(main_layout)
         
+        # API Key Status Widget
+        from .widgets.api_key_status_widget import APIKeyStatusWidget
+        self.api_status_widget = APIKeyStatusWidget()
+        self.api_status_widget.learn_more_requested.connect(self._show_api_key_info)
+        main_layout.addWidget(self.api_status_widget)
+        
         # Dashboard tiles
         self._create_dashboard_tiles(main_layout)
         
@@ -337,6 +343,61 @@ class DashboardWindow(BaseMainWindow):
     def _on_home_clicked(self):
         """Handle home button click - should return to dashboard."""
         self.logger.info("Home button clicked")
+    
+    def _show_api_key_info(self):
+        """Show information about API key usage."""
+        from PySide6.QtWidgets import QMessageBox
+        from ...config.shared_api_keys import is_using_shared_key
+        
+        using_shared_gemini = is_using_shared_key("gemini")
+        using_shared_google = is_using_shared_key("google")
+        
+        if using_shared_gemini and using_shared_google:
+            message = """🔑 <b>Using Shared API Keys</b><br><br>
+            
+<b>What this means:</b><br>
+• You're using the application's built-in API keys<br>
+• No setup required - everything works out of the box!<br>
+• Perfect for getting started and testing features<br><br>
+
+<b>Services included:</b><br>
+• ✨ Gemini AI for caption generation and image editing<br>
+• 🎬 Veo for video generation<br>
+• 🖼️ Imagen 3 for AI image enhancement<br><br>
+
+<b>Want to use your own API keys?</b><br>
+Set these environment variables:<br>
+• GEMINI_API_KEY=your_key_here<br>
+• GOOGLE_API_KEY=your_key_here<br><br>
+
+The app will automatically use your keys if provided!"""
+        else:
+            message = """🔐 <b>Using Personal API Keys</b><br><br>
+            
+<b>What this means:</b><br>
+• You're using your own Google API keys<br>
+• Full control over usage and billing<br>
+• Higher rate limits available<br><br>
+
+<b>Current setup:</b><br>"""
+            if not using_shared_gemini:
+                message += "• ✅ Personal Gemini API key<br>"
+            else:
+                message += "• 🔑 Shared Gemini API key<br>"
+                
+            if not using_shared_google:
+                message += "• ✅ Personal Google API key<br>"
+            else:
+                message += "• 🔑 Shared Google API key<br>"
+                
+            message += "<br>To switch back to shared keys, remove your environment variables."
+        
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("API Key Information")
+        msg_box.setTextFormat(Qt.TextFormat.RichText)
+        msg_box.setText(message)
+        msg_box.setIcon(QMessageBox.Icon.Information)
+        msg_box.exec()
         # This window IS the home, so just ensure we're showing the main view
         self.show()
         self.raise_()

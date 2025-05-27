@@ -15,9 +15,11 @@ from ...config import constants as const
 from ...models.app_state import AppState
 from ...utils.file_reader import extract_context_from_files
 
-# Load API key from environment variables
+# Load API key from environment variables or use shared key
 load_dotenv()
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+from ...config.shared_api_keys import get_gemini_api_key
+
+GEMINI_API_KEY = get_gemini_api_key()
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
 

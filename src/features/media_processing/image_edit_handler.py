@@ -62,8 +62,9 @@ class ImageEditHandler:
             # Always use the original image as the source for new edits
             source_image_path = self.original_image_path
             
-            # Check if GEMINI_API_KEY is configured
-            gemini_key = os.environ.get("GEMINI_API_KEY")
+            # Check if GEMINI_API_KEY is configured (use shared key if available)
+            from ...config.shared_api_keys import get_gemini_api_key
+            gemini_key = get_gemini_api_key()
             if not gemini_key:
                 self.logger.warning("Gemini API key not configured. Using enhanced fallback editing.")
                 return self._apply_basic_edit(source_image_path, edit_instructions)

@@ -44,22 +44,27 @@ class AuthHandler:
     
     def _check_gemini_key(self) -> bool:
         """
-        Check if Gemini API key is available.
+        Check if Gemini API key is available (including shared key).
         
         Returns:
             bool: True if Gemini API key is set, False otherwise
         """
-        gemini_key = os.getenv("GEMINI_API_KEY")
+        from ...config.shared_api_keys import get_gemini_api_key, is_using_shared_key
+        
+        gemini_key = get_gemini_api_key()
         if not gemini_key:
-            logger.warning("No Gemini API key found in environment variables")
+            logger.warning("No Gemini API key found")
             return False
         
         # Check if key is not just a placeholder
         if gemini_key == "your_gemini_api_key_here":
             logger.warning("Gemini API key is set to default placeholder value")
             return False
-            
-        logger.info("Gemini API key found in environment variables")
+        
+        if is_using_shared_key("gemini"):
+            logger.info("Gemini API key found (using shared key)")
+        else:
+            logger.info("Gemini API key found in environment variables")
         return True
     
     def check_auth_status(self) -> bool:
