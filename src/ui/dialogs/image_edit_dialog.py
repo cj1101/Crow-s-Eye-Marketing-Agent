@@ -13,6 +13,7 @@ from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QFont
 
 from ..base_dialog import BaseDialog
+from ..widgets.loading_screen import CartoonLoadingScreen
 
 class ImageEditDialog(BaseDialog):
     """Dialog for editing images with Gemini."""
@@ -35,6 +36,9 @@ class ImageEditDialog(BaseDialog):
         
         # Store image path
         self.image_path = image_path
+        
+        # Initialize loading screen
+        self.loading_screen = CartoonLoadingScreen(self)
         
         # Set up dialog properties
         self.setWindowTitle(self.tr("Edit Image with Gemini"))
@@ -347,6 +351,9 @@ class ImageEditDialog(BaseDialog):
             from PySide6.QtWidgets import QMessageBox, QProgressDialog
             from PySide6.QtCore import Qt
             
+            # Show cartoon loading screen
+            self.loading_screen.show_loading("🎨 Creating your masterpiece...")
+            
             # Show progress dialog
             progress = QProgressDialog("Processing image...", "Cancel", 0, 0, self)
             progress.setWindowModality(Qt.WindowModality.WindowModal)
@@ -357,6 +364,7 @@ class ImageEditDialog(BaseDialog):
             success, edited_path, message = image_handler.edit_image_with_gemini(self.image_path, instructions)
             
             progress.close()
+            self.loading_screen.hide_loading()
             
             if success and edited_path:
                 # Save the edited image to library
@@ -400,6 +408,7 @@ class ImageEditDialog(BaseDialog):
                 )
                 
         except Exception as e:
+            self.loading_screen.hide_loading()
             QMessageBox.critical(
                 self,
                 "Error",

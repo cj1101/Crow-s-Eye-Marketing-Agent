@@ -202,7 +202,7 @@ class UIHandler:
                 # Basic file copy to media library
                 import shutil
                 uploaded = 0
-                media_library_dir = "media_library"
+                media_library_dir = "data/media"
                 os.makedirs(media_library_dir, exist_ok=True)
                 
                 for file_path in file_paths:

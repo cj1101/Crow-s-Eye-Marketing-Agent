@@ -24,12 +24,12 @@ def setup_logging():
 def create_directories():
     """Create required directories if they don't exist."""
     directories = [
-        "media_library",
-        "output",
-        "knowledge_base",
-        "library",
-        "library/images",
-        "library/data",
+        "data",
+        "data/media",
+        "data/output",
+        "data/knowledge_base",
+        "data/images",
+        "data/media_gallery",
         "src/utils"
     ]
     
@@ -103,7 +103,7 @@ def create_default_files():
             """.strip())
     
     # Library data file
-    library_data_file = Path("library/data/library.json")
+    library_data_file = Path("data/library.json")
     if not library_data_file.exists():
         logger.info("Creating library data file...")
         library_data_file.parent.mkdir(parents=True, exist_ok=True)

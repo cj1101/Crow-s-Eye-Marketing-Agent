@@ -294,7 +294,7 @@ class CreatePostDialog(BaseDialog):
         # Show dialog to choose between photo and video generation
         from .create_media_dialog import CreateMediaDialog
         
-        create_dialog = CreateMediaDialog(self)
+        create_dialog = CreateMediaDialog(parent=self)
         if create_dialog.exec() == QDialog.DialogCode.Accepted:
             media_type = create_dialog.get_selected_media_type()
             self.logger.info(f"AI media creation requested: {media_type}")

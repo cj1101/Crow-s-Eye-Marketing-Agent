@@ -9,16 +9,16 @@ from pathlib import Path
 # Version
 APP_VERSION = "5.0.0"
 
-# Directories
+# Directories - Updated for reorganized structure
 ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..'))
 DATA_DIR = os.path.join(ROOT_DIR, 'data')
-MEDIA_LIBRARY_DIR = os.path.join(ROOT_DIR, 'media_library')
-OUTPUT_DIR = os.path.join(ROOT_DIR, 'output')
-KNOWLEDGE_BASE_DIR = os.path.join(ROOT_DIR, 'knowledge_base')
-LIBRARY_DIR = os.path.join(ROOT_DIR, 'library')
-LIBRARY_IMAGES_DIR = os.path.join(LIBRARY_DIR, 'images')
-LIBRARY_DATA_DIR = os.path.join(LIBRARY_DIR, 'data')
-MEDIA_GALLERY_DIR = os.path.join(ROOT_DIR, 'media_gallery')
+MEDIA_LIBRARY_DIR = os.path.join(DATA_DIR, 'media')  # Consolidated media storage
+OUTPUT_DIR = os.path.join(DATA_DIR, 'output')
+KNOWLEDGE_BASE_DIR = os.path.join(DATA_DIR, 'knowledge_base')
+LIBRARY_DIR = os.path.join(DATA_DIR, 'images')  # Library images
+LIBRARY_IMAGES_DIR = os.path.join(DATA_DIR, 'images')
+LIBRARY_DATA_DIR = DATA_DIR  # Library data files are in root data dir
+MEDIA_GALLERY_DIR = os.path.join(DATA_DIR, 'media_gallery')
 
 # Files
 PRESETS_FILE = os.path.join(ROOT_DIR, 'presets.json')
@@ -64,10 +64,8 @@ MAX_KNOWLEDGE_FILE_SIZE = 5 * 1024 * 1024  # 5MB
 # Library Settings
 MAX_LIBRARY_ITEMS = 10000
 
-# --- Application Paths ---
-MEDIA_LIBRARY_DIR = os.path.join(ROOT_DIR, "media_library")
-LIBRARY_DIR = os.path.join(ROOT_DIR, "library")
-OUTPUT_DIR = os.path.join(ROOT_DIR, "output")
+# --- Application Paths --- (Updated for reorganized structure)
+# Note: These are now defined above in the main Directories section
 DOCS_DIR = os.path.join(ROOT_DIR, "docs")
 
 # --- File Paths ---
@@ -226,8 +224,8 @@ UI_DEFAULT_STATUS = "Ready"
 # File paths
 APP_LOG_PATH = "app.log"
 MEDIA_STATUS_PATH = "media_status.json"
-LIBRARY_DATA_PATH = "library/data/library.json"
-LIBRARY_IMAGES_PATH = "library/images"
+LIBRARY_DATA_PATH = "data/library.json"
+LIBRARY_IMAGES_PATH = "data/images"
 
 # API configuration
 MAX_RETRIES = 3

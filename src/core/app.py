@@ -23,13 +23,11 @@ def create_required_directories():
     """Create required directories if they don't exist."""
     directories = [
         "data",
-        "media_library",
-        "output",
-        "knowledge_base",
-        "library",
-        "library/images",
-        "library/data",
-        "media_gallery"
+        "data/media",
+        "data/output", 
+        "data/knowledge_base",
+        "data/images",
+        "data/media_gallery"
     ]
     
     for directory in directories:

@@ -83,10 +83,10 @@ class MediaTypeOptionTile(QFrame):
 class CreateMediaDialog(BaseDialog):
     """Dialog for choosing between photo and video AI generation."""
     
-    def __init__(self, parent=None):
+    def __init__(self, media_type: str = None, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(self.__class__.__name__)
-        self.selected_media_type = None
+        self.selected_media_type = media_type  # Pre-select if provided
         
         self.setWindowTitle("Create Media with AI")
         self.setModal(True)

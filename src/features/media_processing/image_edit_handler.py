@@ -1,5 +1,5 @@
 """
-Image editing handler for processing images with Gemini.
+Image editing handler for processing images with Gemini and Imagen 3.
 """
 import os
 import logging
@@ -12,10 +12,20 @@ import numpy as np
 import google.generativeai as genai
 from google.generativeai.types import HarmCategory, HarmBlockThreshold
 
+# Import for Imagen 3 API
+try:
+    from google import genai as imagen_client
+    from google.genai import types as imagen_types
+    IMAGEN_AVAILABLE = True
+except ImportError:
+    IMAGEN_AVAILABLE = False
+    logging.warning("Imagen 3 API not available. Install google-genai package for AI image generation.")
+
 from ...config import constants as const
 
 # Constants
 GEMINI_VISION_MODEL = "gemini-1.5-flash"  # Using flash model which is better suited for image processing
+IMAGEN_MODEL = "imagen-3.0-generate-002"  # Latest Imagen 3 model
 TEMP_DIR = tempfile.gettempdir()
 
 class ImageEditHandler:
@@ -32,7 +42,7 @@ class ImageEditHandler:
         
     def edit_image_with_gemini(self, image_path: str, edit_instructions: str) -> Tuple[bool, str, str]:
         """
-        Edit an image using Gemini's generative capabilities.
+        Edit an image using Gemini's generative capabilities and Imagen 3 for AI generation.
         
         Args:
             image_path: Path to the image file
@@ -45,20 +55,32 @@ class ImageEditHandler:
             if not os.path.exists(image_path):
                 return False, "", f"Image file not found: {image_path}"
                 
-            # Store original image path
-            self.original_image_path = image_path
+            # Always store and use the original image path to avoid edits on top of edits
+            if self.original_image_path is None:
+                self.original_image_path = image_path
+            
+            # Always use the original image as the source for new edits
+            source_image_path = self.original_image_path
             
             # Check if GEMINI_API_KEY is configured
             gemini_key = os.environ.get("GEMINI_API_KEY")
             if not gemini_key:
                 self.logger.warning("Gemini API key not configured. Using enhanced fallback editing.")
-                return self._apply_basic_edit(image_path, edit_instructions)
+                return self._apply_basic_edit(source_image_path, edit_instructions)
             
-            # Configure Gemini API
+            # First, try to generate a completely new AI image based on the editing instructions
+            if IMAGEN_AVAILABLE:
+                ai_generated_result = self._generate_ai_image_from_original(source_image_path, edit_instructions, gemini_key)
+                if ai_generated_result[0]:  # If successful
+                    return ai_generated_result
+                else:
+                    self.logger.warning("AI image generation failed, falling back to traditional editing")
+            
+            # Configure Gemini API for analysis
             genai.configure(api_key=gemini_key)
             
             # Open and resize image to ensure it's within Gemini's limits while maintaining quality
-            img = Image.open(image_path)
+            img = Image.open(source_image_path)
             
             # Determine original size and format for later
             orig_width, orig_height = img.width, img.height
@@ -91,102 +113,343 @@ class ImageEditHandler:
                 safety_settings=safety_settings
             )
             
-            # Create a prompt for image editing
+            # Create a prompt for image analysis and editing guidance
             prompt = f"""
-            I need you to edit this image according to these instructions:
+            Analyze this image and provide detailed guidance for applying these editing instructions:
             
             {edit_instructions}
             
-            Apply these changes to the image while maintaining a professional, high-quality result.
-            Ensure the edited image has the same dimensions and aspect ratio ({orig_width}x{orig_height}) as the original.
-            Preserve the overall composition unless specifically instructed otherwise.
-            Focus on the specified edits only.
+            Please analyze:
+            1. The current lighting, colors, and composition
+            2. What specific adjustments would best achieve the requested edits
+            3. Recommended color adjustments, contrast changes, or artistic effects
+            4. Any specific areas that need attention
             
-            The resulting image should be high-quality and lossless.
-            Return ONLY the edited image without any text.
+            Provide specific technical recommendations for image processing.
             """
             
-            # Prepare the request
-            request = model.generate_content([
-                {
-                    "role": "user",
-                    "parts": [
-                        {"text": prompt},
-                        {"inline_data": {"mime_type": f"image/{img_format.lower()}", "data": base64.b64encode(img_byte_arr).decode()}}
-                    ]
-                }
-            ])
-            
-            # Process the response and extract the image
-            response = request.candidates[0].content
-            self.logger.info(f"Received response from Gemini with {len(response.parts)} parts")
-            
-            # Look for image data in the response
-            for i, part in enumerate(response.parts):
-                self.logger.info(f"Checking part {i} of type: {type(part)}")
+            # Get analysis from Gemini to guide our editing
+            try:
+                request = model.generate_content([
+                    {
+                        "role": "user",
+                        "parts": [
+                            {"text": prompt},
+                            {"inline_data": {"mime_type": f"image/{img_format.lower()}", "data": base64.b64encode(img_byte_arr).decode()}}
+                        ]
+                    }
+                ])
                 
-                if hasattr(part, "inline_data") and part.inline_data:
-                    self.logger.info(f"Found inline data with mime type: {part.inline_data.mime_type}")
-                    
-                    if part.inline_data.mime_type.startswith("image/"):
-                        # Get image data
-                        try:
-                            image_data = base64.b64decode(part.inline_data.data)
-                            
-                            # Create a temporary file for the edited image
-                            file_name = os.path.basename(image_path)
-                            base_name, ext = os.path.splitext(file_name)
-                            edited_file_path = os.path.join(TEMP_DIR, f"{base_name}_edited{ext}")
-                            
-                            # Save the edited image at highest quality
-                            with open(edited_file_path, "wb") as f:
-                                f.write(image_data)
-                            
-                            # Verify the saved image
-                            try:
-                                edited_img = Image.open(edited_file_path)
-                                edited_img.verify()  # Verify it's a valid image
-                                
-                                # Re-save with specific quality settings for better results
-                                edited_img = Image.open(edited_file_path)
-                                edited_img.save(edited_file_path, quality=100, optimize=True)
-                                
-                                # Update dimensions if needed to match original
-                                if edited_img.size != (orig_width, orig_height):
-                                    edited_img = edited_img.resize((orig_width, orig_height), Image.LANCZOS)
-                                    edited_img.save(edited_file_path, quality=100, optimize=True)
-                                
-                                # Store the edited image path
-                                self.edited_image_path = edited_file_path
-                                
-                                # Add to editing history
-                                self.editing_history.append({
-                                    "instruction": edit_instructions,
-                                    "result_path": edited_file_path
-                                })
-                                
-                                self.logger.info(f"Successfully saved edited image to {edited_file_path}")
-                                return True, edited_file_path, "Image successfully edited with Gemini"
-                                
-                            except Exception as img_error:
-                                self.logger.error(f"Error verifying edited image: {img_error}")
-                                # Continue to fallback instead of returning error
-                                break
-                                
-                        except Exception as decode_error:
-                            self.logger.error(f"Error decoding image data: {decode_error}")
-                            continue
-            
-            # If we get here, we didn't find a valid image in the response
-            self.logger.warning("No valid image found in Gemini response, using enhanced fallback editing")
+                response = request.candidates[0].content
+                analysis = response.parts[0].text if response.parts else ""
+                self.logger.info(f"Gemini analysis: {analysis[:200]}...")
+                
+                # Use the analysis to guide our enhanced editing
+                return self._apply_guided_edit(source_image_path, edit_instructions, analysis)
+                
+            except Exception as analysis_error:
+                self.logger.warning(f"Gemini analysis failed: {analysis_error}")
+                # Fall back to standard enhanced editing
+                self.logger.warning("Using enhanced fallback editing without Gemini analysis")
             
             # Let's implement a fallback to basic image filters if Gemini didn't return an image
-            return self._apply_basic_edit(image_path, edit_instructions)
+            return self._apply_basic_edit(source_image_path, edit_instructions)
             
         except Exception as e:
             self.logger.error(f"Error editing image with Gemini: {e}")
             # Fall back to enhanced editing
             self.logger.info("Falling back to enhanced image editing")
+            return self._apply_basic_edit(source_image_path if 'source_image_path' in locals() else image_path, edit_instructions)
+    
+    def _generate_ai_image_from_original(self, image_path: str, edit_instructions: str, api_key: str) -> Tuple[bool, str, str]:
+        """
+        Generate a completely new AI image using Imagen 3 based on the original image and editing instructions.
+        
+        Args:
+            image_path: Path to the original image
+            edit_instructions: Instructions for how to transform the image
+            api_key: Gemini API key
+            
+        Returns:
+            Tuple[bool, str, str]: Success status, generated image path, and message
+        """
+        try:
+            self.logger.info("Attempting AI image generation with Imagen 3")
+            
+            # First, analyze the original image to understand its content
+            img = Image.open(image_path)
+            img_format = img.format if img.format else "JPEG"
+            
+            # Convert image to bytes for analysis
+            img_byte_arr = io.BytesIO()
+            img.save(img_byte_arr, format=img_format, quality=100)
+            img_byte_arr = img_byte_arr.getvalue()
+            
+            # Configure Gemini for image analysis
+            genai.configure(api_key=api_key)
+            
+            generation_config = {
+                "temperature": 0.3,
+                "top_p": 0.95,
+                "top_k": 32,
+                "max_output_tokens": 4096,
+            }
+            
+            safety_settings = {
+                HarmCategory.HARM_CATEGORY_HARASSMENT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_HATE_SPEECH: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT: HarmBlockThreshold.BLOCK_NONE,
+                HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT: HarmBlockThreshold.BLOCK_NONE,
+            }
+            
+            model = genai.GenerativeModel(
+                model_name=GEMINI_VISION_MODEL,
+                generation_config=generation_config,
+                safety_settings=safety_settings
+            )
+            
+            # Analyze the original image to create a detailed description
+            analysis_prompt = f"""
+            Analyze this image in detail and create a comprehensive description that captures:
+            1. The main subjects and objects in the image
+            2. The setting, background, and environment
+            3. Colors, lighting, and mood
+            4. Composition and style
+            5. Any text or specific details
+            
+            Then, based on these editing instructions: "{edit_instructions}"
+            
+            Create a detailed prompt for AI image generation that:
+            - Maintains the core elements and composition of the original image
+            - Applies the requested transformations and style changes
+            - Results in a high-quality, professional image
+            
+            Format your response as:
+            DESCRIPTION: [detailed description of original image]
+            AI_PROMPT: [optimized prompt for Imagen 3 generation]
+            """
+            
+            # Get image analysis and generate prompt
+            request = model.generate_content([
+                {
+                    "role": "user",
+                    "parts": [
+                        {"text": analysis_prompt},
+                        {"inline_data": {"mime_type": f"image/{img_format.lower()}", "data": base64.b64encode(img_byte_arr).decode()}}
+                    ]
+                }
+            ])
+            
+            response = request.candidates[0].content
+            analysis_text = response.parts[0].text if response.parts else ""
+            
+            # Extract the AI prompt from the analysis
+            ai_prompt = self._extract_ai_prompt(analysis_text, edit_instructions)
+            
+            self.logger.info(f"Generated AI prompt: {ai_prompt[:200]}...")
+            
+            # Now use Imagen 3 to generate the new image
+            client = imagen_client.Client(api_key=api_key)
+            
+            # Determine aspect ratio from original image
+            aspect_ratio = self._get_aspect_ratio(img.width, img.height)
+            
+            response = client.models.generate_images(
+                model=IMAGEN_MODEL,
+                prompt=ai_prompt,
+                config=imagen_types.GenerateImagesConfig(
+                    number_of_images=1,
+                    aspect_ratio=aspect_ratio,
+                    safety_filter_level="BLOCK_LOW_AND_ABOVE",
+                    person_generation="ALLOW_ADULT"
+                )
+            )
+            
+            if response.generated_images:
+                generated_image = response.generated_images[0]
+                
+                # Save the generated image
+                file_name = os.path.basename(image_path)
+                base_name, ext = os.path.splitext(file_name)
+                ai_generated_file_path = os.path.join(TEMP_DIR, f"{base_name}_ai_generated{ext}")
+                
+                # Convert bytes to PIL Image and save
+                ai_image = Image.open(io.BytesIO(generated_image.image.image_bytes))
+                ai_image.save(ai_generated_file_path, quality=100, optimize=True)
+                
+                # Store the generated image path and history
+                self.edited_image_path = ai_generated_file_path
+                self.editing_history.append({
+                    "instruction": edit_instructions,
+                    "ai_prompt": ai_prompt,
+                    "method": "Imagen 3 AI Generation",
+                    "result_path": ai_generated_file_path
+                })
+                
+                success_message = f"AI image generated successfully using Imagen 3. Applied transformation: {edit_instructions}"
+                self.logger.info("AI image generation completed successfully")
+                return True, ai_generated_file_path, success_message
+            else:
+                self.logger.warning("No images generated by Imagen 3")
+                return False, "", "Imagen 3 did not generate any images"
+                
+        except Exception as e:
+            self.logger.error(f"Error in AI image generation: {e}")
+            return False, "", f"AI image generation failed: {str(e)}"
+    
+    def _extract_ai_prompt(self, analysis_text: str, edit_instructions: str) -> str:
+        """Extract and optimize the AI prompt from Gemini's analysis."""
+        try:
+            # Look for AI_PROMPT section
+            if "AI_PROMPT:" in analysis_text:
+                prompt_section = analysis_text.split("AI_PROMPT:")[1].strip()
+                # Take the first paragraph/section
+                ai_prompt = prompt_section.split('\n')[0].strip()
+                if ai_prompt:
+                    return ai_prompt
+            
+            # Fallback: create a prompt based on the analysis and instructions
+            if "DESCRIPTION:" in analysis_text:
+                description = analysis_text.split("DESCRIPTION:")[1].split("AI_PROMPT:")[0].strip()
+            else:
+                description = analysis_text[:500]  # Use first part of analysis
+            
+            # Create a comprehensive prompt
+            fallback_prompt = f"{description}, {edit_instructions}, high quality, professional photography, detailed, 8k resolution"
+            return fallback_prompt
+            
+        except Exception as e:
+            self.logger.warning(f"Error extracting AI prompt: {e}")
+            # Ultimate fallback
+            return f"High quality image with {edit_instructions}, professional photography, detailed, 8k resolution"
+    
+    def _get_aspect_ratio(self, width: int, height: int) -> str:
+        """Determine the best aspect ratio for Imagen 3 based on image dimensions."""
+        ratio = width / height
+        
+        if 0.9 <= ratio <= 1.1:
+            return "1:1"
+        elif ratio > 1.5:
+            return "16:9"
+        elif ratio > 1.2:
+            return "4:3"
+        elif ratio < 0.7:
+            return "9:16"
+        elif ratio < 0.85:
+            return "3:4"
+        else:
+            return "1:1"  # Default fallback
+    
+    def _apply_guided_edit(self, image_path: str, edit_instructions: str, analysis: str) -> Tuple[bool, str, str]:
+        """
+        Apply image edits guided by Gemini's analysis.
+        
+        Args:
+            image_path: Path to the image
+            edit_instructions: Original editing instructions
+            analysis: Gemini's analysis of the image and editing recommendations
+            
+        Returns:
+            Tuple[bool, str, str]: Success status, edited image path, and message
+        """
+        try:
+            self.logger.info("Applying Gemini-guided image editing")
+            
+            # Extract keywords from both instructions and analysis
+            instructions_lower = edit_instructions.lower()
+            analysis_lower = analysis.lower() if analysis else ""
+            applied_effects = []
+            
+            # Open the image
+            img = Image.open(image_path).convert("RGB")
+            original_img = img.copy()
+            
+            # Store original image path
+            self.original_image_path = image_path
+            
+            # Use analysis to guide more sophisticated edits
+            # Look for specific recommendations in the analysis
+            if any(keyword in analysis_lower for keyword in ["increase brightness", "brighten", "lighter"]):
+                enhancer = ImageEnhance.Brightness(img)
+                img = enhancer.enhance(1.3)
+                applied_effects.append("Brightness Enhancement (AI-guided)")
+                
+            if any(keyword in analysis_lower for keyword in ["increase contrast", "more contrast", "dramatic"]):
+                enhancer = ImageEnhance.Contrast(img)
+                img = enhancer.enhance(1.4)
+                applied_effects.append("Contrast Enhancement (AI-guided)")
+                
+            if any(keyword in analysis_lower for keyword in ["increase saturation", "more vibrant", "vivid"]):
+                enhancer = ImageEnhance.Color(img)
+                img = enhancer.enhance(1.5)
+                applied_effects.append("Saturation Enhancement (AI-guided)")
+                
+            if any(keyword in analysis_lower for keyword in ["sharpen", "more detail", "crisp"]):
+                img = img.filter(ImageFilter.UnsharpMask(radius=2, percent=150, threshold=3))
+                applied_effects.append("Sharpening (AI-guided)")
+            
+            # Apply original instruction-based edits with enhanced processing
+            if any(keyword in instructions_lower for keyword in ["studio ghibli", "ghibli", "anime", "animated"]):
+                img = self._apply_studio_ghibli_style(img)
+                applied_effects.append("Studio Ghibli Style")
+                
+            elif any(keyword in instructions_lower for keyword in ["oil painting", "painting", "artistic", "painterly"]):
+                img = self._apply_oil_painting_effect(img)
+                applied_effects.append("Oil Painting Style")
+                
+            elif any(keyword in instructions_lower for keyword in ["warm", "golden hour", "sunset"]):
+                img = self._apply_warm_tone(img)
+                applied_effects.append("Warm Tone")
+                
+            elif any(keyword in instructions_lower for keyword in ["cool", "blue", "cold"]):
+                img = self._apply_cool_tone(img)
+                applied_effects.append("Cool Tone")
+                
+            elif any(keyword in instructions_lower for keyword in ["vintage", "retro", "sepia"]):
+                img = self._apply_vintage_effect(img)
+                applied_effects.append("Vintage Effect")
+                
+            elif any(keyword in instructions_lower for keyword in ["vibrant", "saturated", "vivid"]):
+                img = self._apply_vibrant_colors(img)
+                applied_effects.append("Vibrant Colors")
+                
+            elif any(keyword in instructions_lower for keyword in ["professional", "clean", "crisp"]):
+                img = self._apply_professional_enhancement(img)
+                applied_effects.append("Professional Enhancement")
+                
+            elif any(keyword in instructions_lower for keyword in ["food", "bread", "baking", "culinary"]):
+                img = self._apply_food_photography_enhancement(img)
+                applied_effects.append("Food Photography Enhancement")
+                
+            else:
+                # Apply intelligent enhancement based on analysis
+                img = self._apply_smart_enhancement(img)
+                applied_effects.append("AI-Guided Smart Enhancement")
+            
+            # Create output file
+            file_name = os.path.basename(image_path)
+            base_name, ext = os.path.splitext(file_name)
+            edited_file_path = os.path.join(TEMP_DIR, f"{base_name}_edited{ext}")
+            
+            # Save with high quality
+            img.save(edited_file_path, quality=100, optimize=True)
+            
+            # Store the edited image path and history
+            self.edited_image_path = edited_file_path
+            self.editing_history.append({
+                "instruction": edit_instructions,
+                "analysis": analysis,
+                "effects_applied": applied_effects,
+                "result_path": edited_file_path
+            })
+            
+            effects_str = ", ".join(applied_effects)
+            success_message = f"Image successfully edited with AI guidance. Applied effects: {effects_str}"
+            return True, edited_file_path, success_message
+            
+        except Exception as e:
+            self.logger.error(f"Error in guided editing: {e}")
+            # Fall back to basic editing
             return self._apply_basic_edit(image_path, edit_instructions)
             
     def _apply_basic_edit(self, image_path: str, edit_instructions: str) -> Tuple[bool, str, str]:
@@ -325,15 +588,24 @@ class ImageEditHandler:
                 img = self._apply_tilt_shift(img)
                 applied_effects.append("Tilt-Shift Effect")
             
-            # If no specific effects were applied, apply a smart enhancement
+            # If no specific effects were applied, apply a smart enhancement based on instructions
             if not applied_effects:
                 if any(keyword in instructions_lower for keyword in ["enhance", "improve", "better", "quality"]):
                     img = self._apply_smart_enhancement(img)
                     applied_effects.append("Smart Enhancement")
+                elif any(keyword in instructions_lower for keyword in ["dramatic", "bold", "striking", "vibrant"]):
+                    img = self._apply_dramatic_enhancement(img)
+                    applied_effects.append("Dramatic Enhancement")
+                elif any(keyword in instructions_lower for keyword in ["professional", "clean", "crisp"]):
+                    img = self._apply_professional_enhancement(img)
+                    applied_effects.append("Professional Enhancement")
+                elif any(keyword in instructions_lower for keyword in ["food", "bread", "baking", "culinary"]):
+                    img = self._apply_food_photography_enhancement(img)
+                    applied_effects.append("Food Photography Enhancement")
                 else:
-                    # Default artistic transformation
-                    img = self._apply_subtle_enhancement(img)
-                    applied_effects.append("Subtle Enhancement")
+                    # Apply more substantial default transformation instead of subtle
+                    img = self._apply_enhanced_default(img)
+                    applied_effects.append("Enhanced Processing")
             
             # Create output file
             file_name = os.path.basename(image_path)
@@ -359,6 +631,19 @@ class ImageEditHandler:
             self.logger.error(f"Error in enhanced editing: {e}")
             return False, "", f"Error applying enhanced edits: {str(e)}"
             
+    def apply_traditional_edits(self, image_path: str, edit_instructions: str) -> Tuple[bool, str, str]:
+        """
+        Apply traditional image editing (brightness, contrast, filters, etc.) without AI generation.
+        
+        Args:
+            image_path: Path to the image file
+            edit_instructions: Instructions for how to edit the image
+            
+        Returns:
+            Tuple[bool, str, str]: Success status, edited image path, and message
+        """
+        return self._apply_basic_edit(image_path, edit_instructions)
+    
     def revert_to_original(self) -> str:
         """
         Revert to the original image.
@@ -367,6 +652,17 @@ class ImageEditHandler:
             str: Path to the original image
         """
         return self.original_image_path if self.original_image_path else ""
+    
+    def set_new_original_image(self, image_path: str):
+        """
+        Set a new original image path, clearing any previous editing history.
+        
+        Args:
+            image_path: Path to the new original image
+        """
+        self.original_image_path = image_path
+        self.edited_image_path = None
+        self.editing_history = []
     
     def get_current_edited_image(self) -> str:
         """
@@ -731,36 +1027,69 @@ class ImageEditHandler:
     def _apply_studio_ghibli_style(self, img: Image.Image) -> Image.Image:
         """Apply Studio Ghibli anime-style transformation."""
         from PIL import ImageEnhance, ImageFilter
+        import numpy as np
         
-        # Enhance colors and saturation for anime look
+        # Convert to numpy for color manipulation
+        img_array = np.array(img)
+        
+        # Apply anime-style color quantization (reduce color palette)
+        # Divide by factor, round, then multiply back to create flat color areas
+        quantize_factor = 32
+        img_array = (img_array // quantize_factor) * quantize_factor
+        img = Image.fromarray(img_array.astype(np.uint8))
+        
+        # Enhance colors and saturation dramatically for anime look
         color_enhancer = ImageEnhance.Color(img)
-        img = color_enhancer.enhance(1.4)
+        img = color_enhancer.enhance(1.8)
         
-        # Slight blur for soft anime aesthetic
-        img = img.filter(ImageFilter.GaussianBlur(radius=0.5))
+        # Increase contrast for defined anime-style shading
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.4)
         
-        # Increase brightness slightly
+        # Apply slight blur for soft anime aesthetic
+        img = img.filter(ImageFilter.GaussianBlur(radius=0.8))
+        
+        # Increase brightness for that bright anime look
         brightness_enhancer = ImageEnhance.Brightness(img)
-        img = brightness_enhancer.enhance(1.1)
+        img = brightness_enhancer.enhance(1.2)
         
         # Apply warm tone for Ghibli feel
         img = self._apply_warm_tone(img)
+        
+        # Final sharpening to define edges
+        img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=100, threshold=2))
         
         return img
     
     def _apply_oil_painting_effect(self, img: Image.Image) -> Image.Image:
         """Apply oil painting artistic effect."""
         from PIL import ImageFilter, ImageEnhance
+        import numpy as np
         
-        # Apply median filter for paint-like effect
+        # Convert to numpy array for advanced processing
+        img_array = np.array(img)
+        
+        # Apply multiple median filters for stronger paint effect
+        img = img.filter(ImageFilter.MedianFilter(size=5))
         img = img.filter(ImageFilter.MedianFilter(size=3))
         
-        # Enhance colors
+        # Enhance colors dramatically for oil painting look
         color_enhancer = ImageEnhance.Color(img)
-        img = color_enhancer.enhance(1.3)
+        img = color_enhancer.enhance(1.6)
         
-        # Slight blur for painterly look
-        img = img.filter(ImageFilter.GaussianBlur(radius=1.0))
+        # Increase contrast for more defined brush strokes
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.3)
+        
+        # Apply blur for painterly texture
+        img = img.filter(ImageFilter.GaussianBlur(radius=1.2))
+        
+        # Add slight sharpening to define edges like brush strokes
+        img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=120, threshold=3))
+        
+        # Enhance brightness slightly
+        brightness_enhancer = ImageEnhance.Brightness(img)
+        img = brightness_enhancer.enhance(1.1)
         
         return img
     
@@ -1214,5 +1543,109 @@ class ImageEditHandler:
         # Slight color enhancement
         color_enhancer = ImageEnhance.Color(img)
         img = color_enhancer.enhance(1.05)
+        
+        return img
+    
+    def _apply_dramatic_enhancement(self, img: Image.Image) -> Image.Image:
+        """Apply dramatic enhancement for bold, striking effects."""
+        from PIL import ImageEnhance, ImageFilter
+        
+        # High contrast for dramatic effect
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.6)
+        
+        # Boost saturation significantly
+        color_enhancer = ImageEnhance.Color(img)
+        img = color_enhancer.enhance(1.4)
+        
+        # Increase sharpness
+        sharpness_enhancer = ImageEnhance.Sharpness(img)
+        img = sharpness_enhancer.enhance(1.3)
+        
+        # Slight brightness adjustment
+        brightness_enhancer = ImageEnhance.Brightness(img)
+        img = brightness_enhancer.enhance(1.1)
+        
+        return img
+    
+    def _apply_professional_enhancement(self, img: Image.Image) -> Image.Image:
+        """Apply professional enhancement for clean, crisp results."""
+        from PIL import ImageEnhance, ImageFilter
+        
+        # Moderate contrast for professional look
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.25)
+        
+        # Enhance sharpness for crisp details
+        sharpness_enhancer = ImageEnhance.Sharpness(img)
+        img = sharpness_enhancer.enhance(1.4)
+        
+        # Slight color enhancement
+        color_enhancer = ImageEnhance.Color(img)
+        img = color_enhancer.enhance(1.15)
+        
+        # Apply unsharp mask for professional sharpening
+        img = img.filter(ImageFilter.UnsharpMask(radius=1, percent=120, threshold=3))
+        
+        return img
+    
+    def _apply_food_photography_enhancement(self, img: Image.Image) -> Image.Image:
+        """Apply food photography specific enhancements."""
+        from PIL import ImageEnhance, ImageFilter
+        
+        # Warm tone for appetizing look
+        img = self._apply_warm_tone(img)
+        
+        # Enhance colors for food appeal
+        color_enhancer = ImageEnhance.Color(img)
+        img = color_enhancer.enhance(1.3)
+        
+        # Increase contrast for definition
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.2)
+        
+        # Sharpen for texture details
+        sharpness_enhancer = ImageEnhance.Sharpness(img)
+        img = sharpness_enhancer.enhance(1.2)
+        
+        # Slight brightness boost
+        brightness_enhancer = ImageEnhance.Brightness(img)
+        img = brightness_enhancer.enhance(1.05)
+        
+        return img
+    
+    def _apply_enhanced_default(self, img: Image.Image) -> Image.Image:
+        """Apply enhanced default processing with more substantial changes."""
+        from PIL import ImageEnhance, ImageFilter, ImageStat
+        
+        # Analyze image characteristics
+        stat = ImageStat.Stat(img)
+        mean_brightness = sum(stat.mean) / 3
+        
+        # Significant contrast enhancement for more noticeable effect
+        contrast_enhancer = ImageEnhance.Contrast(img)
+        img = contrast_enhancer.enhance(1.5)
+        
+        # Strong color enhancement
+        color_enhancer = ImageEnhance.Color(img)
+        img = color_enhancer.enhance(1.4)
+        
+        # Sharpness enhancement for crisp details
+        sharpness_enhancer = ImageEnhance.Sharpness(img)
+        img = sharpness_enhancer.enhance(1.3)
+        
+        # Brightness adjustment based on image analysis
+        if mean_brightness < 120:  # Dark image
+            brightness_enhancer = ImageEnhance.Brightness(img)
+            img = brightness_enhancer.enhance(1.25)
+        elif mean_brightness > 160:  # Bright image
+            brightness_enhancer = ImageEnhance.Brightness(img)
+            img = brightness_enhancer.enhance(0.9)
+        else:  # Normal brightness
+            brightness_enhancer = ImageEnhance.Brightness(img)
+            img = brightness_enhancer.enhance(1.1)
+        
+        # Apply unsharp mask for professional sharpening
+        img = img.filter(ImageFilter.UnsharpMask(radius=1.5, percent=150, threshold=3))
         
         return img 

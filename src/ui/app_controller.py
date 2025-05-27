@@ -224,13 +224,14 @@ class AppController(QWidget):
         self.dashboard.create_post_requested.connect(self._on_create_post_requested)
         self.dashboard.library_requested.connect(self.show_library)
         self.dashboard.campaign_manager_requested.connect(self.show_campaign_manager)
-        self.dashboard.customer_handler_requested.connect(self._on_customer_handler_requested)
-        self.dashboard.data_requested.connect(self._on_data_requested)
         self.dashboard.tools_requested.connect(self.show_tools)
         self.dashboard.presets_requested.connect(self._on_presets_requested)
+        self.dashboard.customer_handler_requested.connect(self._on_customer_handler_requested)
+        self.dashboard.data_requested.connect(self._on_data_requested)
         
         # Library signals
         self.library_tabs.create_gallery_requested.connect(self._on_create_gallery_requested)
+        self.library_tabs.media_uploaded.connect(self._on_media_uploaded)
         
         # Campaign manager signals
         self.campaign_manager.add_campaign_requested.connect(self._on_add_campaign_requested)
@@ -331,6 +332,10 @@ class AppController(QWidget):
         """Handle post creation completion."""
         self.logger.info(f"Post created: {item_id}")
         
+        # Refresh library tabs if they're currently visible
+        if hasattr(self, 'library_tabs'):
+            self.library_tabs.refresh_content()
+        
         # Optionally show the library to see the saved post
         reply = QMessageBox.question(
             self,
@@ -423,10 +428,48 @@ class AppController(QWidget):
         """Handle video upload request."""
         self.logger.info(f"Video upload requested: {file_path}")
         
-        # Open the comprehensive post creation dialog
+        # First show video editing services dialog
+        from .dialogs.video_editing_services_dialog import VideoEditingServicesDialog
+        
+        services_dialog = VideoEditingServicesDialog(file_path, self)
+        selected_services = {}
+        
+        if services_dialog.exec():
+            # User selected some services
+            selected_services = services_dialog.get_selected_services()
+            self.logger.info(f"Video services selected: {selected_services}")
+        else:
+            # User skipped all services
+            self.logger.info("Video services skipped")
+        
+        final_video_path = file_path
+        
+        # If services were selected, show the step-by-step processing pipeline
+        if selected_services and any(selected_services.values()):
+            from .dialogs.video_processing_pipeline_dialog import VideoProcessingPipelineDialog
+            
+            pipeline_dialog = VideoProcessingPipelineDialog(file_path, selected_services, self)
+            
+            if pipeline_dialog.exec():
+                # User completed the pipeline
+                final_video_path = pipeline_dialog.get_final_video_path()
+                self.logger.info(f"Video processing pipeline completed: {final_video_path}")
+            else:
+                # User cancelled the pipeline, use original video
+                self.logger.info("Video processing pipeline cancelled, using original video")
+        
+        # Now open the comprehensive post creation dialog with the final video
         from .dialogs.post_creation_dialog import PostCreationDialog
         
-        dialog = PostCreationDialog(media_path=file_path, parent=self)
+        dialog = PostCreationDialog(media_path=final_video_path, parent=self)
+        
+        # Store the selected services in the dialog for later use
+        if hasattr(dialog, 'selected_video_services'):
+            dialog.selected_video_services = selected_services
+        else:
+            # Add the attribute if it doesn't exist
+            dialog.selected_video_services = selected_services
+        
         dialog.post_created.connect(self._on_post_created)
         
         if dialog.exec():
@@ -442,7 +485,7 @@ class AppController(QWidget):
         from .dialogs.create_media_dialog import CreateMediaDialog
         
         # Open create media dialog with the specified type
-        dialog = CreateMediaDialog(media_type, self)
+        dialog = CreateMediaDialog(media_type=media_type, parent=self)
         if dialog.exec():
             self.logger.info(f"AI {media_type} creation completed")
         else:
@@ -521,7 +564,7 @@ class AppController(QWidget):
         self.logger.info(f"Edit campaign requested: {campaign_data}")
         
         # Open scheduling dialog for campaign editing
-        dialog = ScheduleDialog(campaign_data, self)
+        dialog = ScheduleDialog(self, campaign_data)
         if dialog.exec():
             self.logger.info("Campaign editing completed")
             # Refresh campaign manager
@@ -696,6 +739,11 @@ class AppController(QWidget):
         # Open knowledge management system
         dialog = KnowledgeManagementDialog(self)
         dialog.exec()
+    
+    def _on_media_uploaded(self):
+        """Handle media uploaded signal."""
+        self.logger.info("Media uploaded signal received")
+        self.show_library()
     
     def closeEvent(self, event):
         """Handle close event."""

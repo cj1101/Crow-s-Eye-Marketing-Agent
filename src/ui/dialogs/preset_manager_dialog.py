@@ -28,7 +28,7 @@ class PresetManagerDialog(BaseDialog):
         self.logger = logging.getLogger(self.__class__.__name__)
         
         # Initialize preset manager
-        self.preset_manager = PresetManager()
+        self.preset_manager = PresetManager("presets.json")
         
         # UI components
         self.preset_list = None

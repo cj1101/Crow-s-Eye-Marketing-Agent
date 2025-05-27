@@ -574,7 +574,7 @@ class LibraryWindow(BaseMainWindow):
             try:
                 import shutil
                 uploaded = 0
-                media_library_dir = "media_library"
+                media_library_dir = "data/media"
                 
                 # Ensure media_library directory exists
                 os.makedirs(media_library_dir, exist_ok=True)
