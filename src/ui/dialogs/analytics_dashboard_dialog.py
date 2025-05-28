@@ -19,6 +19,11 @@ from PySide6.QtCharts import QChart, QChartView, QBarSeries, QBarSet, QValueAxis
 
 from ..base_dialog import BaseDialog
 from ...handlers.analytics_handler import AnalyticsHandler
+from ...utils.subscription_utils import (
+    check_feature_access_with_dialog, check_usage_limit_with_dialog,
+    requires_feature_qt, requires_usage_qt, show_upgrade_dialog
+)
+from ...features.subscription.access_control import Feature
 
 
 class AnalyticsWorker(QThread):
@@ -82,6 +87,12 @@ class AnalyticsDashboardDialog(BaseDialog):
         super().__init__(parent)
         self.setWindowTitle("Post Performance Analytics")
         self.setMinimumSize(900, 700)
+        
+        # Check permissions before initializing
+        if not check_feature_access_with_dialog(Feature.PERFORMANCE_ANALYTICS, parent):
+            self.reject()
+            return
+            
         self.analytics_handler = AnalyticsHandler()
         self.worker = None
         self._setup_ui()

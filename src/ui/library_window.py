@@ -17,6 +17,11 @@ from .base_window import BaseMainWindow
 from .components.gallery_item_widget import GalleryItemWidget
 from .components.media_thumbnail_widget import MediaThumbnailWidget
 from ..handlers.library_handler import LibraryManager
+from ..utils.subscription_utils import (
+    check_feature_access_with_dialog, check_usage_limit_with_dialog,
+    requires_feature_qt, requires_usage_qt, show_upgrade_dialog
+)
+from ..features.subscription.access_control import Feature
 
 class LibraryWindow(BaseMainWindow):
     """Main window for the media library with complete selection → gallery workflow."""
@@ -374,6 +379,7 @@ class LibraryWindow(BaseMainWindow):
         self._update_selection_display()
         self.tab_widget.setCurrentIndex(0)  # Switch to Media tab
     
+    @requires_feature_qt(Feature.SMART_GALLERY_GENERATOR)
     def _on_generate_gallery(self):
         """Generate gallery with AI."""
         from .dialogs.gallery_generation_dialog import GalleryGenerationDialog

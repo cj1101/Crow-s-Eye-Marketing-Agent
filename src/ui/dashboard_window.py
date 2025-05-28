@@ -15,6 +15,7 @@ from PySide6.QtGui import QFont, QPixmap, QIcon
 
 from .base_window import BaseMainWindow
 from ..models.app_state import AppState
+from ..models.user import UserManager, User
 from ..handlers.media_handler import MediaHandler
 from ..handlers.library_handler import LibraryManager
 from ..i18n import i18n
@@ -133,6 +134,10 @@ class DashboardWindow(BaseMainWindow):
         self.library_manager = library_manager
         self.logger = logging.getLogger(self.__class__.__name__)
         
+        # Initialize user manager
+        self.user_manager = UserManager()
+        self.current_user = self.user_manager.get_current_user()
+        
         # Connect to i18n system
         self.i18n = i18n
         self.i18n.language_changed.connect(self.retranslateUi)
@@ -142,6 +147,7 @@ class DashboardWindow(BaseMainWindow):
         
         self._setup_ui()
         self._connect_signals()
+        self._update_login_button()
         
         self.logger.info("Dashboard window initialized")
     
@@ -253,6 +259,26 @@ class DashboardWindow(BaseMainWindow):
                 
         self.language_combo.currentIndexChanged.connect(self._on_language_changed)
         header_layout.addWidget(self.language_combo)
+        
+        # Login/User button
+        self.login_button = QPushButton(self.tr("🔐 Login"))
+        self.login_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 16px;
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        self.login_button.clicked.connect(self._on_login_clicked)
+        header_layout.addWidget(self.login_button)
         
         # Home button (always visible)
         self.home_button = QPushButton(self.tr("🏠 Home"))
@@ -501,12 +527,169 @@ The app will automatically use your keys if provided!"""
         self.raise_()
         self.activateWindow()
     
+    def _on_login_clicked(self):
+        """Handle login button click."""
+        if self.current_user:
+            # User is logged in, show user menu or logout
+            self._show_user_menu()
+        else:
+            # User is not logged in, show login dialog
+            self._show_login_dialog()
+    
+    def _show_login_dialog(self):
+        """Show the login dialog."""
+        try:
+            from .dialogs.user_auth_dialog import UserAuthDialog
+            
+            dialog = UserAuthDialog(self)
+            dialog.login_successful.connect(self._on_user_logged_in_firebase)
+            dialog.exec()
+            
+        except Exception as e:
+            self.logger.error(f"Error showing login dialog: {e}")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Failed to open login dialog: {str(e)}")
+    
+    def _show_user_menu(self):
+        """Show user menu with logout option."""
+        from PySide6.QtWidgets import QMenu, QMessageBox
+        
+        menu = QMenu(self)
+        
+        # User info action
+        if self.current_user:
+            user_info_action = menu.addAction(f"👤 {self.current_user.username}")
+            user_info_action.setEnabled(False)  # Just for display
+            
+            subscription_action = menu.addAction(f"💎 {self.current_user.get_subscription_status()}")
+            subscription_action.setEnabled(False)  # Just for display
+            
+            menu.addSeparator()
+        
+        # Account settings action
+        settings_action = menu.addAction("⚙️ Account Settings")
+        settings_action.triggered.connect(self._show_account_settings)
+        
+        # Logout action
+        logout_action = menu.addAction("🚪 Logout")
+        logout_action.triggered.connect(self._logout_user)
+        
+        # Show menu at button position
+        menu.exec(self.login_button.mapToGlobal(self.login_button.rect().bottomLeft()))
+    
+    def _on_user_logged_in(self, user: User):
+        """Handle successful user login."""
+        self.current_user = user
+        self._update_login_button()
+        self.logger.info(f"User logged in: {user.email}")
+        
+        # Show welcome message
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, 
+            "Welcome!", 
+            f"Welcome back, {user.username}!\n\nSubscription: {user.get_subscription_status()}"
+        )
+    
+    def _on_user_logged_in_firebase(self, login_data: dict):
+        """Handle successful Firebase login."""
+        # Get the current user from user_manager after Firebase login
+        user = self.user_manager.get_current_user()
+        if user:
+            self.current_user = user
+            self._update_login_button()
+            self.logger.info(f"User logged in via Firebase: {login_data.get('email', 'unknown')}")
+            
+            # Show welcome message
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.information(
+                self, 
+                "Welcome!", 
+                f"Welcome back, {user.username}!\n\nSubscription: {user.get_subscription_status()}"
+            )
+        else:
+            self.logger.error("Firebase login successful but no user data available")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.warning(self, "Login Error", "Login was successful but failed to load user data.")
+    
+    def _logout_user(self):
+        """Logout the current user."""
+        if self.current_user:
+            from PySide6.QtWidgets import QMessageBox
+            
+            reply = QMessageBox.question(
+                self,
+                "Logout",
+                f"Are you sure you want to logout {self.current_user.username}?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
+            )
+            
+            if reply == QMessageBox.StandardButton.Yes:
+                self.user_manager.logout()
+                self.current_user = None
+                self._update_login_button()
+                self.logger.info("User logged out")
+                
+                QMessageBox.information(self, "Logged Out", "You have been successfully logged out.")
+    
+    def _show_account_settings(self):
+        """Show account settings dialog."""
+        from PySide6.QtWidgets import QMessageBox
+        QMessageBox.information(
+            self, 
+            "Account Settings", 
+            "Account settings feature coming soon!\n\nFor now, you can manage your subscription and settings through the Crow's Eye website."
+        )
+    
+    def _update_login_button(self):
+        """Update the login button text and style based on user state."""
+        if self.current_user:
+            # User is logged in
+            self.login_button.setText(f"👤 {self.current_user.username}")
+            self.login_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #007bff;
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin-right: 10px;
+                }
+                QPushButton:hover {
+                    background-color: #0056b3;
+                }
+            """)
+        else:
+            # User is not logged in
+            self.login_button.setText(self.tr("🔐 Login"))
+            self.login_button.setStyleSheet("""
+                QPushButton {
+                    background-color: #28a745;
+                    color: white;
+                    border: none;
+                    padding: 12px 24px;
+                    border-radius: 8px;
+                    font-size: 16px;
+                    font-weight: bold;
+                    margin-right: 10px;
+                }
+                QPushButton:hover {
+                    background-color: #218838;
+                }
+            """)
+
     def retranslateUi(self):
         """Update UI text for internationalization."""
         self.setWindowTitle(self.tr("Crow's Eye Marketing Agent"))
         self.title_label.setText(self.tr("Crow's Eye Marketing Agent"))
         self.home_button.setText(self.tr("🏠 Home"))
         self.subtitle_label.setText(self.tr("Choose an action to get started"))
+        
+        # Update login button
+        self._update_login_button()
         
         # Update tiles by recreating them with new translations
         self._update_tiles_translations() 

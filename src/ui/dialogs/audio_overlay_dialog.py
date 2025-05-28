@@ -16,6 +16,11 @@ from PySide6.QtWidgets import (
 
 from ..base_dialog import BaseDialog
 from ...features.media_processing.video_handler import VideoHandler
+from ...utils.subscription_utils import (
+    check_feature_access_with_dialog, check_usage_limit_with_dialog,
+    requires_feature_qt, requires_usage_qt, show_upgrade_dialog
+)
+from ...features.subscription.access_control import Feature
 
 
 class AudioOverlayWorker(QThread):
@@ -345,6 +350,10 @@ class AudioOverlayDialog(BaseDialog):
     
     def _add_audio_overlay(self):
         """Add audio overlay to the video."""
+        # Check permissions first
+        if not check_feature_access_with_dialog(Feature.AUDIO_IMPORTER, self):
+            return
+            
         if not self.video_path or not self.audio_path:
             QMessageBox.warning(self, "Warning", "Please select both video and audio files.")
             return

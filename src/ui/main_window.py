@@ -43,6 +43,12 @@ from .dialogs.story_assistant_dialog import StoryAssistantDialog
 from .dialogs.thumbnail_selector_dialog import ThumbnailSelectorDialog
 from .dialogs.audio_overlay_dialog import AudioOverlayDialog
 from .dialogs.custom_media_upload_dialog import CustomMediaUploadDialog
+from .widgets.subscription_status_widget import SubscriptionStatusWidget
+from ..utils.subscription_utils import (
+    check_feature_access_with_dialog, check_usage_limit_with_dialog,
+    requires_feature_qt, requires_usage_qt, show_upgrade_dialog
+)
+from ..features.subscription.access_control import Feature
 
 class MainWindow(BaseMainWindow):
     """Main application window."""
@@ -133,6 +139,10 @@ class MainWindow(BaseMainWindow):
         # Header section
         self.header_section = HeaderSection()
         main_layout.addWidget(self.header_section)
+        
+        # Subscription status widget
+        self.subscription_widget = SubscriptionStatusWidget()
+        main_layout.addWidget(self.subscription_widget)
         
         # Add tabs for different features
         self.tab_widget = QSplitter(Qt.Orientation.Vertical)
@@ -542,6 +552,7 @@ class MainWindow(BaseMainWindow):
             self.logger.exception(f"Error handling login success: {e}")
             self._show_error(self.tr("Login Error"), self.tr("An error occurred after login: {error_message}").format(error_message=str(e)))
     
+    @requires_feature_qt(Feature.MEDIA_LIBRARY)
     def _on_open_library(self):
         """Open the library window with media and Crow's Eye functionality."""
         try:
@@ -630,6 +641,8 @@ class MainWindow(BaseMainWindow):
         if hasattr(self.app_state, 'context_files'):
             self.app_state.context_files = file_paths
         
+    @requires_feature_qt(Feature.BASIC_POSTING)
+    @requires_usage_qt('posts', 1)
     def _on_generate(self):
         """Handle generate button click."""
         self.logger.info("Generate button clicked")
@@ -1199,6 +1212,7 @@ class MainWindow(BaseMainWindow):
             self.logger.error(f"Error loading media from library: {e}")
             self._show_error("Load Error", f"Could not load media for post generation: {str(e)}")
     
+    @requires_feature_qt(Feature.HIGHLIGHT_REEL_GENERATOR)
     def _on_open_highlight_reel(self):
         """Open the highlight reel generator dialog."""
         try:
@@ -1208,6 +1222,7 @@ class MainWindow(BaseMainWindow):
             self.logger.error(f"Error opening highlight reel dialog: {e}")
             self._show_error("Highlight Reel Error", f"Could not open highlight reel generator: {str(e)}")
     
+    @requires_feature_qt(Feature.STORY_ASSISTANT)
     def _on_open_story_assistant(self):
         """Open the story assistant dialog."""
         try:
@@ -1226,6 +1241,8 @@ class MainWindow(BaseMainWindow):
             self.logger.error(f"Error opening thumbnail selector dialog: {e}")
             self._show_error("Thumbnail Selector Error", f"Could not open thumbnail selector: {str(e)}")
     
+    @requires_feature_qt(Feature.VEO_VIDEO_GENERATOR)
+    @requires_usage_qt('videos', 1)
     def _on_open_veo_generator(self):
         """Open the Veo video generator."""
         try:
@@ -1253,6 +1270,7 @@ class MainWindow(BaseMainWindow):
             self.logger.error(f"Error opening Veo generator: {e}")
             self._show_error("Veo Generator Error", f"Could not open Veo video generator: {str(e)}")
     
+    @requires_feature_qt(Feature.AUDIO_IMPORTER)
     def _on_open_audio_overlay(self):
         """Open the audio overlay dialog."""
         try:
@@ -1262,6 +1280,7 @@ class MainWindow(BaseMainWindow):
             self.logger.error(f"Error opening audio overlay dialog: {e}")
             self._show_error("Audio Overlay Error", f"Could not open audio overlay: {str(e)}")
     
+    @requires_feature_qt(Feature.PERFORMANCE_ANALYTICS)
     def _on_open_analytics_dashboard(self):
         """Open the analytics dashboard dialog."""
         try:

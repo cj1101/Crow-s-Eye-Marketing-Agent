@@ -1,348 +1,367 @@
 """
-Login dialog for Meta API authentication.
+Login Dialog for Crow's Eye Marketing Platform.
+Provides user authentication and registration functionality.
 """
-import os
 import logging
-from typing import Optional, Dict, Any, List
+from typing import Optional
 
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QComboBox, QMessageBox, QFrame, QStackedWidget, QTextEdit,
-    QLineEdit, QFormLayout, QGroupBox, QRadioButton, QButtonGroup,
-    QWidget
+    QDialog, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QLabel, QLineEdit, QPushButton, QTabWidget, QWidget,
+    QMessageBox, QCheckBox, QFrame
 )
-from PySide6.QtCore import Qt, Signal, QEvent
-from PySide6.QtGui import QIcon, QFont
-from PySide6.QtWidgets import QApplication
+from PySide6.QtCore import Qt, Signal
+from PySide6.QtGui import QFont, QPixmap
 
-from ...features.authentication.auth_handler import auth_handler
-from ...utils.api_key_manager import key_manager
-from ..base_dialog import BaseDialog
+from ...models.user import UserManager, User
 
-logger = logging.getLogger(__name__)
-
-class LoginDialog(BaseDialog):
-    """Dialog for Meta API authentication."""
+class LoginDialog(QDialog):
+    """Dialog for user login and registration."""
     
-    login_successful = Signal(dict)
+    # Signals
+    user_logged_in = Signal(object)  # Emits User object when login successful
     
     def __init__(self, parent=None):
-        """Initialize the login dialog."""
         super().__init__(parent)
-        self.setWindowTitle(self.tr("Meta API Login"))
-        self.setMinimumWidth(600)
-        self.setMinimumHeight(500)
+        self.user_manager = UserManager()
+        self.logger = logging.getLogger(self.__class__.__name__)
         
-        self.business_accounts = []
-        self.selected_account_id = None
+        self.setWindowTitle("Crow's Eye - Login")
+        self.setFixedSize(450, 600)
+        self.setModal(True)
         
-        # Initialize UI elements that we'll need to access in retranslateUi
-        self.title_label = QLabel(self.tr("Meta API Authentication"), self)
-        self.stacked_widget = QStackedWidget(self)
-        self.back_button = QPushButton(self.tr("Back"), self)
-        self.next_button = QPushButton(self.tr("Next"), self)
-        self.close_button = QPushButton(self.tr("Close"), self)
-        self.api_key_info_label = QLabel("", self)
-        self.api_key_app_id_label = QLabel("", self)
-        self.app_id_input = QLineEdit(self)
-        self.api_key_app_secret_label = QLabel("", self)
-        self.app_secret_input = QLineEdit(self)
-        self.api_key_access_token_label = QLabel("", self)
-        self.access_token_input = QLineEdit(self)
-        self.api_key_status = QLabel("", self)
-        self.instructions_button = QPushButton("", self)
-        self.biz_account_info_label = QLabel("", self)
-        self.account_combo = QComboBox(self)
-        self.account_status = QLabel("", self)
-        self.refresh_accounts_button = QPushButton("", self)
-        self.instructions_title_label = QLabel("", self)
-        self.instructions_text = QTextEdit(self)
-
         self._setup_ui()
-        self.retranslateUi()
+        self._connect_signals()
         
-        # Check for application translator and current language
-        app = QApplication.instance()
-        if app:
-            # Get the current language from application property
-            current_language = app.property("current_language")
-            if current_language:
-                self.logger.info(f"Dialog created with current language: {current_language}")
-            
-        self._check_api_keys() # Sets initial status messages
-    
     def _setup_ui(self):
-        """Set up the dialog UI."""
+        """Set up the login dialog UI."""
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(30, 30, 30, 30)
+        layout.setSpacing(20)
+        
+        # Header
+        self._create_header(layout)
+        
+        # Tab widget for Login/Register
+        self.tab_widget = QTabWidget()
+        self.tab_widget.setStyleSheet("""
+            QTabWidget::pane {
+                border: 2px solid #e0e0e0;
+                border-radius: 8px;
+                background-color: #ffffff;
+            }
+            QTabBar::tab {
+                background-color: #f5f5f5;
+                color: #333333;
+                padding: 12px 24px;
+                margin-right: 2px;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                font-weight: bold;
+            }
+            QTabBar::tab:selected {
+                background-color: #007bff;
+                color: white;
+            }
+            QTabBar::tab:hover {
+                background-color: #e0e0e0;
+            }
+        """)
+        
+        # Login tab
+        self._create_login_tab()
+        
+        # Register tab
+        self._create_register_tab()
+        
+        layout.addWidget(self.tab_widget)
+        
+        # Footer
+        self._create_footer(layout)
+        
+        # Apply styling
+        self.setStyleSheet("""
+            QDialog {
+                background-color: #ffffff;
+            }
+            QLabel {
+                color: #333333;
+            }
+            QLineEdit {
+                padding: 12px;
+                border: 2px solid #e0e0e0;
+                border-radius: 6px;
+                font-size: 14px;
+                background-color: #ffffff;
+            }
+            QLineEdit:focus {
+                border-color: #007bff;
+            }
+            QPushButton {
+                padding: 12px 24px;
+                border: none;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+        """)
+    
+    def _create_header(self, layout: QVBoxLayout):
+        """Create the header section."""
+        # Logo/Title
+        title_label = QLabel("🐦‍⬛ Crow's Eye")
+        title_font = QFont()
+        title_font.setPointSize(24)
+        title_font.setBold(True)
+        title_label.setFont(title_font)
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("color: #007bff; margin-bottom: 10px;")
+        layout.addWidget(title_label)
+        
+        # Subtitle
+        subtitle_label = QLabel("Marketing Platform")
+        subtitle_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        subtitle_label.setStyleSheet("color: #666666; font-size: 16px; margin-bottom: 20px;")
+        layout.addWidget(subtitle_label)
+        
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet("color: #e0e0e0;")
+        layout.addWidget(separator)
+    
+    def _create_login_tab(self):
+        """Create the login tab."""
+        login_widget = QWidget()
+        layout = QVBoxLayout(login_widget)
+        layout.setContentsMargins(20, 20, 20, 20)
         layout.setSpacing(15)
         
-        self.title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.title_label.setStyleSheet("font-size: 18px; font-weight: bold; margin-bottom: 10px;")
-        layout.addWidget(self.title_label)
-        
-        self.stacked_widget = QStackedWidget()
-        layout.addWidget(self.stacked_widget)
-        
-        self._create_api_key_page()
-        self._create_business_account_page()
-        self._create_instructions_page()
-        
-        self.stacked_widget.setCurrentIndex(0)
-        
-        button_layout = QHBoxLayout()
-        
-        self.back_button.clicked.connect(self._on_back_clicked)
-        self.back_button.setEnabled(False)
-        button_layout.addWidget(self.back_button)
-        
-        button_layout.addStretch()
-        
-        self.close_button.clicked.connect(self.reject)
-        button_layout.addWidget(self.close_button)
-        
-        self.next_button.clicked.connect(self._on_next_clicked)
-        button_layout.addWidget(self.next_button)
-        
-        layout.addLayout(button_layout)
-    
-    def _create_api_key_page(self):
-        """Create the API key input page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
-        
-        self.api_key_info_label.setWordWrap(True)
-        layout.addWidget(self.api_key_info_label)
-        
+        # Form
         form_layout = QFormLayout()
-        form_layout.setVerticalSpacing(10)
+        form_layout.setSpacing(15)
         
-        form_layout.addRow(self.api_key_app_id_label, self.app_id_input)
+        # Email field
+        self.login_email = QLineEdit()
+        self.login_email.setPlaceholderText("Enter your email address")
+        form_layout.addRow("Email:", self.login_email)
         
-        self.app_secret_input.setEchoMode(QLineEdit.EchoMode.Password)
-        form_layout.addRow(self.api_key_app_secret_label, self.app_secret_input)
-        
-        form_layout.addRow(self.api_key_access_token_label, self.access_token_input)
+        # Password field
+        self.login_password = QLineEdit()
+        self.login_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.login_password.setPlaceholderText("Enter your password")
+        form_layout.addRow("Password:", self.login_password)
         
         layout.addLayout(form_layout)
         
-        self.api_key_status.setStyleSheet("color: red;") # Default, can be overridden
-        self.api_key_status.setWordWrap(True)
-        layout.addWidget(self.api_key_status)
+        # Remember me checkbox
+        self.remember_me = QCheckBox("Remember me")
+        self.remember_me.setStyleSheet("color: #666666;")
+        layout.addWidget(self.remember_me)
         
-        self.instructions_button.clicked.connect(self._on_instructions_clicked)
-        layout.addWidget(self.instructions_button)
+        # Login button
+        self.login_button = QPushButton("Login")
+        self.login_button.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+            QPushButton:pressed {
+                background-color: #004085;
+            }
+        """)
+        layout.addWidget(self.login_button)
+        
+        # Forgot password link
+        forgot_label = QLabel('<a href="#" style="color: #007bff; text-decoration: none;">Forgot your password?</a>')
+        forgot_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        forgot_label.setOpenExternalLinks(False)
+        layout.addWidget(forgot_label)
         
         layout.addStretch()
-        self.stacked_widget.addWidget(page)
+        
+        self.tab_widget.addTab(login_widget, "Login")
     
-    def _create_business_account_page(self):
-        """Create the business account selection page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
+    def _create_register_tab(self):
+        """Create the register tab."""
+        register_widget = QWidget()
+        layout = QVBoxLayout(register_widget)
+        layout.setContentsMargins(20, 20, 20, 20)
+        layout.setSpacing(15)
         
-        self.biz_account_info_label.setWordWrap(True)
-        layout.addWidget(self.biz_account_info_label)
+        # Form
+        form_layout = QFormLayout()
+        form_layout.setSpacing(15)
         
-        self.account_combo.setMinimumHeight(30)
-        layout.addWidget(self.account_combo)
+        # Username field
+        self.register_username = QLineEdit()
+        self.register_username.setPlaceholderText("Choose a username")
+        form_layout.addRow("Username:", self.register_username)
         
-        self.account_status.setStyleSheet("color: #444;") # Default
-        self.account_status.setWordWrap(True)
-        layout.addWidget(self.account_status)
+        # Email field
+        self.register_email = QLineEdit()
+        self.register_email.setPlaceholderText("Enter your email address")
+        form_layout.addRow("Email:", self.register_email)
         
-        self.refresh_accounts_button.clicked.connect(self._load_business_accounts)
-        layout.addWidget(self.refresh_accounts_button)
+        # Password field
+        self.register_password = QLineEdit()
+        self.register_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.register_password.setPlaceholderText("Create a password")
+        form_layout.addRow("Password:", self.register_password)
+        
+        # Confirm password field
+        self.register_confirm_password = QLineEdit()
+        self.register_confirm_password.setEchoMode(QLineEdit.EchoMode.Password)
+        self.register_confirm_password.setPlaceholderText("Confirm your password")
+        form_layout.addRow("Confirm Password:", self.register_confirm_password)
+        
+        layout.addLayout(form_layout)
+        
+        # Terms checkbox
+        self.accept_terms = QCheckBox("I agree to the Terms of Service and Privacy Policy")
+        self.accept_terms.setStyleSheet("color: #666666;")
+        layout.addWidget(self.accept_terms)
+        
+        # Register button
+        self.register_button = QPushButton("Create Account")
+        self.register_button.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:pressed {
+                background-color: #1e7e34;
+            }
+        """)
+        layout.addWidget(self.register_button)
         
         layout.addStretch()
-        self.stacked_widget.addWidget(page)
+        
+        self.tab_widget.addTab(register_widget, "Register")
     
-    def _create_instructions_page(self):
-        """Create the instructions page."""
-        page = QWidget()
-        layout = QVBoxLayout(page)
+    def _create_footer(self, layout: QVBoxLayout):
+        """Create the footer section."""
+        # Separator
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.HLine)
+        separator.setStyleSheet("color: #e0e0e0;")
+        layout.addWidget(separator)
         
-        self.instructions_title_label.setStyleSheet("font-size: 16px; font-weight: bold;")
-        layout.addWidget(self.instructions_title_label)
+        # Footer buttons
+        footer_layout = QHBoxLayout()
         
-        self.instructions_text.setReadOnly(True)
-        layout.addWidget(self.instructions_text)
+        # Continue as guest button
+        self.guest_button = QPushButton("Continue as Guest")
+        self.guest_button.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        footer_layout.addWidget(self.guest_button)
         
-        self.stacked_widget.addWidget(page)
+        footer_layout.addStretch()
+        
+        # Cancel button
+        self.cancel_button = QPushButton("Cancel")
+        self.cancel_button.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        footer_layout.addWidget(self.cancel_button)
+        
+        layout.addLayout(footer_layout)
     
-    def _check_api_keys(self):
-        """Check if API keys are set in environment variables."""
-        has_keys = key_manager.has_required_env_variables()
+    def _connect_signals(self):
+        """Connect signals to slots."""
+        self.login_button.clicked.connect(self._on_login_clicked)
+        self.register_button.clicked.connect(self._on_register_clicked)
+        self.guest_button.clicked.connect(self._on_guest_clicked)
+        self.cancel_button.clicked.connect(self.reject)
         
-        if has_keys:
-            creds = key_manager.get_api_credentials_from_env()
-            self.app_id_input.setText(creds.get('app_id', ''))
-            self.app_secret_input.setText(creds.get('app_secret', ''))
-            self.access_token_input.setText(creds.get('access_token', ''))
-            self.api_key_status.setText(self.tr("API keys found in environment variables")) # Use tr
-            self.api_key_status.setStyleSheet("color: green;")
-        else:
-            self.api_key_status.setText(self.tr("No API keys found. Please enter your credentials or set environment variables.")) # Use tr
-            self.api_key_status.setStyleSheet("color: #666;")
+        # Enter key handling
+        self.login_password.returnPressed.connect(self._on_login_clicked)
+        self.register_confirm_password.returnPressed.connect(self._on_register_clicked)
     
-    def _load_business_accounts(self):
-        """Load and display business accounts."""
-        self.account_status.setText(self.tr("Loading business accounts...")) # Use tr
-        self.account_status.setStyleSheet("color: #444;")
+    def _on_login_clicked(self):
+        """Handle login button click."""
+        email = self.login_email.text().strip()
+        password = self.login_password.text()
         
-        self.account_combo.clear()
-        accounts = auth_handler.get_business_accounts()
-        
-        if not accounts:
-            self.account_status.setText(self.tr("No business accounts found or error fetching accounts.")) # Use tr
-            self.account_status.setStyleSheet("color: red;")
+        if not email or not password:
+            QMessageBox.warning(self, "Login Error", "Please enter both email and password.")
             return
         
-        self.business_accounts = accounts
-        for account in accounts:
-            account_name = account.get('name', self.tr('Unknown')) # Use tr
-            account_category = account.get('category', '')
-            display_text = f"{account_name} ({account_category})"
-            self.account_combo.addItem(display_text, account.get('id'))
-        
-        self.account_status.setText(self.tr("Found {count} business account(s)").format(count=len(accounts))) # Use tr
-        self.account_status.setStyleSheet("color: green;")
-        
-        if accounts:
-            self.next_button.setEnabled(True)
-            self.selected_account_id = accounts[0].get('id')
-            self.account_combo.currentIndexChanged.connect(self._on_account_selected)
+        try:
+            if self.user_manager.authenticate_user(email, password):
+                user = self.user_manager.get_current_user()
+                if user:
+                    self.logger.info(f"User logged in successfully: {email}")
+                    self.user_logged_in.emit(user)
+                    self.accept()
+                else:
+                    QMessageBox.critical(self, "Login Error", "Authentication succeeded but failed to load user data.")
+            else:
+                QMessageBox.warning(self, "Login Failed", "Invalid email or password. Please try again.")
+                
+        except Exception as e:
+            self.logger.error(f"Login error: {e}")
+            QMessageBox.critical(self, "Login Error", f"An error occurred during login: {str(e)}")
     
-    def _on_account_selected(self, index):
-        """Handle account selection."""
-        if index >= 0 and index < len(self.business_accounts):
-            self.selected_account_id = self.business_accounts[index].get('id')
-    
-    def _on_back_clicked(self):
-        """Handle back button click."""
-        current_index = self.stacked_widget.currentIndex()
+    def _on_register_clicked(self):
+        """Handle register button click."""
+        username = self.register_username.text().strip()
+        email = self.register_email.text().strip()
+        password = self.register_password.text()
+        confirm_password = self.register_confirm_password.text()
         
-        if current_index > 0:
-            self.stacked_widget.setCurrentIndex(current_index - 1)
-            
-            # Update button states
-            self.next_button.setEnabled(True)
-            if self.stacked_widget.currentIndex() == 0:
-                self.back_button.setEnabled(False)
-    
-    def _on_next_clicked(self):
-        """Handle next button click."""
-        current_index = self.stacked_widget.currentIndex()
+        # Validation
+        if not all([username, email, password, confirm_password]):
+            QMessageBox.warning(self, "Registration Error", "Please fill in all fields.")
+            return
         
-        if current_index == 0:  # API key page
-            app_id = self.app_id_input.text().strip()
-            app_secret = self.app_secret_input.text().strip()
-            access_token = self.access_token_input.text().strip()
-            
-            if not (app_id and app_secret and access_token):
-                self.api_key_status.setText(self.tr("Please enter all required credentials.")) # Use tr
-                self.api_key_status.setStyleSheet("color: red;")
-                return
-            
-            key_manager.set_api_key_to_env(key_manager.ENV_VAR_APP_ID, app_id)
-            key_manager.set_api_key_to_env(key_manager.ENV_VAR_APP_SECRET, app_secret)
-            key_manager.set_api_key_to_env(key_manager.ENV_VAR_ACCESS_TOKEN, access_token)
-            key_manager.update_credentials_from_env()
-            
-            self.stacked_widget.setCurrentIndex(1)
-            self.back_button.setEnabled(True)
-            self._load_business_accounts()
-            
-        elif current_index == 1:  # Business account page
-            if not self.selected_account_id:
-                self.account_status.setText(self.tr("Please select a business account.")) # Use tr
-                self.account_status.setStyleSheet("color: red;")
-                return
-            
-            success = auth_handler.select_business_account(self.selected_account_id)
-            if success:
-                account = auth_handler.get_selected_account()
-                self.login_successful.emit(account)
+        if password != confirm_password:
+            QMessageBox.warning(self, "Registration Error", "Passwords do not match.")
+            return
+        
+        if len(password) < 6:
+            QMessageBox.warning(self, "Registration Error", "Password must be at least 6 characters long.")
+            return
+        
+        if not self.accept_terms.isChecked():
+            QMessageBox.warning(self, "Registration Error", "Please accept the Terms of Service and Privacy Policy.")
+            return
+        
+        try:
+            user = self.user_manager.create_user(email, username, password)
+            if user:
+                self.logger.info(f"User registered successfully: {email}")
+                QMessageBox.information(self, "Registration Successful", 
+                                      f"Account created successfully! You are now logged in as {username}.")
+                self.user_logged_in.emit(user)
                 self.accept()
             else:
-                self.account_status.setText(self.tr("Error selecting business account. Please try again.")) # Use tr
-                self.account_status.setStyleSheet("color: red;")
-        
-        elif current_index == 2:  # Instructions page
-            self.stacked_widget.setCurrentIndex(0)
-            self.back_button.setEnabled(False)
-        self.retranslateUi() # Ensure button text is updated
+                QMessageBox.warning(self, "Registration Failed", "Failed to create account. Email may already be in use.")
+                
+        except Exception as e:
+            self.logger.error(f"Registration error: {e}")
+            QMessageBox.critical(self, "Registration Error", f"An error occurred during registration: {str(e)}")
     
-    def _on_instructions_clicked(self):
-        """Show instructions page."""
-        self.stacked_widget.setCurrentIndex(2)
-        self.back_button.setEnabled(True)
-
-    def retranslateUi(self):
-        """Retranslate all UI elements in LoginDialog."""
-        self.title_label.setText(self.tr("Meta API Authentication"))
-
-        # API Key Page
-        self.api_key_info_label.setText(self.tr(
-            "Please enter your Meta API credentials. These are required to interact with Instagram and Facebook APIs. "
-            "You can usually find these in your Meta Developer Portal."
-        ))
-        self.api_key_app_id_label.setText(self.tr("App ID:"))
-        self.app_id_input.setPlaceholderText(self.tr("Enter your Meta App ID"))
-        self.api_key_app_secret_label.setText(self.tr("App Secret:"))
-        self.app_secret_input.setPlaceholderText(self.tr("Enter your Meta App Secret"))
-        self.api_key_access_token_label.setText(self.tr("Access Token:"))
-        self.access_token_input.setPlaceholderText(self.tr("Enter your Meta Access Token"))
-        self.instructions_button.setText(self.tr("How to get API keys"))
-        # Refresh status messages that might have been set before first translation
-        self._check_api_keys() 
-
-        # Business Account Page
-        self.biz_account_info_label.setText(self.tr(
-            "Select the Business Account and associated Instagram/Facebook page you want to use."
-        ))
-        self.refresh_accounts_button.setText(self.tr("Refresh Account List"))
-        # Refresh account list and its status messages
-        current_account_text_before_reload = self.account_combo.currentText() # if any items exist
-        self._load_business_accounts() # This will re-populate combo with tr() and set status
-        # Try to restore selection if possible based on text (imperfect)
-        if current_account_text_before_reload:
-            for i in range(self.account_combo.count()):
-                if self.account_combo.itemText(i) == current_account_text_before_reload:
-                    self.account_combo.setCurrentIndex(i)
-                    break
-
-        # Instructions Page
-        self.instructions_title_label.setText(self.tr("How to Get Meta API Keys"))
-        if hasattr(key_manager, 'get_instructions'): # Check if method exists
-            instructions_content = key_manager.get_instructions()
-            # If get_instructions returns a single string, it's fine.
-            # If it can return a translatable string or key, that logic would go here.
-            # For now, assuming it's a pre-formatted, non-translatable help text.
-            self.instructions_text.setText(instructions_content)
-        else:
-            self.instructions_text.setText(self.tr("Instructions on obtaining API keys are not available in this version."))
-
-        # Buttons
-        self.back_button.setText(self.tr("Back"))
-        self.close_button.setText(self.tr("Close"))
-        self.next_button.setText(self.tr("Next"))
-        
-        # Update window title for current page of stacked widget if necessary (e.g. Instructions)
-        current_idx = self.stacked_widget.currentIndex()
-        if current_idx == 2: # Assuming 2 is the instructions page
-             # Could add a specific title for this page to self.title_label if desired
-             pass
-
-        # Retranslate status messages
-        if hasattr(self, 'api_key_status'):
-            self.api_key_status.setText(self.tr(self.api_key_status.text()))
-        if hasattr(self, 'account_status'):
-            self.account_status.setText(self.tr(self.account_status.text()))
-        
-        # Retranslate page titles
-        if hasattr(self, 'api_key_page') and self.api_key_page:
-            self.api_key_page.setTitle(self.tr("API Key Input"))
-        if hasattr(self, 'business_account_page') and self.business_account_page:
-            self.business_account_page.setTitle(self.tr("Business Account Selection"))
-        if hasattr(self, 'instructions_page') and self.instructions_page:
-            self.instructions_page.setTitle(self.tr("Instructions")) 
+    def _on_guest_clicked(self):
+        """Handle continue as guest button click."""
+        self.logger.info("User chose to continue as guest")
+        self.reject()  # Close dialog without logging in 

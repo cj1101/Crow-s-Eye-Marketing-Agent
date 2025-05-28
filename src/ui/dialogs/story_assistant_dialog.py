@@ -16,6 +16,11 @@ from PySide6.QtWidgets import (
 
 from ..base_dialog import BaseDialog
 from ...features.media_processing.video_handler import VideoHandler
+from ...utils.subscription_utils import (
+    check_feature_access_with_dialog, check_usage_limit_with_dialog,
+    requires_feature_qt, requires_usage_qt, show_upgrade_dialog
+)
+from ...features.subscription.access_control import Feature
 
 
 class StoryAssistantWorker(QThread):
@@ -275,6 +280,12 @@ class StoryAssistantDialog(BaseDialog):
     
     def _create_story_clips(self):
         """Create the story clips."""
+        # Check permissions first
+        if not check_feature_access_with_dialog(Feature.STORY_ASSISTANT, self):
+            return
+        if not check_usage_limit_with_dialog('videos', 1, self):
+            return
+            
         if not self.video_path:
             QMessageBox.warning(self, "Warning", "Please select a video file first.")
             return
