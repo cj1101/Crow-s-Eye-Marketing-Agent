@@ -58,8 +58,13 @@ class PendingMessageWidget(QWidget):
         # Message info
         info_layout = QHBoxLayout()
         
-        # Source (Comment/DM)
-        source_label = QLabel(f"<b>{self.message_data['type']}:</b>")
+        # Platform icon and type
+        platform_icon = self.message_data.get('platform_icon', '💬')
+        platform_name = self.message_data.get('platform', 'Unknown')
+        message_type = self.message_data.get('message_type', 'Message')
+        
+        source_label = QLabel(f"<b>{platform_icon} {platform_name} {message_type}:</b>")
+        source_label.setStyleSheet("color: #4A90E2; font-weight: bold;")
         info_layout.addWidget(source_label)
         
         # From
@@ -68,6 +73,7 @@ class PendingMessageWidget(QWidget):
         
         # Time
         time_label = QLabel(f"Time: {self.message_data['time']}")
+        time_label.setStyleSheet("color: #666666;")
         info_layout.addWidget(time_label)
         
         # Add spacer

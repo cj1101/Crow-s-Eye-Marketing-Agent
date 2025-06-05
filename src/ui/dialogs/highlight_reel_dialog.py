@@ -11,7 +11,7 @@ from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtWidgets import (
     QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
     QLineEdit, QSpinBox, QTextEdit, QProgressBar, QFileDialog,
-    QGroupBox, QFormLayout, QMessageBox
+    QGroupBox, QFormLayout, QMessageBox, QWidget
 )
 
 from ..base_dialog import BaseDialog
@@ -119,8 +119,22 @@ class HighlightReelDialog(BaseDialog):
         self.duration_spinbox.setRange(5, 300)  # 5 seconds to 5 minutes
         self.duration_spinbox.setValue(30)
         self.duration_spinbox.setSuffix(" seconds")
-        self.duration_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px;")
-        settings_layout.addRow("Target Duration:", self.duration_spinbox)
+        self.duration_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px; font-size: 14px;")
+        
+        # Add helpful text showing the range
+        duration_help = QLabel("(5 seconds to 5 minutes)")
+        duration_help.setStyleSheet("color: #888888; font-size: 11px; font-style: italic;")
+        
+        duration_layout = QVBoxLayout()
+        duration_layout.addWidget(self.duration_spinbox)
+        duration_layout.addWidget(duration_help)
+        duration_layout.setContentsMargins(0, 0, 0, 0)
+        duration_layout.setSpacing(2)
+        
+        duration_widget = QWidget()
+        duration_widget.setLayout(duration_layout)
+        
+        settings_layout.addRow("Target Duration:", duration_widget)
         
         layout.addWidget(settings_group)
         

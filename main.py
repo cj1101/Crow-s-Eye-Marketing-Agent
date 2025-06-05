@@ -10,7 +10,9 @@ import os
 # Add the src directory to the Python path
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), 'src'))
 
-from src.core.app import main
+from crow_eye_api.main import app
 
+# This is the WSGI application that App Engine will use
 if __name__ == "__main__":
-    main() 
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8080) 

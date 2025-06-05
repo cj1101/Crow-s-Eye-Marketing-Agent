@@ -19,9 +19,10 @@ logger = logging.getLogger(__name__)
 class VeoHandler:
     """Handler for Veo video generation with shared API key support."""
     
-    def __init__(self):
+    def __init__(self, app_state=None):
         """Initialize the Veo handler."""
         self.logger = logging.getLogger(self.__class__.__name__)
+        self.app_state = app_state
         self.client = None
         self._initialize_client()
     
@@ -86,7 +87,7 @@ class VeoHandler:
             # Poll operation until completion
             import time
             while not operation.done:
-                time.sleep(10)
+                time.sleep(20)
                 operation = self.client.operations.get(operation)
             
             if operation.result and operation.result.generated_videos:
