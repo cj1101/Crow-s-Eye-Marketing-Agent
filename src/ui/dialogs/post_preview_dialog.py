@@ -1,454 +1,488 @@
 """
-Post Preview Dialog - Shows the complete post with image, caption, and posting options.
+Post Preview Dialog - Preview finished posts with publishing options.
 """
-
 import os
 import logging
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List
+from datetime import datetime
 
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QScrollArea,
-    QGroupBox, QCheckBox, QMessageBox, QFrame, QSizePolicy
+    QDialog, QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, 
+    QFrame, QScrollArea, QGroupBox, QCheckBox, QTextEdit, QSplitter, QMessageBox, QWidget
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap, QFont
 
-from ..components.adjustable_button import AdjustableButton
+from ..base_dialog import BaseDialog
 
-class PostPreviewDialog(QDialog):
-    """Dialog showing complete post preview with image, caption, and posting options."""
+class PostPreviewDialog(BaseDialog):
+    """Dialog for previewing finished posts with publishing options."""
     
     # Signals
-    post_now = Signal(dict)  # Post immediately
-    add_to_queue = Signal(dict)  # Add to schedule queue
-    edit_post = Signal(dict)  # Edit post
-    delete_post = Signal(dict)  # Delete post
+    post_now_requested = Signal(dict)  # post_data with platforms
+    add_to_campaign_requested = Signal(dict)  # post_data with platforms
+    schedule_post_requested = Signal(dict)  # post_data with platforms
+    edit_post_requested = Signal(dict)  # post_data
     
-    def __init__(self, parent=None, post_data: Optional[Dict[str, Any]] = None, media_handler=None):
+    def __init__(self, post_data: Dict[str, Any], parent=None):
         super().__init__(parent)
-        self.post_data = post_data or {}
-        self.media_handler = media_handler
         self.logger = logging.getLogger(self.__class__.__name__)
         
+        self.post_data = post_data
+        self.media_path = post_data.get("path", "")
+        self.is_video = self._detect_video_type()
+        
+        # Platform compatibility data with aspect ratio requirements
+        self.platform_media_requirements = {
+            'instagram': {
+                'photos': True, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['1:1', '4:5', '9:16'], 'preferred': '1:1'
+            },
+            'facebook': {
+                'photos': True, 'videos': True, 'text_only': True,
+                'aspect_ratios': ['16:9', '1:1', '4:5'], 'preferred': '16:9'
+            },
+            'tiktok': {
+                'photos': False, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['9:16'], 'preferred': '9:16'
+            },
+            'youtube': {
+                'photos': False, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['16:9'], 'preferred': '16:9'
+            },
+            'pinterest': {
+                'photos': True, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['2:3', '1:1', '3:4'], 'preferred': '2:3'
+            },
+            'snapchat': {
+                'photos': True, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['9:16'], 'preferred': '9:16'
+            }
+        }
+        
         self.setWindowTitle("Post Preview")
-        self.setMinimumSize(600, 800)
-        self.setMaximumSize(800, 1000)
-        self.setWindowFlags(self.windowFlags() | Qt.WindowType.WindowStaysOnTopHint)
+        self.setMinimumSize(900, 700)
+        self.setModal(True)
         
-        self.setStyleSheet("""
-            QDialog {
-                background-color: #1a1a1a;
-                color: white;
-            }
-            QLabel {
-                color: white;
-            }
-            QCheckBox {
-                color: white;
-                font-size: 14px;
-            }
-            QGroupBox {
-                border: 1px solid #444444;
-                border-radius: 8px;
-                margin-top: 15px;
-                font-weight: bold;
-                color: white;
-                font-size: 14px;
-            }
-            QGroupBox::title {
-                subcontrol-origin: margin;
-                left: 10px;
-                padding: 0 5px 0 5px;
-            }
-            QScrollArea {
-                border: none;
-                background-color: #2a2a2a;
-            }
-            QFrame#postFrame {
-                background-color: #2a2a2a;
-                border: 1px solid #444444;
-                border-radius: 12px;
-                padding: 15px;
-            }
-        """)
+        self._setup_ui()
+        self._setup_platform_compatibility()
         
-        self._create_ui()
+        self.logger.info(f"Post preview opened for: {self.post_data.get('id', 'unknown')}")
     
-    def _create_ui(self):
-        """Create the UI components."""
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(20, 20, 20, 20)
-        layout.setSpacing(20)
+    def _detect_video_type(self) -> bool:
+        """Detect if the media is a video."""
+        if not self.media_path:
+            return False
         
-        # Header
-        header_label = QLabel("Post Preview")
-        header_label.setStyleSheet("font-size: 24px; font-weight: bold; color: #FFFFFF; margin-bottom: 10px;")
-        header_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(header_label)
-        
-        # Scroll area for the post content
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
-        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
-        
-        # Post content widget
-        post_widget = QFrame()
-        post_widget.setObjectName("postFrame")
-        post_layout = QVBoxLayout(post_widget)
-        post_layout.setSpacing(15)
-        
-        # Media preview
-        self._create_media_preview(post_layout)
-        
-        # Caption
-        self._create_caption_section(post_layout)
-        
-        scroll_area.setWidget(post_widget)
-        layout.addWidget(scroll_area)
-        
-        # Posting options
-        self._create_posting_options(layout)
-        
-        # Action buttons
-        self._create_action_buttons(layout)
+        video_extensions = ['.mp4', '.mov', '.avi', '.mkv', '.wmv', '.webm']
+        file_ext = os.path.splitext(self.media_path)[1].lower()
+        return file_ext in video_extensions
     
-    def _create_media_preview(self, layout):
-        """Create the media preview section."""
-        media_path = self.post_data.get("media_path", "")
+    def _setup_ui(self):
+        """Set up the dialog UI."""
+        main_layout = QVBoxLayout(self)
         
-        if not media_path or not os.path.exists(media_path):
-            error_label = QLabel("Media file not found")
-            error_label.setStyleSheet("color: #ff6b6b; font-size: 14px; padding: 20px;")
-            error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            layout.addWidget(error_label)
-            return
+        # Title
+        title_label = QLabel("Post Preview")
+        title_label.setStyleSheet("font-size: 20px; font-weight: bold; margin-bottom: 15px;")
+        main_layout.addWidget(title_label)
         
-        # Media container
-        media_frame = QFrame()
-        media_frame.setStyleSheet("background-color: #333333; border-radius: 8px; padding: 10px;")
-        media_layout = QVBoxLayout(media_frame)
+        # Main content splitter
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        main_layout.addWidget(splitter)
         
-        # Load and display image
-        try:
-            if self.media_handler:
-                pil_image = self.media_handler.load_image(media_path)
-                if pil_image:
-                    # Convert PIL to QPixmap
-                    from ...handlers.media_handler import pil_to_qpixmap
-                    pixmap = pil_to_qpixmap(pil_image)
-                    
-                    if pixmap and not pixmap.isNull():
-                        # Scale image to fit nicely in preview
-                        max_width = 500
-                        max_height = 400
-                        
-                        scaled_pixmap = pixmap.scaled(
-                            max_width, max_height,
-                            Qt.AspectRatioMode.KeepAspectRatio,
-                            Qt.TransformationMode.SmoothTransformation
-                        )
-                        
-                        image_label = QLabel()
-                        image_label.setPixmap(scaled_pixmap)
-                        image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                        image_label.setStyleSheet("border: 1px solid #555555; border-radius: 4px;")
-                        media_layout.addWidget(image_label)
-                    else:
-                        self._add_error_placeholder(media_layout, "Could not load image")
-                else:
-                    self._add_error_placeholder(media_layout, "Could not process image")
-            else:
-                # Fallback: try to load with QPixmap directly
-                pixmap = QPixmap(media_path)
-                if not pixmap.isNull():
-                    max_width = 500
-                    max_height = 400
-                    
-                    scaled_pixmap = pixmap.scaled(
-                        max_width, max_height,
-                        Qt.AspectRatioMode.KeepAspectRatio,
-                        Qt.TransformationMode.SmoothTransformation
-                    )
-                    
-                    image_label = QLabel()
-                    image_label.setPixmap(scaled_pixmap)
-                    image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                    image_label.setStyleSheet("border: 1px solid #555555; border-radius: 4px;")
-                    media_layout.addWidget(image_label)
-                else:
-                    self._add_error_placeholder(media_layout, "Could not load image file")
-                    
-        except Exception as e:
-            self.logger.error(f"Error loading media preview: {e}")
-            self._add_error_placeholder(media_layout, f"Error loading media: {str(e)}")
+        # Left side - Media preview
+        left_widget = self._create_media_preview_widget()
+        splitter.addWidget(left_widget)
         
-        layout.addWidget(media_frame)
-    
-    def _add_error_placeholder(self, layout, message):
-        """Add an error placeholder when image can't be loaded."""
-        error_label = QLabel(message)
-        error_label.setStyleSheet("""
-            color: #ff6b6b; 
-            font-size: 14px; 
-            padding: 40px; 
-            border: 2px dashed #555555; 
-            border-radius: 8px;
-            background-color: #2a2a2a;
-        """)
-        error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        layout.addWidget(error_label)
-    
-    def _create_caption_section(self, layout):
-        """Create the caption display section."""
-        caption = self.post_data.get("caption", "")
+        # Right side - Post details and controls
+        right_widget = self._create_post_details_widget()
+        splitter.addWidget(right_widget)
         
-        caption_frame = QFrame()
-        caption_frame.setStyleSheet("background-color: #333333; border-radius: 8px; padding: 15px;")
-        caption_layout = QVBoxLayout(caption_frame)
+        # Set splitter proportions (60% media, 40% details)
+        splitter.setSizes([540, 360])
         
-        # Caption header
-        caption_header = QLabel("Caption")
-        caption_header.setStyleSheet("font-size: 16px; font-weight: bold; color: #FFFFFF; margin-bottom: 8px;")
-        caption_layout.addWidget(caption_header)
-        
-        # Caption text
-        if caption:
-            caption_label = QLabel(caption)
-            caption_label.setWordWrap(True)
-            caption_label.setStyleSheet("""
-                color: #EEEEEE; 
-                font-size: 14px; 
-                line-height: 1.4;
-                padding: 10px;
-                background-color: #2a2a2a;
-                border-radius: 6px;
-                border: 1px solid #444444;
-            """)
-            caption_label.setTextInteractionFlags(Qt.TextInteractionFlag.TextSelectableByMouse)
-        else:
-            caption_label = QLabel("No caption")
-            caption_label.setStyleSheet("color: #888888; font-style: italic; font-size: 14px; padding: 10px;")
-        
-        caption_layout.addWidget(caption_label)
-        layout.addWidget(caption_frame)
-    
-    def _create_posting_options(self, layout):
-        """Create the posting options section."""
-        # Post Now Section
-        post_now_group = QGroupBox("Post Now")
-        post_now_layout = QVBoxLayout(post_now_group)
-        
-        # Create a grid layout for better organization
-        platform_grid = QGridLayout()
-        
-        # Row 1: Meta platforms
-        self.fb_checkbox = QCheckBox("Post to Facebook")
-        self.fb_checkbox.setChecked(True)
-        platform_grid.addWidget(self.fb_checkbox, 0, 0)
-        
-        self.ig_checkbox = QCheckBox("Post to Instagram")
-        self.ig_checkbox.setChecked(True)
-        platform_grid.addWidget(self.ig_checkbox, 0, 1)
-        
-        # Row 2: Professional platforms
-
-        
-        # Row 2: New platforms
-        self.tiktok_checkbox = QCheckBox("Post to TikTok")
-        self.tiktok_checkbox.setChecked(False)
-        platform_grid.addWidget(self.tiktok_checkbox, 1, 0)
-        
-        self.pinterest_checkbox = QCheckBox("Post to Pinterest")
-        self.pinterest_checkbox.setChecked(False)
-        platform_grid.addWidget(self.pinterest_checkbox, 1, 1)
-        
-        # Row 3: Additional platforms
-        self.bluesky_checkbox = QCheckBox("Post to BlueSky")
-        self.bluesky_checkbox.setChecked(False)
-        platform_grid.addWidget(self.bluesky_checkbox, 2, 0)
-        
-        self.threads_checkbox = QCheckBox("Post to Threads")
-        self.threads_checkbox.setChecked(False)
-        platform_grid.addWidget(self.threads_checkbox, 2, 1)
-        
-        # Row 4: Business platforms
-        self.google_business_checkbox = QCheckBox("Post to Google My Business")
-        self.google_business_checkbox.setChecked(False)
-        platform_grid.addWidget(self.google_business_checkbox, 3, 0)
-        
-        post_now_layout.addLayout(platform_grid)
-        
-        # Post Now button
-        self.post_now_btn = AdjustableButton("Post Now")
-        self.post_now_btn.setStyleSheet("""
-            AdjustableButton {
-                background-color: #4CAF50;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 12px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            AdjustableButton:hover {
-                background-color: #45a049;
-            }
-        """)
-        self.post_now_btn.clicked.connect(self._on_post_now)
-        post_now_layout.addWidget(self.post_now_btn)
-        
-        layout.addWidget(post_now_group)
-        
-        # Queue Section
-        queue_group = QGroupBox("Add to Queue")
-        queue_layout = QVBoxLayout(queue_group)
-        
-        queue_info = QLabel("Add this post to the next available slot in the publishing queue.")
-        queue_info.setWordWrap(True)
-        queue_info.setStyleSheet("color: #CCCCCC; font-size: 13px; margin-bottom: 10px;")
-        queue_layout.addWidget(queue_info)
-        
-        self.queue_btn = AdjustableButton("Add to Queue")
-        self.queue_btn.setStyleSheet("""
-            AdjustableButton {
-                background-color: #3949AB;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 12px 20px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            AdjustableButton:hover {
-                background-color: #303F9F;
-            }
-        """)
-        self.queue_btn.clicked.connect(self._on_add_to_queue)
-        queue_layout.addWidget(self.queue_btn)
-        
-        layout.addWidget(queue_group)
-    
-    def _create_action_buttons(self, layout):
-        """Create the action buttons section."""
-        # Action buttons layout
-        action_layout = QHBoxLayout()
-        action_layout.setSpacing(10)
+        # Bottom buttons
+        button_layout = QHBoxLayout()
         
         # Edit button
-        edit_btn = AdjustableButton("Edit Post")
-        edit_btn.setStyleSheet("""
-            AdjustableButton {
-                background-color: #FF9800;
+        self.edit_btn = QPushButton("Edit Post")
+        self.edit_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
                 color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 16px;
-                font-size: 13px;
                 font-weight: bold;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                margin-right: 10px;
             }
-            AdjustableButton:hover {
-                background-color: #F57C00;
+            QPushButton:hover {
+                background-color: #5a6268;
             }
         """)
-        edit_btn.clicked.connect(self._on_edit_post)
-        action_layout.addWidget(edit_btn)
+        self.edit_btn.clicked.connect(self._edit_post)
+        button_layout.addWidget(self.edit_btn)
         
-        # Delete button
-        delete_btn = AdjustableButton("Delete Post")
-        delete_btn.setStyleSheet("""
-            AdjustableButton {
-                background-color: #e74c3c;
+        button_layout.addStretch()
+        
+        # Action buttons
+        self.post_now_btn = QPushButton("Post Now")
+        self.post_now_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
                 color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 16px;
-                font-size: 13px;
                 font-weight: bold;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                margin-right: 10px;
             }
-            AdjustableButton:hover {
-                background-color: #c0392b;
+            QPushButton:hover {
+                background-color: #218838;
             }
         """)
-        delete_btn.clicked.connect(self._on_delete_post)
-        action_layout.addWidget(delete_btn)
+        self.post_now_btn.clicked.connect(self._post_now)
+        button_layout.addWidget(self.post_now_btn)
         
-        action_layout.addStretch()
+        self.add_to_campaign_btn = QPushButton("Add to Campaign")
+        self.add_to_campaign_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff;
+                color: white;
+                font-weight: bold;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                margin-right: 10px;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        self.add_to_campaign_btn.clicked.connect(self._add_to_campaign)
+        button_layout.addWidget(self.add_to_campaign_btn)
+        
+        self.schedule_post_btn = QPushButton("Schedule Post")
+        self.schedule_post_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #17a2b8;
+                color: white;
+                font-weight: bold;
+                padding: 10px 20px;
+                border: none;
+                border-radius: 5px;
+                margin-right: 10px;
+            }
+            QPushButton:hover {
+                background-color: #138496;
+            }
+        """)
+        self.schedule_post_btn.clicked.connect(self._schedule_post)
+        button_layout.addWidget(self.schedule_post_btn)
         
         # Cancel button
-        cancel_btn = AdjustableButton("Cancel")
-        cancel_btn.setStyleSheet("""
-            AdjustableButton {
-                background-color: #6b7280;
-                color: white;
-                border: none;
-                border-radius: 6px;
-                padding: 10px 16px;
-                font-size: 13px;
-            }
-            AdjustableButton:hover {
-                background-color: #6b7280cc;
+        self.cancel_btn = QPushButton("Close")
+        self.cancel_btn.clicked.connect(self.reject)
+        button_layout.addWidget(self.cancel_btn)
+        
+        main_layout.addLayout(button_layout)
+    
+    def _create_media_preview_widget(self):
+        """Create the media preview widget."""
+        group = QGroupBox("Media Preview")
+        layout = QVBoxLayout(group)
+        
+        # Media display
+        self.media_label = QLabel()
+        self.media_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.media_label.setMinimumHeight(400)
+        self.media_label.setStyleSheet("""
+            QLabel {
+                border: 2px solid #dee2e6;
+                border-radius: 8px;
+                background-color: #f8f9fa;
             }
         """)
-        cancel_btn.clicked.connect(self.reject)
-        action_layout.addWidget(cancel_btn)
         
-        layout.addLayout(action_layout)
+        layout.addWidget(self.media_label)
+        
+        # Media info
+        self.media_info_label = QLabel()
+        self.media_info_label.setStyleSheet("color: #666666; font-size: 12px; margin-top: 10px;")
+        self.media_info_label.setWordWrap(True)
+        layout.addWidget(self.media_info_label)
+        
+        # Load media after both labels are created
+        self._load_media_preview()
+        
+        return group
     
-    def _on_post_now(self):
-        """Handle post now button click."""
-        if not (self.fb_checkbox.isChecked() or self.ig_checkbox.isChecked() or 
-                self.tiktok_checkbox.isChecked() or self.pinterest_checkbox.isChecked() or
-                self.bluesky_checkbox.isChecked() or self.threads_checkbox.isChecked() or
-                self.google_business_checkbox.isChecked()):
-            QMessageBox.warning(self, "Post Error", "Please select at least one platform to post to.")
+    def _create_post_details_widget(self):
+        """Create the post details and controls widget."""
+        widget = QScrollArea()
+        widget.setWidgetResizable(True)
+        
+        content = QWidget()
+        layout = QVBoxLayout(content)
+        
+        # Post caption
+        caption_group = QGroupBox("Caption")
+        caption_layout = QVBoxLayout(caption_group)
+        
+        self.caption_display = QTextEdit()
+        self.caption_display.setPlainText(self.post_data.get("caption", "No caption"))
+        self.caption_display.setReadOnly(True)
+        self.caption_display.setMaximumHeight(120)
+        caption_layout.addWidget(self.caption_display)
+        
+        layout.addWidget(caption_group)
+        
+        # Platform selection
+        platform_group = QGroupBox("Select Platforms")
+        platform_layout = QVBoxLayout(platform_group)
+        
+        # Use a wrapping layout for platform checkboxes
+        platforms_widget = QWidget()
+        platforms_layout = QGridLayout(platforms_widget)
+        platforms_layout.setContentsMargins(0, 0, 0, 0)
+        
+        # Create all platform checkboxes
+        self.instagram_checkbox = QCheckBox("Instagram")
+        self.instagram_checkbox.setChecked(True)
+        platforms_layout.addWidget(self.instagram_checkbox, 0, 0)
+        
+        self.facebook_checkbox = QCheckBox("Facebook")
+        self.facebook_checkbox.setChecked(True)
+        platforms_layout.addWidget(self.facebook_checkbox, 0, 1)
+        
+        self.tiktok_checkbox = QCheckBox("TikTok")
+        platforms_layout.addWidget(self.tiktok_checkbox, 0, 2)
+        
+        self.youtube_checkbox = QCheckBox("YouTube")
+        platforms_layout.addWidget(self.youtube_checkbox, 1, 0)
+        
+        self.pinterest_checkbox = QCheckBox("Pinterest")
+        platforms_layout.addWidget(self.pinterest_checkbox, 1, 1)
+        
+        self.snapchat_checkbox = QCheckBox("Snapchat")
+        platforms_layout.addWidget(self.snapchat_checkbox, 1, 2)
+        
+        # Add stretch to the right
+        platforms_layout.setColumnStretch(3, 1)
+        
+        platform_layout.addWidget(platforms_widget)
+        
+        # Aspect ratio warning
+        aspect_warning = QLabel("⚠️ Content will be automatically resized to fit each platform's optimal aspect ratio")
+        aspect_warning.setStyleSheet("""
+            QLabel {
+                color: #f39c12;
+                font-size: 11px;
+                font-style: italic;
+                margin-top: 5px;
+                padding: 5px;
+                background-color: rgba(243, 156, 18, 0.1);
+                border-radius: 3px;
+            }
+        """)
+        aspect_warning.setWordWrap(True)
+        platform_layout.addWidget(aspect_warning)
+        
+        layout.addWidget(platform_group)
+        
+        # Post metadata
+        metadata_group = QGroupBox("Post Information")
+        metadata_layout = QVBoxLayout(metadata_group)
+        
+        # Creation date
+        date_created = self.post_data.get("date_added", "Unknown")
+        if date_created != "Unknown":
+            try:
+                parsed_date = datetime.fromisoformat(date_created.replace('Z', '+00:00'))
+                date_str = parsed_date.strftime("%B %d, %Y at %I:%M %p")
+            except:
+                date_str = date_created
+        else:
+            date_str = "Unknown"
+        
+        date_label = QLabel(f"Created: {date_str}")
+        date_label.setStyleSheet("margin-bottom: 5px;")
+        metadata_layout.addWidget(date_label)
+        
+        # Media type
+        media_type = "Video" if self.is_video else "Photo"
+        type_label = QLabel(f"Type: {media_type}")
+        type_label.setStyleSheet("margin-bottom: 5px;")
+        metadata_layout.addWidget(type_label)
+        
+        # File size if available
+        if os.path.exists(self.media_path):
+            try:
+                file_size = os.path.getsize(self.media_path)
+                size_mb = file_size / (1024 * 1024)
+                size_label = QLabel(f"Size: {size_mb:.1f} MB")
+                size_label.setStyleSheet("margin-bottom: 5px;")
+                metadata_layout.addWidget(size_label)
+            except:
+                pass
+        
+        # Dimensions if available
+        dimensions = self.post_data.get("dimensions", [])
+        if dimensions and len(dimensions) >= 2 and dimensions[0] and dimensions[1]:
+            dim_label = QLabel(f"Dimensions: {dimensions[0]} × {dimensions[1]}")
+            dim_label.setStyleSheet("margin-bottom: 5px;")
+            metadata_layout.addWidget(dim_label)
+        
+        layout.addWidget(metadata_group)
+        
+        layout.addStretch()
+        
+        widget.setWidget(content)
+        return widget
+    
+    def _load_media_preview(self):
+        """Load and display media preview."""
+        if not self.media_path or not os.path.exists(self.media_path):
+            self.media_label.setText("Media not found")
+            self.media_info_label.setText("File path: " + (self.media_path or "None"))
             return
+        
+        try:
+            if self.is_video:
+                # For videos, try to show a thumbnail or placeholder
+                self.media_label.setText(f"🎬 Video File\n\n{os.path.basename(self.media_path)}")
+                self.media_label.setStyleSheet("""
+                    QLabel {
+                        border: 2px solid #28a745;
+                        border-radius: 8px;
+                        background-color: #f8f9fa;
+                        font-size: 16px;
+                        color: #28a745;
+                    }
+                """)
+            else:
+                # For images, show the actual image
+                pixmap = QPixmap(self.media_path)
+                if not pixmap.isNull():
+                    # Scale to fit preview area while maintaining aspect ratio
+                    scaled_pixmap = pixmap.scaled(
+                        500, 400, 
+                        Qt.AspectRatioMode.KeepAspectRatio, 
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    self.media_label.setPixmap(scaled_pixmap)
+                else:
+                    self.media_label.setText("Could not load image")
             
-        platforms = []
-        if self.fb_checkbox.isChecked():
-            platforms.append("facebook")
-        if self.ig_checkbox.isChecked():
-            platforms.append("instagram")
-
-        if self.tiktok_checkbox.isChecked():
-            platforms.append("tiktok")
-        if self.pinterest_checkbox.isChecked():
-            platforms.append("pinterest")
-        if self.bluesky_checkbox.isChecked():
-            platforms.append("bluesky")
-        if self.threads_checkbox.isChecked():
-            platforms.append("threads")
-        if self.google_business_checkbox.isChecked():
-            platforms.append("google_business")
+            # Update media info
+            file_size = os.path.getsize(self.media_path)
+            file_size_mb = file_size / (1024 * 1024)
+            self.media_info_label.setText(
+                f"File: {os.path.basename(self.media_path)}\n"
+                f"Size: {file_size_mb:.1f} MB\n"
+                f"Path: {self.media_path}"
+            )
             
-        # Add platforms to post data
+        except Exception as e:
+            self.logger.error(f"Error loading media preview: {e}")
+            self.media_label.setText("Error loading media")
+            self.media_info_label.setText(f"Error: {str(e)}")
+    
+    def _setup_platform_compatibility(self):
+        """Set up platform compatibility based on media type."""
+        media_type = 'videos' if self.is_video else 'photos'
+        
+        # Check each platform's compatibility
+        platforms = {
+            'instagram': self.instagram_checkbox,
+            'facebook': self.facebook_checkbox,
+            'tiktok': self.tiktok_checkbox,
+            'youtube': self.youtube_checkbox,
+            'pinterest': self.pinterest_checkbox,
+            'snapchat': self.snapchat_checkbox
+        }
+        
+        for platform_name, checkbox in platforms.items():
+            requirements = self.platform_media_requirements.get(platform_name, {})
+            is_compatible = requirements.get(media_type, False)
+            
+            if not is_compatible:
+                checkbox.setChecked(False)
+                checkbox.setEnabled(False)
+                if platform_name == 'tiktok' and not self.is_video:
+                    checkbox.setToolTip("TikTok requires video content")
+                elif platform_name == 'instagram' and not self.media_path:
+                    checkbox.setToolTip("Instagram requires media content")
+            else:
+                checkbox.setEnabled(True)
+                checkbox.setToolTip("")
+    
+    def _get_selected_platforms(self) -> List[str]:
+        """Get list of selected platforms."""
+        selected_platforms = []
+        
+        platform_checkboxes = {
+            'instagram': self.instagram_checkbox,
+            'facebook': self.facebook_checkbox,
+            'tiktok': self.tiktok_checkbox,
+            'youtube': self.youtube_checkbox,
+            'pinterest': self.pinterest_checkbox,
+            'snapchat': self.snapchat_checkbox
+        }
+        
+        for platform, checkbox in platform_checkboxes.items():
+            if checkbox.isChecked() and checkbox.isEnabled():
+                selected_platforms.append(platform)
+        
+        return selected_platforms
+    
+    def _validate_selection(self) -> bool:
+        """Validate that at least one platform is selected."""
+        selected = self._get_selected_platforms()
+        if not selected:
+            QMessageBox.warning(self, "No Platforms Selected", 
+                              "Please select at least one platform.")
+            return False
+        return True
+    
+    def _post_now(self):
+        """Handle post now action."""
+        if not self._validate_selection():
+            return
+        
         post_data = self.post_data.copy()
-        post_data["platforms"] = platforms
+        post_data['platforms'] = self._get_selected_platforms()
+        post_data['action'] = 'post_now'
         
-        # Emit signal
-        self.post_now.emit(post_data)
+        self.post_now_requested.emit(post_data)
         self.accept()
+    
+    def _add_to_campaign(self):
+        """Handle add to campaign action."""
+        if not self._validate_selection():
+            return
         
-    def _on_add_to_queue(self):
-        """Handle add to queue button click."""
-        self.add_to_queue.emit(self.post_data)
+        post_data = self.post_data.copy()
+        post_data['platforms'] = self._get_selected_platforms()
+        post_data['action'] = 'add_to_campaign'
+        
+        self.add_to_campaign_requested.emit(post_data)
         self.accept()
+    
+    def _schedule_post(self):
+        """Handle schedule post action."""
+        if not self._validate_selection():
+            return
         
-    def _on_edit_post(self):
-        """Handle edit post button click."""
-        self.edit_post.emit(self.post_data)
+        post_data = self.post_data.copy()
+        post_data['platforms'] = self._get_selected_platforms()
+        post_data['action'] = 'schedule_post'
+        
+        self.schedule_post_requested.emit(post_data)
         self.accept()
-        
-    def _on_delete_post(self):
-        """Handle delete post button click."""
-        result = QMessageBox.question(
-            self,
-            "Confirm Delete",
-            "Are you sure you want to delete this post? This action cannot be undone.",
-            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-            QMessageBox.StandardButton.No
-        )
-        
-        if result == QMessageBox.StandardButton.Yes:
-            self.delete_post.emit(self.post_data)
-            self.accept() 
+    
+    def _edit_post(self):
+        """Handle edit post action."""
+        self.edit_post_requested.emit(self.post_data)
+        self.accept() 

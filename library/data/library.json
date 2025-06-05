@@ -1,5 +1,26 @@
 {
     "version": "1.0",
-    "items": {},
+    "items": {
+        "18fc1fe2-9db9-48bf-97ab-d211ececfdac": {
+            "id": "18fc1fe2-9db9-48bf-97ab-d211ececfdac",
+            "type": "post_ready_photo",
+            "filename": "18fc1fe2-9db9-48bf-97ab-d211ececfdac.png",
+            "path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\library\\images\\18fc1fe2-9db9-48bf-97ab-d211ececfdac.png",
+            "caption": "My hair salon's profit margin is looking... *amazing*.  Turns out, knowing the difference between fixed and variable costs isn't just for accountants! \ud83d\ude09 #SalonBusiness #Profitability #HairSalonFinance #SmallBusinessSuccess",
+            "date_added": "2025-06-05T13:04:03.037127",
+            "tags": [],
+            "dimensions": [
+                1024,
+                1024
+            ],
+            "size_str": "1164.0 KB",
+            "metadata": {
+                "original_mode": "RGB",
+                "instructions": "Make a funny caption",
+                "editing_instructions": "",
+                "context_files": []
+            }
+        }
+    },
     "collections": {}
 }

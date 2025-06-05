@@ -7,7 +7,7 @@ import logging
 from typing import List, Optional, Dict, Any
 
 from PySide6.QtWidgets import (
-    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QTextEdit, 
+    QVBoxLayout, QHBoxLayout, QGridLayout, QLabel, QPushButton, QTextEdit, 
     QScrollArea, QWidget, QFrame, QSplitter, QGroupBox, QFileDialog,
     QListWidget, QListWidgetItem, QMessageBox, QProgressBar, QCheckBox
 )
@@ -64,6 +64,34 @@ class PostCreationDialog(BaseDialog):
         self.edited_media_path = None    # Store edited path
         self.showing_original = True     # Track which version is displayed
         
+        # Platform compatibility data with aspect ratio requirements
+        self.platform_media_requirements = {
+            'instagram': {
+                'photos': True, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['1:1', '4:5', '9:16'], 'preferred': '1:1'
+            },
+            'facebook': {
+                'photos': True, 'videos': True, 'text_only': True,
+                'aspect_ratios': ['16:9', '1:1', '4:5'], 'preferred': '16:9'
+            },
+            'tiktok': {
+                'photos': False, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['9:16'], 'preferred': '9:16'
+            },
+            'youtube': {
+                'photos': False, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['16:9'], 'preferred': '16:9'
+            },
+            'pinterest': {
+                'photos': True, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['2:3', '1:1', '3:4'], 'preferred': '2:3'
+            },
+            'snapchat': {
+                'photos': True, 'videos': True, 'text_only': False,
+                'aspect_ratios': ['9:16'], 'preferred': '9:16'
+            }
+        }
+        
         if self.media_path:
             self.original_media_path = self.media_path
             self.is_video = any(self.media_path.lower().endswith(ext) 
@@ -74,6 +102,8 @@ class PostCreationDialog(BaseDialog):
         self._setup_ui()
         if self.media_path:
             self._load_media_preview()
+        self._setup_platform_compatibility()
+        self._connect_scheduling_signals()
         self.retranslateUi()  # Apply initial translations
             
     def _setup_ui(self):
@@ -236,23 +266,7 @@ class PostCreationDialog(BaseDialog):
         widget = QWidget()
         layout = QVBoxLayout(widget)
         
-        # Caption section with keep caption toggle
-        self.caption_group = QGroupBox()  # Title set in retranslateUi
-        caption_layout = QVBoxLayout(self.caption_group)
-        
-        # Keep caption toggle
-        self.keep_caption_checkbox = QCheckBox()  # Text set in retranslateUi
-        self.keep_caption_checkbox.setStyleSheet("color: #666666; font-size: 12px; margin-bottom: 5px;")
-        caption_layout.addWidget(self.keep_caption_checkbox)
-        
-        self.caption_edit = QTextEdit()
-        # Placeholder text set in retranslateUi
-        self.caption_edit.setMaximumHeight(150)
-        caption_layout.addWidget(self.caption_edit)
-        
-        layout.addWidget(self.caption_group)
-        
-        # Instructions section
+        # Instructions section (moved to top)
         self.instructions_group = QGroupBox()  # Title set in retranslateUi
         instructions_layout = QVBoxLayout(self.instructions_group)
         
@@ -402,7 +416,374 @@ class PostCreationDialog(BaseDialog):
         context_layout.addLayout(context_buttons_layout)
         layout.addWidget(self.context_group)
         
+        # Caption section with keep caption toggle (moved to bottom)
+        self.caption_group = QGroupBox()  # Title set in retranslateUi
+        caption_layout = QVBoxLayout(self.caption_group)
+        
+        # Keep caption toggle
+        self.keep_caption_checkbox = QCheckBox()  # Text set in retranslateUi
+        self.keep_caption_checkbox.setStyleSheet("color: #666666; font-size: 12px; margin-bottom: 5px;")
+        caption_layout.addWidget(self.keep_caption_checkbox)
+        
+        self.caption_edit = QTextEdit()
+        # Placeholder text set in retranslateUi
+        self.caption_edit.setMaximumHeight(150)
+        caption_layout.addWidget(self.caption_edit)
+        
+        layout.addWidget(self.caption_group)
+        
+        # Platform Selection & Scheduling section
+        self.platform_schedule_group = QGroupBox("Platform & Scheduling")
+        platform_schedule_layout = QVBoxLayout(self.platform_schedule_group)
+        
+        # Platform selection checkboxes
+        platform_label = QLabel("Select Platforms:")
+        platform_label.setStyleSheet("font-weight: bold; margin-bottom: 5px;")
+        platform_schedule_layout.addWidget(platform_label)
+        
+        # Use a grid layout for better wrapping
+        platforms_widget = QWidget()
+        platforms_layout = QGridLayout(platforms_widget)
+        platforms_layout.setContentsMargins(0, 0, 0, 0)
+        
+        self.instagram_checkbox = QCheckBox("Instagram")
+        self.instagram_checkbox.setChecked(True)  # Default to checked
+        platforms_layout.addWidget(self.instagram_checkbox, 0, 0)
+        
+        self.facebook_checkbox = QCheckBox("Facebook")
+        self.facebook_checkbox.setChecked(True)  # Default to checked
+        platforms_layout.addWidget(self.facebook_checkbox, 0, 1)
+        
+        self.tiktok_checkbox = QCheckBox("TikTok")
+        platforms_layout.addWidget(self.tiktok_checkbox, 0, 2)
+        
+        self.youtube_checkbox = QCheckBox("YouTube")
+        platforms_layout.addWidget(self.youtube_checkbox, 1, 0)
+        
+        self.pinterest_checkbox = QCheckBox("Pinterest")
+        platforms_layout.addWidget(self.pinterest_checkbox, 1, 1)
+        
+        self.snapchat_checkbox = QCheckBox("Snapchat")
+        platforms_layout.addWidget(self.snapchat_checkbox, 1, 2)
+        
+        # Add stretch to the right
+        platforms_layout.setColumnStretch(3, 1)
+        
+        platform_schedule_layout.addWidget(platforms_widget)
+        
+        # Aspect ratio warning
+        aspect_warning = QLabel("⚠️ Content will be automatically resized to fit each platform's optimal aspect ratio")
+        aspect_warning.setStyleSheet("""
+            QLabel {
+                color: #f39c12;
+                font-size: 11px;
+                font-style: italic;
+                margin-top: 5px;
+                padding: 5px;
+                background-color: rgba(243, 156, 18, 0.1);
+                border-radius: 3px;
+            }
+        """)
+        aspect_warning.setWordWrap(True)
+        platform_schedule_layout.addWidget(aspect_warning)
+        
+        # Scheduling options
+        schedule_label = QLabel("Publishing Options:")
+        schedule_label.setStyleSheet("font-weight: bold; margin-top: 10px; margin-bottom: 5px;")
+        platform_schedule_layout.addWidget(schedule_label)
+        
+        schedule_options_layout = QHBoxLayout()
+        
+        self.post_now_btn = QPushButton("Post Now")
+        self.post_now_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 5px;
+                margin-right: 5px;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+        """)
+        schedule_options_layout.addWidget(self.post_now_btn)
+        
+        self.add_to_queue_btn = QPushButton("Add to Queue")
+        self.add_to_queue_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #ffc107;
+                color: #212529;
+                font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 5px;
+                margin-right: 5px;
+            }
+            QPushButton:hover {
+                background-color: #e0a800;
+            }
+        """)
+        schedule_options_layout.addWidget(self.add_to_queue_btn)
+        
+        self.schedule_post_btn = QPushButton("Schedule Post")
+        self.schedule_post_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #17a2b8;
+                color: white;
+                font-weight: bold;
+                padding: 8px 16px;
+                border: none;
+                border-radius: 5px;
+            }
+            QPushButton:hover {
+                background-color: #138496;
+            }
+        """)
+        schedule_options_layout.addWidget(self.schedule_post_btn)
+        
+        schedule_options_layout.addStretch()
+        platform_schedule_layout.addLayout(schedule_options_layout)
+        
+        layout.addWidget(self.platform_schedule_group)
+        
         return widget
+    
+    def _setup_platform_compatibility(self):
+        """Set up platform compatibility based on media type."""
+        if not hasattr(self, 'instagram_checkbox'):
+            return  # UI not initialized yet
+            
+        media_type = 'videos' if self.is_video else 'photos'
+        
+        # Check each platform's compatibility
+        platforms = {
+            'instagram': self.instagram_checkbox,
+            'facebook': self.facebook_checkbox,
+            'tiktok': self.tiktok_checkbox,
+            'youtube': self.youtube_checkbox,
+            'pinterest': self.pinterest_checkbox,
+            'snapchat': self.snapchat_checkbox
+        }
+        
+        for platform_name, checkbox in platforms.items():
+            requirements = self.platform_media_requirements.get(platform_name, {})
+            is_compatible = requirements.get(media_type, False)
+            
+            if not is_compatible:
+                checkbox.setChecked(False)
+                checkbox.setEnabled(False)
+                if platform_name == 'tiktok' and not self.is_video:
+                    checkbox.setToolTip("TikTok requires video content")
+                elif platform_name == 'instagram' and not self.media_path:
+                    checkbox.setToolTip("Instagram requires media content (no text-only posts)")
+            else:
+                checkbox.setEnabled(True)
+                checkbox.setToolTip("")
+    
+    def _connect_scheduling_signals(self):
+        """Connect scheduling button signals."""
+        if hasattr(self, 'post_now_btn'):
+            self.post_now_btn.clicked.connect(self._post_now)
+        if hasattr(self, 'add_to_queue_btn'):
+            self.add_to_queue_btn.clicked.connect(self._add_to_queue)
+        if hasattr(self, 'schedule_post_btn'):
+            self.schedule_post_btn.clicked.connect(self._schedule_post)
+    
+    def _get_selected_platforms(self) -> List[str]:
+        """Get list of selected platforms."""
+        selected_platforms = []
+        
+        platform_checkboxes = {
+            'instagram': getattr(self, 'instagram_checkbox', None),
+            'facebook': getattr(self, 'facebook_checkbox', None),
+            'tiktok': getattr(self, 'tiktok_checkbox', None),
+            'youtube': getattr(self, 'youtube_checkbox', None),
+            'pinterest': getattr(self, 'pinterest_checkbox', None),
+            'snapchat': getattr(self, 'snapchat_checkbox', None)
+        }
+        
+        for platform, checkbox in platform_checkboxes.items():
+            if checkbox and checkbox.isChecked() and checkbox.isEnabled():
+                selected_platforms.append(platform)
+        
+        return selected_platforms
+    
+    def _post_now(self):
+        """Post immediately to selected platforms."""
+        selected_platforms = self._get_selected_platforms()
+        
+        if not selected_platforms:
+            QMessageBox.warning(self, "No Platforms Selected", 
+                              "Please select at least one platform to post to.")
+            return
+        
+        # Get post data
+        post_data = self.get_post_data()
+        post_data['platforms'] = selected_platforms
+        post_data['publish_immediately'] = True
+        
+        # Add to library and publish
+        self._add_to_library_and_publish(post_data)
+    
+    def _add_to_queue(self):
+        """Add post to the publishing queue."""
+        selected_platforms = self._get_selected_platforms()
+        
+        if not selected_platforms:
+            QMessageBox.warning(self, "No Platforms Selected", 
+                              "Please select at least one platform to add to queue.")
+            return
+        
+        # Get post data
+        post_data = self.get_post_data()
+        post_data['platforms'] = selected_platforms
+        post_data['add_to_queue'] = True
+        
+        # Add to library and queue
+        self._add_to_library_and_publish(post_data)
+    
+    def _schedule_post(self):
+        """Open scheduling dialog for the post."""
+        selected_platforms = self._get_selected_platforms()
+        
+        if not selected_platforms:
+            QMessageBox.warning(self, "No Platforms Selected", 
+                              "Please select at least one platform to schedule to.")
+            return
+        
+        # Import scheduling dialog
+        try:
+            from .scheduling_dialog import SchedulingDialog
+            
+            # Get post data
+            post_data = self.get_post_data()
+            post_data['platforms'] = selected_platforms
+            
+            # Open scheduling dialog
+            dialog = SchedulingDialog(post_data, parent=self)
+            if dialog.exec() == dialog.DialogCode.Accepted:
+                # Get scheduled data
+                scheduled_data = dialog.get_scheduled_data()
+                
+                # Add to library with scheduling info
+                post_data.update(scheduled_data)
+                self._add_to_library_and_publish(post_data)
+                
+        except ImportError as e:
+            self.logger.warning(f"Scheduling dialog not available: {e}")
+            QMessageBox.information(self, "Scheduling", 
+                                  "Scheduling feature will be available in future updates.\n"
+                                  "For now, use 'Add to Queue' to schedule for next available slot.")
+    
+    def _add_to_library_and_publish(self, post_data):
+        """Add post to library and handle publishing/scheduling."""
+        try:
+            # Add to library first
+            self._add_to_library_with_data(post_data)
+            
+            # Handle publishing based on options
+            if post_data.get('publish_immediately'):
+                self.logger.info("Immediate publishing requested - would publish now")
+                QMessageBox.information(self, "Post Created", 
+                                      f"Post added to library and would be published immediately to: {', '.join(post_data['platforms'])}")
+            elif post_data.get('add_to_queue'):
+                # Import scheduler
+                try:
+                    from ...handlers.scheduling_handler import PostScheduler
+                    from ...models.app_state import AppState
+                    
+                    scheduler = PostScheduler(AppState())
+                    success = scheduler.add_to_queue(post_data)
+                    
+                    if success:
+                        QMessageBox.information(self, "Post Queued", 
+                                              f"Post added to publishing queue for: {', '.join(post_data['platforms'])}")
+                    else:
+                        QMessageBox.warning(self, "Queue Error", 
+                                          "Failed to add post to queue. Check logs for details.")
+                        
+                except ImportError as e:
+                    self.logger.warning(f"Scheduler not available: {e}")
+                    QMessageBox.information(self, "Post Created", "Post added to library.")
+            else:
+                # Scheduled post
+                QMessageBox.information(self, "Post Scheduled", 
+                                      f"Post scheduled for: {post_data.get('scheduled_time', 'specified time')}")
+            
+            # Close dialog
+            self.accept()
+            
+            # Try to refresh library if accessible
+            try:
+                # Look for parent app controller or main window to refresh library
+                parent = self.parent()
+                while parent:
+                    if hasattr(parent, 'library_tabs') and hasattr(parent.library_tabs, 'refresh_content'):
+                        parent.library_tabs.refresh_content()
+                        self.logger.info("Triggered library refresh from parent")
+                        break
+                    elif hasattr(parent, 'refresh_library'):
+                        parent.refresh_library()
+                        self.logger.info("Triggered library refresh from parent")
+                        break
+                    parent = parent.parent()
+            except Exception as e:
+                self.logger.warning(f"Could not trigger library refresh: {e}")
+            
+        except Exception as e:
+            self.logger.error(f"Error in publish workflow: {e}")
+            QMessageBox.critical(self, "Error", f"Failed to complete post creation: {str(e)}")
+    
+    def _add_to_library_with_data(self, post_data):
+        """Add post to library with additional data."""
+        if not self.media_path:
+            self.logger.warning("No media path available for library addition")
+            return
+            
+        try:
+            # Use edited media path if available, otherwise original
+            media_path_to_use = self.edited_media_path if self.edited_media_path else self.media_path
+            
+            # Create comprehensive metadata
+            metadata = {
+                "caption": post_data.get("caption", ""),
+                "instructions": post_data.get("instructions", ""),
+                "editing_instructions": post_data.get("editing_instructions", ""),
+                "context_files": post_data.get("context_files", []),
+                "platforms": post_data.get("platforms", []),
+                "creation_date": post_data.get("date_added", ""),
+                "media_type": "video" if self.is_video else "photo"
+            }
+            
+            # Add scheduling info if available
+            if post_data.get('scheduled_time'):
+                metadata['scheduled_time'] = post_data['scheduled_time']
+            if post_data.get('publish_immediately'):
+                metadata['publish_immediately'] = True
+            if post_data.get('add_to_queue'):
+                metadata['add_to_queue'] = True
+            
+            # Add to library as post-ready item
+            item = self.library_manager.add_item_from_path(
+                file_path=media_path_to_use,
+                caption=post_data.get("caption", ""),
+                metadata=metadata,
+                is_post_ready=True
+            )
+            
+            if item:
+                self.logger.info(f"Added post-ready item to library: {item['id']}")
+                self.add_to_library_requested.emit(post_data)
+                self.post_created.emit(item['id'])  # Emit the post_created signal
+            else:
+                self.logger.warning("Failed to add item to library")
+                
+        except Exception as e:
+            self.logger.error(f"Error adding to library: {e}")
+            raise
         
     def _load_media_preview(self):
         """Load and display media preview."""
@@ -830,56 +1211,41 @@ Ready for processing"""
         self.context_files_list.clear()
         
     def _add_to_library(self):
-        """Add the post to the library."""
+        """Add the post to the library (legacy method - defaults to library only)."""
         if not self.media_path:
             QMessageBox.warning(self, "No Media", "Please select a media file first.")
             return
-            
-        caption = self.caption_edit.toPlainText().strip()
-        instructions = self.instructions_edit.toPlainText().strip()
-        editing_instructions = self.editing_instructions_edit.toPlainText().strip()
         
-        # Create post data
-        post_data = {
-            "media_path": self.media_path,
-            "caption": caption,
-            "instructions": instructions,
-            "editing_instructions": editing_instructions,
-            "context_files": self.context_files.copy(),
-            "is_video": self.is_video
-        }
+        # Get post data
+        post_data = self.get_post_data()
         
-        try:
-            # Add to library as post-ready item
-            metadata = {
-                "instructions": instructions,
-                "editing_instructions": editing_instructions,
-                "context_files": self.context_files
-            }
-            
-            item_id = self.library_manager.add_item_from_path(
-                self.media_path,
-                caption=caption,
-                metadata=metadata,
-                is_post_ready=True
+        # Check if we have platform selection UI (new workflow)
+        if hasattr(self, 'platform_schedule_group'):
+            # Show message about new workflow options
+            reply = QMessageBox.question(
+                self, 
+                "Add to Library", 
+                "This will add the post to your library only.\n\n"
+                "For publishing options (Post Now, Queue, Schedule), use the buttons above.\n\n"
+                "Continue adding to library only?",
+                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+                QMessageBox.StandardButton.No
             )
             
-            if item_id:
-                self.post_created.emit(item_id)
-                QMessageBox.information(
-                    self, 
-                    "Success", 
-                    "Post has been added to your library!\n\n"
-                    "You can now find it in the 'Finished Posts' section."
-                )
-                self.accept()
-            else:
-                QMessageBox.critical(
-                    self, 
-                    "Error", 
-                    "Failed to add post to library. Please try again."
-                )
-                
+            if reply == QMessageBox.StandardButton.No:
+                return
+        
+        # Use the new method for consistency
+        try:
+            self._add_to_library_with_data(post_data)
+            QMessageBox.information(
+                self, 
+                "Success", 
+                "Post has been added to your library!\n\n"
+                "You can now find it in the 'Finished Posts' section."
+            )
+            self.accept()
+            
         except Exception as e:
             self.logger.error(f"Error adding post to library: {e}")
             QMessageBox.critical(
@@ -890,6 +1256,7 @@ Ready for processing"""
             
     def get_post_data(self) -> Dict[str, Any]:
         """Get the current post data."""
+        from datetime import datetime
         return {
             "media_path": self.media_path,
             "original_media_path": self.original_media_path,
@@ -899,7 +1266,8 @@ Ready for processing"""
             "instructions": self.instructions_edit.toPlainText().strip(),
             "editing_instructions": self.editing_instructions_edit.toPlainText().strip(),
             "context_files": self.context_files.copy(),
-            "is_video": self.is_video
+            "is_video": self.is_video,
+            "date_added": datetime.now().isoformat()
         }
     
     def retranslateUi(self):

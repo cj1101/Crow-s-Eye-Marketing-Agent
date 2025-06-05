@@ -87,6 +87,15 @@ class LibraryManager:
         except Exception as e:
             self.logger.error(f"Error saving library data: {e}")
             return False
+    
+    def get_current_timestamp(self) -> str:
+        """
+        Get current timestamp in ISO format.
+        
+        Returns:
+            str: Current timestamp in ISO format
+        """
+        return datetime.now().isoformat()
             
     def add_item_from_path(self, file_path: str, caption: str = "", 
                          date_added: str = None, metadata: dict = None, 

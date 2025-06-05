@@ -246,9 +246,13 @@ class CustomMediaUploadDialog(BaseDialog):
         platform_grid.addWidget(self.threads_checkbox, 2, 1)
         
         # Row 4: Business platforms
+        self.snapchat_checkbox = QCheckBox("Snapchat")
+        self.snapchat_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
+        platform_grid.addWidget(self.snapchat_checkbox, 3, 0)
+        
         self.google_business_checkbox = QCheckBox("Google My Business")
         self.google_business_checkbox.setStyleSheet("QCheckBox { font-size: 14px; }")
-        platform_grid.addWidget(self.google_business_checkbox, 3, 0)
+        platform_grid.addWidget(self.google_business_checkbox, 3, 1)
         
         platform_layout.addLayout(platform_grid)
         layout.addWidget(platform_group)
@@ -331,6 +335,7 @@ class CustomMediaUploadDialog(BaseDialog):
         self.pinterest_checkbox.toggled.connect(self._validate_form)
         self.bluesky_checkbox.toggled.connect(self._validate_form)
         self.threads_checkbox.toggled.connect(self._validate_form)
+        self.snapchat_checkbox.toggled.connect(self._validate_form)
         self.google_business_checkbox.toggled.connect(self._validate_form)
         
         # Unified handler signals

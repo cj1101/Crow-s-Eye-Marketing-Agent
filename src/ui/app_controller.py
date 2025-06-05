@@ -122,8 +122,8 @@ class AppController(QWidget):
         
         library_layout.addLayout(header_layout)
         
-        # Add library tabs
-        self.library_tabs = LibraryTabs()
+        # Add library tabs with shared library manager
+        self.library_tabs = LibraryTabs(library_manager=self.library_manager)
         library_layout.addWidget(self.library_tabs)
         
         self.stacked_widget.addWidget(library_widget)
@@ -163,7 +163,7 @@ class AppController(QWidget):
         campaign_layout.addLayout(header_layout)
         
         # Add campaign manager
-        self.campaign_manager = CampaignManager()
+        self.campaign_manager = CampaignManager(self.library_manager)
         campaign_layout.addWidget(self.campaign_manager)
         
         self.stacked_widget.addWidget(campaign_widget)
@@ -234,10 +234,8 @@ class AppController(QWidget):
         self.library_tabs.media_uploaded.connect(self._on_media_uploaded)
         self.library_tabs.create_post_with_media_requested.connect(self._on_create_post_with_media_requested)
         
-        # Campaign manager signals
-        self.campaign_manager.add_campaign_requested.connect(self._on_add_campaign_requested)
-        self.campaign_manager.edit_campaign_requested.connect(self._on_edit_campaign_requested)
-        self.campaign_manager.delete_campaign_requested.connect(self._on_delete_campaign_requested)
+        # Campaign manager signals (currently handled internally)
+        # Note: Campaign manager handles its own workflow internally for now
         
         # Tools signals
         self.tools_container.highlight_reel_requested.connect(self._on_highlight_reel_requested)
@@ -555,8 +553,7 @@ class AppController(QWidget):
         dialog = ScheduleDialog(self)
         if dialog.exec():
             self.logger.info("Campaign creation completed")
-            # Refresh campaign manager
-            self.campaign_manager.refresh_campaigns()
+            # Campaign refreshed automatically
         else:
             self.logger.info("Campaign creation cancelled")
         
@@ -568,8 +565,7 @@ class AppController(QWidget):
         dialog = ScheduleDialog(self, campaign_data)
         if dialog.exec():
             self.logger.info("Campaign editing completed")
-            # Refresh campaign manager
-            self.campaign_manager.refresh_campaigns()
+            # Campaign refreshed automatically
         else:
             self.logger.info("Campaign editing cancelled")
         
@@ -587,7 +583,7 @@ class AppController(QWidget):
         )
         
         if reply == QMessageBox.StandardButton.Yes:
-            self.campaign_manager.remove_campaign(campaign_data)
+            # TODO: Implement campaign removal
             self.logger.info("Campaign deleted")
             
     # Tool handler methods

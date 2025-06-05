@@ -4,6 +4,7 @@ Library tabs component - Simple tab structure for the new library layout.
 import logging
 import os
 import shutil
+from datetime import datetime
 from typing import Optional
 
 from PySide6.QtWidgets import (
@@ -18,6 +19,7 @@ from ...models.app_state import AppState
 from ...handlers.media_handler import MediaHandler
 from ...handlers.crowseye_handler import CrowsEyeHandler
 from .media_thumbnail_widget import MediaThumbnailWidget
+from .selectable_media_widget import SelectableMediaWidget
 
 class LibraryTabs(QWidget):
     """Simple library tabs widget following the new specification."""
@@ -29,17 +31,21 @@ class LibraryTabs(QWidget):
     media_uploaded = Signal()  # Signal when media is uploaded
     create_post_with_media_requested = Signal(str)  # Signal to create post with pre-loaded media
     
-    def __init__(self, parent=None):
+    def __init__(self, library_manager: LibraryManager = None, parent=None):
         super().__init__(parent)
         self.logger = logging.getLogger(self.__class__.__name__)
         
-        # Initialize library manager
-        self.library_manager = LibraryManager()
+        # Use provided library manager or create new one
+        self.library_manager = library_manager if library_manager else LibraryManager()
         
         # Initialize media handlers
         self.app_state = AppState()
         self.media_handler = MediaHandler(self.app_state)
         self.crowseye_handler = CrowsEyeHandler(self.app_state, self.media_handler, self.library_manager)
+        
+        # Track selected media for gallery creation
+        self.selected_media = set()
+        self.media_widgets = {}  # Map media_path to widget for selection tracking
         
         self._setup_ui()
         
@@ -140,6 +146,101 @@ class LibraryTabs(QWidget):
         
         layout.addLayout(header_layout)
         
+        # Selection controls (initially hidden)
+        self.selection_controls = QWidget()
+        selection_layout = QHBoxLayout(self.selection_controls)
+        selection_layout.setContentsMargins(0, 10, 0, 0)
+        
+        self.select_all_btn = QPushButton("Select All")
+        self.select_all_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #007bff;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #0056b3;
+            }
+        """)
+        self.select_all_btn.clicked.connect(self._select_all_media_combined)
+        selection_layout.addWidget(self.select_all_btn)
+        
+        self.clear_selection_btn = QPushButton("Clear Selection")
+        self.clear_selection_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                border: none;
+                padding: 6px 12px;
+                border-radius: 4px;
+                font-size: 12px;
+            }
+            QPushButton:hover {
+                background-color: #545b62;
+            }
+        """)
+        self.clear_selection_btn.clicked.connect(self._clear_selection)
+        selection_layout.addWidget(self.clear_selection_btn)
+        
+        self.selected_count_label = QLabel("0 selected")
+        self.selected_count_label.setStyleSheet("color: #666; font-size: 12px; margin-left: 10px;")
+        selection_layout.addWidget(self.selected_count_label)
+        
+        selection_layout.addStretch()
+        
+        # Action buttons
+        self.create_gallery_btn = QPushButton("Create Gallery")
+        self.create_gallery_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #28a745;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #218838;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.create_gallery_btn.clicked.connect(self._create_gallery_from_selection)
+        self.create_gallery_btn.setEnabled(False)
+        selection_layout.addWidget(self.create_gallery_btn)
+        
+        self.delete_selected_btn = QPushButton("Delete Selected")
+        self.delete_selected_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 8px 16px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.delete_selected_btn.clicked.connect(self._delete_selected_media)
+        self.delete_selected_btn.setEnabled(False)
+        selection_layout.addWidget(self.delete_selected_btn)
+        
+        self.selection_controls.setVisible(False)
+        layout.addWidget(self.selection_controls)
+        
         # Content area with side-by-side sections
         content_layout = QHBoxLayout()
         
@@ -205,6 +306,8 @@ class LibraryTabs(QWidget):
         
         layout.addLayout(header_layout)
         
+
+        
         # Scroll area for media items
         scroll_area = QScrollArea()
         scroll_area.setWidgetResizable(True)
@@ -224,153 +327,105 @@ class LibraryTabs(QWidget):
         return section
         
     def _create_finished_posts_tab(self):
-        """Create the Finished Posts tab with sub-tabs."""
-        posts_tab = QWidget()
-        posts_layout = QVBoxLayout(posts_tab)
+        """Create the finished posts tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setSpacing(10)
         
-        # Header with Create Gallery button
+        # Header with title only (removed Create Gallery button)
         header_layout = QHBoxLayout()
         
         title_label = QLabel("Finished Posts")
-        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #000000; margin-bottom: 10px;")
+        title_label.setStyleSheet("font-size: 18px; font-weight: bold; color: #333333;")
         header_layout.addWidget(title_label)
         
         header_layout.addStretch()
         
-        # Selection info
-        self.selection_info = QLabel("No items selected")
-        self.selection_info.setStyleSheet("font-size: 12px; color: #666666; margin-right: 15px;")
-        header_layout.addWidget(self.selection_info)
+        layout.addLayout(header_layout)
         
-        # Clear selection button
-        self.clear_selection_btn = QPushButton("Clear Selection")
-        self.clear_selection_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #6b7280;
-                color: white;
-                border: none;
-                padding: 8px 16px;
-                border-radius: 4px;
-                font-size: 12px;
-                margin-right: 10px;
-            }
-            QPushButton:hover {
-                background-color: #4b5563;
-            }
-        """)
-        self.clear_selection_btn.clicked.connect(self._clear_finished_posts_selection)
-        self.clear_selection_btn.hide()  # Initially hidden
-        header_layout.addWidget(self.clear_selection_btn)
+        # Info text
+        info_label = QLabel("Ready-to-post content organized by type")
+        info_label.setStyleSheet("color: #666666; font-size: 12px; margin-bottom: 10px;")
+        layout.addWidget(info_label)
         
-        # Create Gallery button
-        self.create_gallery_btn = QPushButton("Create Gallery")
-        self.create_gallery_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #7c3aed;
-                color: white;
-                border: none;
-                padding: 10px 20px;
-                border-radius: 6px;
-                font-size: 14px;
-                font-weight: bold;
-            }
-            QPushButton:hover {
-                background-color: #6d28d9;
-            }
-            QPushButton:disabled {
-                background-color: #9ca3af;
-                color: #6b7280;
-            }
-        """)
-        self.create_gallery_btn.clicked.connect(self._create_gallery_from_finished_posts)
-        self.create_gallery_btn.setEnabled(False)  # Initially disabled
-        header_layout.addWidget(self.create_gallery_btn)
-        
-        posts_layout.addLayout(header_layout)
-        
-        # Initialize selection tracking
-        self.selected_finished_posts = []
-        
-        # Sub-tabs for different post types
-        posts_sub_tabs = QTabWidget()
-        posts_sub_tabs.setStyleSheet("""
+        # Subtabs for different post types
+        self.finished_posts_subtabs = QTabWidget()
+        self.finished_posts_subtabs.setStyleSheet("""
             QTabWidget::pane {
-                border: 1px solid #dddddd;
-                background-color: #fafafa;
+                border: 1px solid #cccccc;
+                border-radius: 5px;
+                background-color: white;
             }
             QTabBar::tab {
-                background-color: #e8e8e8;
-                color: #000000;
-                padding: 6px 12px;
-                margin-right: 1px;
-                border: 1px solid #dddddd;
-                border-bottom: none;
-                font-size: 12px;
+                background-color: #f0f0f0;
+                color: #333333;
+                border: 1px solid #cccccc;
+                padding: 8px 16px;
+                margin-right: 2px;
+                border-top-left-radius: 4px;
+                border-top-right-radius: 4px;
             }
             QTabBar::tab:selected {
-                background-color: #fafafa;
-                color: #000000;
-                font-weight: bold;
+                background-color: white;
+                border-bottom-color: white;
+            }
+            QTabBar::tab:hover {
+                background-color: #e0e0e0;
             }
         """)
         
-        # Create sub-tabs for different post types
-        post_types = ["Photo Posts", "Galleries", "Videos/Reels", "Text"]
+        # Create subtabs
+        post_types = ["Photo Posts", "Videos/Reels", "Stories", "Carousels"]
         for post_type in post_types:
             subtab = self._create_posts_subtab(post_type)
-            posts_sub_tabs.addTab(subtab, post_type)
+            self.finished_posts_subtabs.addTab(subtab, post_type)
         
-        posts_layout.addWidget(posts_sub_tabs)
-        
-        return posts_tab
-        
-    def _create_posts_subtab(self, post_type: str):
-        """Create a finished posts sub-tab."""
-        tab = QWidget()
-        layout = QVBoxLayout(tab)
-        layout.setContentsMargins(10, 10, 10, 10)
-        
-        # Header
-        title_label = QLabel(f"{post_type} Posts")
-        title_label.setStyleSheet("font-size: 16px; font-weight: bold; color: #000000; margin-bottom: 10px;")
-        layout.addWidget(title_label)
-        
-        # Scroll area for posts
-        scroll_area = QScrollArea()
-        scroll_area.setWidgetResizable(True)
-        scroll_area.setStyleSheet("QScrollArea { border: none; }")
-        
-        # Container for posts grid
-        container = QWidget()
-        grid_layout = QGridLayout(container)
-        grid_layout.setSpacing(10)
-        
-        # Load actual finished posts from library manager
-        self._load_finished_posts_to_grid(grid_layout, post_type)
-        
-        scroll_area.setWidget(container)
-        layout.addWidget(scroll_area)
+        layout.addWidget(self.finished_posts_subtabs)
         
         return tab
         
+    def _create_posts_subtab(self, post_type: str):
+        """Create a subtab for a specific post type."""
+        widget = QWidget()
+        layout = QVBoxLayout(widget)
+        layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Create scroll area for posts
+        scroll = QScrollArea()
+        scroll.setWidgetResizable(True)
+        scroll.setStyleSheet("QScrollArea { border: none; background-color: white; }")
+        
+        scroll_content = QWidget()
+        scroll_layout = QGridLayout(scroll_content)
+        scroll_layout.setSpacing(10)
+        scroll_layout.setContentsMargins(10, 10, 10, 10)
+        
+        # Load posts for this type
+        self._load_finished_posts_to_grid(scroll_layout, post_type)
+        
+        scroll.setWidget(scroll_content)
+        layout.addWidget(scroll)
+        
+        return widget
+    
     def _load_finished_posts_to_grid(self, grid_layout, post_type):
         """Load finished posts from library manager into the grid."""
         try:
             # Get finished posts from library manager
             if post_type == "Photo Posts":
                 # Load both photos and videos for photo posts
-                posts = self.library_manager.get_all_post_ready_items()
+                posts = self.library_manager.get_all_post_ready_items() if self.library_manager else []
             elif post_type == "Videos/Reels":
                 # Load only videos
-                posts = self.library_manager.get_post_ready_videos()
+                posts = self.library_manager.get_post_ready_videos() if self.library_manager else []
             else:
                 # For now, other types show empty
                 posts = []
             
             if not posts:
                 # Show placeholder if no posts
-                display_name = post_type.lower().replace(" posts", "") if "posts" in post_type.lower() else post_type.lower()
-                placeholder_label = QLabel(f"No {display_name} found\n\nCreate content using the 'Create Post' feature")
+                placeholder_label = QLabel(f"No {post_type.lower()} found\n\nCreate posts using the 'Create Post' feature")
                 placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
                 placeholder_label.setStyleSheet("color: #666666; font-size: 14px; padding: 40px;")
                 placeholder_label.setWordWrap(True)
@@ -414,40 +469,17 @@ class LibraryTabs(QWidget):
             }
         """)
         widget.setCursor(Qt.CursorShape.PointingHandCursor)
-        
-        # Store post data and selection state
+
+        # Store post data
         widget.post_data = post_data
-        widget.is_selected = False
         
         layout = QVBoxLayout(widget)
         layout.setContentsMargins(8, 8, 8, 8)
         layout.setSpacing(5)
         
-        # Selection indicator (checkbox)
-        widget.checkbox = QPushButton("☐")
-        widget.checkbox.setFixedSize(20, 20)
-        widget.checkbox.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-                font-size: 14px;
-                text-align: center;
-            }
-            QPushButton:hover {
-                background-color: #f0f0f0;
-            }
-        """)
-        widget.checkbox.clicked.connect(lambda: self._toggle_finished_post_selection(widget))
-        
-        checkbox_layout = QHBoxLayout()
-        checkbox_layout.addWidget(widget.checkbox)
-        checkbox_layout.addStretch()
-        layout.addLayout(checkbox_layout)
-        
         # Media preview
         preview_label = QLabel()
-        preview_label.setFixedSize(180, 135)
+        preview_label.setFixedSize(180, 150)
         preview_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         preview_label.setStyleSheet("border: 1px solid #ddd; border-radius: 4px; background-color: #f5f5f5;")
         
@@ -458,7 +490,7 @@ class LibraryTabs(QWidget):
                 pixmap = QPixmap(media_path)
                 if not pixmap.isNull():
                     # Scale pixmap to fit
-                    scaled_pixmap = pixmap.scaled(180, 135, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
+                    scaled_pixmap = pixmap.scaled(180, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation)
                     preview_label.setPixmap(scaled_pixmap)
                 else:
                     preview_label.setText("📷\nPreview\nUnavailable")
@@ -501,14 +533,12 @@ class LibraryTabs(QWidget):
         type_label.setStyleSheet("font-size: 10px; color: #007bff; font-weight: bold;")
         layout.addWidget(type_label)
         
-        # Connect click event for post viewing (right-click or double-click)
-        def on_click(event):
+        # Connect click event to open post preview
+        def on_widget_click(event):
             if event.button() == Qt.MouseButton.LeftButton:
-                self._toggle_finished_post_selection(widget)
-            elif event.button() == Qt.MouseButton.RightButton:
-                self.finished_post_selected.emit(post_data)
+                self._open_post_preview(post_data)
         
-        widget.mousePressEvent = on_click
+        widget.mousePressEvent = on_widget_click
         
         return widget
         
@@ -541,14 +571,26 @@ class LibraryTabs(QWidget):
             
             for media_path in media_paths:
                 if os.path.exists(media_path):
-                    thumbnail = MediaThumbnailWidget(media_path, widget_type)
-                    thumbnail.clicked.connect(self._on_media_selected)
+                    # Use selectable widget for the media tab
+                    thumbnail = SelectableMediaWidget(media_path, widget_type)
+                    thumbnail.selection_changed.connect(self._on_media_selection_changed)
+                    thumbnail.media_clicked.connect(self._on_media_selected)  # Both clicks show options dialog
+                    
+                    # Store widget reference for selection management
+                    self.media_widgets[media_path] = thumbnail
+                    
                     grid_layout.addWidget(thumbnail, row, col)
                     
                     col += 1
                     if col >= max_cols:
                         col = 0
                         row += 1
+            
+            # Show selection controls if we have any media in either section
+            all_media = self.crowseye_handler.get_all_media()
+            has_any_media = (all_media.get("raw_photos", []) or all_media.get("raw_videos", []))
+            if has_any_media:
+                self.selection_controls.setVisible(True)
                         
         except Exception as e:
             self.logger.error(f"Error loading {media_type}: {e}")
@@ -559,11 +601,16 @@ class LibraryTabs(QWidget):
             grid_layout.addWidget(error_label, 0, 0)
     
     def _on_media_selected(self, media_path):
-        """Handle media selection by showing options dialog."""
-        self.logger.info(f"Media selected: {media_path}")
+        """Handle media click by showing options dialog for unedited media."""
+        self.logger.info(f"Unedited media clicked: {media_path}")
         
-        # Show options dialog for the selected media
+        # Debug logging
+        self.logger.debug(f"About to show media options dialog for: {media_path}")
+        
+        # Show options dialog for unedited media (needs editing before posting)
         self._show_media_options_dialog(media_path)
+    
+
     
     def _show_media_options_dialog(self, media_path):
         """Show options dialog for selected media."""
@@ -571,9 +618,12 @@ class LibraryTabs(QWidget):
         from PySide6.QtCore import Qt
         from PySide6.QtGui import QPixmap, QFont
         
+        self.logger.debug(f"Creating media options dialog for: {media_path}")
+        
         dialog = QDialog(self)
         dialog.setWindowTitle("Media Options")
         dialog.setFixedSize(500, 600)
+        dialog.setWindowFlags(Qt.WindowType.Dialog | Qt.WindowType.WindowTitleHint | Qt.WindowType.WindowCloseButtonHint)
         dialog.setStyleSheet("""
             QDialog {
                 background-color: #f8f9fa;
@@ -650,16 +700,17 @@ class LibraryTabs(QWidget):
         options_label.setStyleSheet("font-size: 14px; color: #34495e; font-weight: bold; margin: 10px 0;")
         layout.addWidget(options_label)
         
-        # Option buttons
+        # Option buttons - Updated to include "Create Gallery" option
         options = [
             ("🎨 Create Post", "Create a social media post with this media", self._create_post_with_media),
             ("✂️ Edit Media", "Edit or enhance this media", self._edit_media),
-            ("🖼️ Add to Gallery", "Add this media to a new or existing gallery", self._add_to_gallery),
+            ("🖼️ Create Gallery", "Create a new gallery starting with this media", self._create_gallery_with_media),
+            ("🖼️ Add to Gallery", "Add this media to an existing gallery", self._add_to_gallery),
             ("📱 Generate Post Variants", "Create multiple post variations", self._generate_variants),
             ("🎯 Quick Share", "Share directly to social platforms", self._quick_share),
             ("🏷️ Add Tags/Caption", "Add metadata and captions", self._add_metadata),
             ("📊 Analyze Media", "Get AI insights about this media", self._analyze_media),
-            ("🗂️ Move to Folder", "Organize this media", self._organize_media)
+            ("📋 Move to Campaign", "Move this media to a campaign", self._organize_media)
         ]
         
         for icon_title, description, action in options:
@@ -689,7 +740,9 @@ class LibraryTabs(QWidget):
         
         layout.addLayout(close_layout)
         
-        dialog.exec()
+        self.logger.debug(f"Executing media options dialog for: {media_path}")
+        result = dialog.exec()
+        self.logger.debug(f"Media options dialog result: {result}")
     
     def _create_option_button(self, title, description, action):
         """Create an option button with title and description."""
@@ -776,22 +829,85 @@ class LibraryTabs(QWidget):
             )
     
     def _add_to_gallery(self, media_path):
-        """Add media to a gallery."""
-        self.logger.info(f"Adding to gallery: {media_path}")
+        """Add media to an existing gallery."""
+        self.logger.info(f"Adding media to gallery: {media_path}")
         
         # Get existing galleries
-        galleries = self.crowseye_handler.get_saved_galleries()
-        
-        if not galleries:
-            # No existing galleries, create new one
-            gallery_name, ok = QInputDialog.getText(
-                self,
-                "Create New Gallery",
-                "Enter a name for the new gallery:",
-                text="New Gallery"
-            )
+        try:
+            galleries = self.crowseye_handler.get_all_galleries()
             
-            if ok and gallery_name:
+            if not galleries:
+                # No galleries exist - offer to create one
+                from PySide6.QtWidgets import QMessageBox
+                reply = QMessageBox.question(
+                    self,
+                    "No Galleries Found",
+                    "No galleries exist yet. Would you like to create a new gallery with this media?",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                
+                if reply == QMessageBox.StandardButton.Yes:
+                    self._create_new_gallery_with_media(None, media_path)
+                return
+            
+            # Show gallery selection dialog
+            from PySide6.QtWidgets import QDialog, QVBoxLayout, QListWidget, QPushButton, QHBoxLayout, QLabel
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Select Gallery")
+            dialog.setFixedSize(400, 300)
+            
+            layout = QVBoxLayout(dialog)
+            
+            label = QLabel("Select a gallery to add this media to:")
+            layout.addWidget(label)
+            
+            gallery_list = QListWidget()
+            for gallery in galleries:
+                gallery_name = gallery.get("name", "Unnamed Gallery")
+                gallery_list.addItem(gallery_name)
+            layout.addWidget(gallery_list)
+            
+            buttons_layout = QHBoxLayout()
+            
+            add_btn = QPushButton("Add to Selected")
+            add_btn.clicked.connect(lambda: self._add_to_selected_gallery(dialog, gallery_list, media_path, galleries))
+            buttons_layout.addWidget(add_btn)
+            
+            new_btn = QPushButton("Create New Gallery")
+            new_btn.clicked.connect(lambda: self._create_new_gallery_with_media(dialog, media_path))
+            buttons_layout.addWidget(new_btn)
+            
+            cancel_btn = QPushButton("Cancel")
+            cancel_btn.clicked.connect(dialog.reject)
+            buttons_layout.addWidget(cancel_btn)
+            
+            layout.addLayout(buttons_layout)
+            
+            dialog.exec()
+            
+        except Exception as e:
+            self.logger.error(f"Error adding to gallery: {e}")
+            from PySide6.QtWidgets import QMessageBox
+            QMessageBox.critical(self, "Error", f"Could not add to gallery: {str(e)}")
+    
+    def _create_gallery_with_media(self, media_path):
+        """Create a new gallery starting with the selected media."""
+        self.logger.info(f"Creating new gallery with media: {media_path}")
+        
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+        
+        # Get gallery name
+        gallery_name, ok = QInputDialog.getText(
+            self,
+            "Create Gallery",
+            "Enter a name for your new gallery:",
+            text=f"Gallery_{os.path.basename(media_path).split('.')[0]}"
+        )
+        
+        if ok and gallery_name:
+            try:
+                # Create gallery with the media
                 caption = f"Gallery created with {os.path.basename(media_path)}"
                 success = self.crowseye_handler.save_gallery(gallery_name, [media_path], caption)
                 
@@ -799,7 +915,7 @@ class LibraryTabs(QWidget):
                     QMessageBox.information(
                         self,
                         "Gallery Created",
-                        f"Created new gallery '{gallery_name}' with selected media!"
+                        f"Gallery '{gallery_name}' created successfully with the selected media!"
                     )
                     self.refresh_content()
                 else:
@@ -808,72 +924,49 @@ class LibraryTabs(QWidget):
                         "Gallery Creation Failed",
                         "Failed to create gallery. Please try again."
                     )
-        else:
-            # Show dialog to choose existing gallery or create new
-            dialog = QDialog(self)
-            dialog.setWindowTitle("Add to Gallery")
-            dialog.setFixedSize(400, 300)
-            
-            layout = QVBoxLayout(dialog)
-            
-            label = QLabel("Choose an existing gallery or create a new one:")
-            layout.addWidget(label)
-            
-            # List of existing galleries
-            gallery_list = QListWidget()
-            for gallery in galleries:
-                gallery_list.addItem(gallery.get('name', 'Unnamed Gallery'))
-            layout.addWidget(gallery_list)
-            
-            # Buttons
-            button_layout = QHBoxLayout()
-            
-            new_btn = QPushButton("Create New Gallery")
-            new_btn.clicked.connect(lambda: self._create_new_gallery_with_media(dialog, media_path))
-            button_layout.addWidget(new_btn)
-            
-            add_btn = QPushButton("Add to Selected")
-            add_btn.clicked.connect(lambda: self._add_to_selected_gallery(dialog, gallery_list, media_path, galleries))
-            button_layout.addWidget(add_btn)
-            
-            cancel_btn = QPushButton("Cancel")
-            cancel_btn.clicked.connect(dialog.reject)
-            button_layout.addWidget(cancel_btn)
-            
-            layout.addLayout(button_layout)
-            
-            dialog.exec()
+            except Exception as e:
+                self.logger.error(f"Error creating gallery: {e}")
+                QMessageBox.critical(self, "Error", f"Could not create gallery: {str(e)}")
     
     def _create_new_gallery_with_media(self, parent_dialog, media_path):
         """Create a new gallery with the selected media."""
+        from PySide6.QtWidgets import QInputDialog, QMessageBox
+        
         gallery_name, ok = QInputDialog.getText(
-            parent_dialog,
+            parent_dialog or self,
             "Create New Gallery",
             "Enter a name for the new gallery:",
             text="New Gallery"
         )
         
         if ok and gallery_name:
-            caption = f"Gallery created with {os.path.basename(media_path)}"
-            success = self.crowseye_handler.save_gallery(gallery_name, [media_path], caption)
-            
-            if success:
-                QMessageBox.information(
-                    parent_dialog,
-                    "Gallery Created",
-                    f"Created new gallery '{gallery_name}' with selected media!"
-                )
-                parent_dialog.accept()
-                self.refresh_content()
-            else:
-                QMessageBox.critical(
-                    parent_dialog,
-                    "Gallery Creation Failed",
-                    "Failed to create gallery. Please try again."
-                )
+            try:
+                caption = f"Gallery created with {os.path.basename(media_path)}"
+                success = self.crowseye_handler.save_gallery(gallery_name, [media_path], caption)
+                
+                if success:
+                    QMessageBox.information(
+                        parent_dialog or self,
+                        "Gallery Created",
+                        f"Created new gallery '{gallery_name}' with selected media!"
+                    )
+                    if parent_dialog:
+                        parent_dialog.accept()
+                    self.refresh_content()
+                else:
+                    QMessageBox.critical(
+                        parent_dialog or self,
+                        "Gallery Creation Failed",
+                        "Failed to create gallery. Please try again."
+                    )
+            except Exception as e:
+                self.logger.error(f"Error creating new gallery: {e}")
+                QMessageBox.critical(parent_dialog or self, "Error", f"Could not create gallery: {str(e)}")
     
     def _add_to_selected_gallery(self, parent_dialog, gallery_list, media_path, galleries):
         """Add media to the selected existing gallery."""
+        from PySide6.QtWidgets import QMessageBox
+        
         current_item = gallery_list.currentItem()
         if not current_item:
             QMessageBox.warning(parent_dialog, "No Selection", "Please select a gallery first.")
@@ -885,22 +978,26 @@ class LibraryTabs(QWidget):
             gallery_filename = gallery.get('filename', '')
             
             if gallery_filename:
-                success = self.crowseye_handler.add_media_to_gallery(gallery_filename, [media_path])
-                
-                if success:
-                    QMessageBox.information(
-                        parent_dialog,
-                        "Media Added",
-                        f"Added media to gallery '{gallery.get('name', 'Unnamed Gallery')}'!"
-                    )
-                    parent_dialog.accept()
-                    self.refresh_content()
-                else:
-                    QMessageBox.critical(
-                        parent_dialog,
-                        "Addition Failed",
-                        "Failed to add media to gallery. Please try again."
-                    )
+                try:
+                    success = self.crowseye_handler.add_media_to_gallery(gallery_filename, [media_path])
+                    
+                    if success:
+                        QMessageBox.information(
+                            parent_dialog,
+                            "Media Added",
+                            f"Added media to gallery '{gallery.get('name', 'Unnamed Gallery')}'!"
+                        )
+                        parent_dialog.accept()
+                        self.refresh_content()
+                    else:
+                        QMessageBox.critical(
+                            parent_dialog,
+                            "Addition Failed",
+                            "Failed to add media to gallery. Please try again."
+                        )
+                except Exception as e:
+                    self.logger.error(f"Error adding to selected gallery: {e}")
+                    QMessageBox.critical(parent_dialog, "Error", f"Could not add to gallery: {str(e)}")
     
     def _generate_variants(self, media_path):
         """Generate post variants."""
@@ -939,12 +1036,16 @@ class LibraryTabs(QWidget):
         )
     
     def _organize_media(self, media_path):
-        """Organize media into folders."""
-        self.logger.info(f"Organizing media: {media_path}")
+        """Move media to a campaign."""
+        self.logger.info(f"Moving media to campaign: {media_path}")
+        
+        # For now, show placeholder for campaign management
+        from PySide6.QtWidgets import QMessageBox
         QMessageBox.information(
             self,
-            "Organize Media",
-            f"Organizing:\n{os.path.basename(media_path)}\n\n(Media organization feature coming soon)"
+            "Move to Campaign",
+            f"Campaign management for:\n{os.path.basename(media_path)}\n\n"
+            "(Campaign organization features coming soon)"
         )
     
     def refresh_content(self):
@@ -953,6 +1054,10 @@ class LibraryTabs(QWidget):
         
         try:
             current_index = self.tab_widget.currentIndex()
+            
+            # Clear selection tracking
+            self.selected_media.clear()
+            self.media_widgets.clear()
             
             # Initialize selection tracking if not exists
             if not hasattr(self, 'selected_finished_posts'):
@@ -1044,208 +1149,289 @@ class LibraryTabs(QWidget):
         # TODO: Implement when i18n is needed
         pass 
 
-    def _toggle_finished_post_selection(self, widget):
-        """Toggle selection state of a finished post."""
-        if widget.is_selected:
-            # Deselect
-            widget.is_selected = False
-            widget.checkbox.setText("☐")
-            widget.setStyleSheet("""
-                QWidget {
-                    background-color: white;
-                    border: 1px solid #e0e0e0;
-                    border-radius: 8px;
-                }
-                QWidget:hover {
-                    border-color: #007bff;
-                    background-color: #f8f9fa;
-                }
-            """)
-            if widget.post_data in self.selected_finished_posts:
-                self.selected_finished_posts.remove(widget.post_data)
-        else:
-            # Select
-            widget.is_selected = True
-            widget.checkbox.setText("☑")
-            widget.setStyleSheet("""
-                QWidget {
-                    background-color: #e3f2fd;
-                    border: 2px solid #2196f3;
-                    border-radius: 8px;
-                }
-                QWidget:hover {
-                    background-color: #bbdefb;
-                }
-            """)
-            if widget.post_data not in self.selected_finished_posts:
-                self.selected_finished_posts.append(widget.post_data)
-        
-        self._update_finished_posts_selection_ui()
+    def _open_post_preview(self, post_data):
+        """Open the post preview dialog for a finished post."""
+        try:
+            from ..dialogs.post_preview_dialog import PostPreviewDialog
+            
+            dialog = PostPreviewDialog(post_data, parent=self)
+            
+            # Connect signals
+            dialog.post_now_requested.connect(self._handle_post_now)
+            dialog.add_to_campaign_requested.connect(self._handle_add_to_campaign)
+            dialog.schedule_post_requested.connect(self._handle_schedule_post)
+            dialog.edit_post_requested.connect(self._handle_edit_post)
+            
+            dialog.exec()
+            
+        except Exception as e:
+            self.logger.error(f"Error opening post preview: {e}")
+            QMessageBox.critical(self, "Error", f"Could not open post preview: {str(e)}")
     
-    def _update_finished_posts_selection_ui(self):
-        """Update the selection UI elements."""
-        count = len(self.selected_finished_posts)
-        
-        if count == 0:
-            self.selection_info.setText("No items selected")
-            self.clear_selection_btn.hide()
-            self.create_gallery_btn.setEnabled(False)
-        else:
-            self.selection_info.setText(f"{count} item(s) selected")
-            self.clear_selection_btn.show()
-            self.create_gallery_btn.setEnabled(count >= 2)  # Need at least 2 items for gallery
-    
-    def _clear_finished_posts_selection(self):
-        """Clear all selections in finished posts."""
-        for post_data in self.selected_finished_posts.copy():
-            # Find the widget and deselect it
-            # Note: This is a simplified approach; in a real implementation, 
-            # you'd want to keep track of widgets properly
-            pass
-        
-        self.selected_finished_posts.clear()
-        self._update_finished_posts_selection_ui()
-        
-        # Refresh the tab to reset visual states
-        self.refresh_content()
-    
-    def _create_gallery_from_finished_posts(self):
-        """Create a gallery from selected finished posts with platform validation."""
-        if len(self.selected_finished_posts) < 2:
-            QMessageBox.warning(
-                self,
-                "Insufficient Selection",
-                "Please select at least 2 items to create a gallery."
+    def _handle_post_now(self, post_data):
+        """Handle post now request from preview dialog."""
+        try:
+            platforms = ", ".join(post_data.get('platforms', []))
+            self.logger.info(f"Post now requested for platforms: {platforms}")
+            
+            # TODO: Implement actual posting logic
+            QMessageBox.information(
+                self, 
+                "Post Now", 
+                f"Post would be published immediately to: {platforms}\n\n"
+                "(Publishing integration coming soon)"
             )
+            
+        except Exception as e:
+            self.logger.error(f"Error in post now: {e}")
+            QMessageBox.critical(self, "Error", f"Could not post now: {str(e)}")
+    
+    def _handle_add_to_campaign(self, post_data):
+        """Handle add to campaign request from preview dialog."""
+        try:
+            platforms = ", ".join(post_data.get('platforms', []))
+            self.logger.info(f"Add to campaign requested for platforms: {platforms}")
+            
+            # TODO: Implement campaign selection/creation dialog
+            QMessageBox.information(
+                self, 
+                "Add to Campaign", 
+                f"Post would be added to a campaign for: {platforms}\n\n"
+                "(Campaign management coming next)"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error adding to campaign: {e}")
+            QMessageBox.critical(self, "Error", f"Could not add to campaign: {str(e)}")
+    
+    def _handle_schedule_post(self, post_data):
+        """Handle schedule post request from preview dialog."""
+        try:
+            platforms = ", ".join(post_data.get('platforms', []))
+            self.logger.info(f"Schedule post requested for platforms: {platforms}")
+            
+            # TODO: Implement scheduling dialog
+            QMessageBox.information(
+                self, 
+                "Schedule Post", 
+                f"Post would be scheduled for: {platforms}\n\n"
+                "(Scheduling interface coming soon)"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Error scheduling post: {e}")
+            QMessageBox.critical(self, "Error", f"Could not schedule post: {str(e)}")
+    
+    def _handle_edit_post(self, post_data):
+        """Handle edit post request from preview dialog."""
+        try:
+            media_path = post_data.get('path', '')
+            self.logger.info(f"Edit post requested for: {media_path}")
+            
+            # Emit signal to trigger post editing
+            self.create_post_with_media_requested.emit(media_path)
+            
+        except Exception as e:
+            self.logger.error(f"Error editing post: {e}")
+            QMessageBox.critical(self, "Error", f"Could not edit post: {str(e)}")
+    
+    def _on_media_selection_changed(self, media_path: str, is_selected: bool):
+        """Handle media selection change."""
+        if is_selected:
+            self.selected_media.add(media_path)
+        else:
+            self.selected_media.discard(media_path)
+        
+        self._update_selection_ui()
+    
+    def _update_selection_ui(self):
+        """Update the selection UI based on current selection."""
+        count = len(self.selected_media)
+        self.selected_count_label.setText(f"{count} selected")
+        
+        # Enable/disable action buttons based on selection
+        has_selection = count > 0
+        self.create_gallery_btn.setEnabled(has_selection)
+        self.delete_selected_btn.setEnabled(has_selection)
+    
+    def _select_all_media_combined(self):
+        """Select all media (both photos and videos)."""
+        try:
+            all_media = self.crowseye_handler.get_all_media()
+            
+            # Select all photos and videos
+            all_media_paths = all_media.get("raw_photos", []) + all_media.get("raw_videos", [])
+            
+            for media_path in all_media_paths:
+                if media_path in self.media_widgets:
+                    widget = self.media_widgets[media_path]
+                    widget.set_selected(True)
+                    
+        except Exception as e:
+            self.logger.error(f"Error selecting all media: {e}")
+    
+    def _select_all_media(self, media_type: str):
+        """Select all media of the specified type."""
+        try:
+            all_media = self.crowseye_handler.get_all_media()
+            
+            if media_type == "Photos":
+                media_paths = all_media.get("raw_photos", [])
+            else:  # Videos
+                media_paths = all_media.get("raw_videos", [])
+            
+            for media_path in media_paths:
+                if media_path in self.media_widgets:
+                    widget = self.media_widgets[media_path]
+                    widget.set_selected(True)
+                    
+        except Exception as e:
+            self.logger.error(f"Error selecting all media: {e}")
+    
+    def _clear_selection(self):
+        """Clear all media selection."""
+        for widget in self.media_widgets.values():
+            widget.set_selected(False)
+        
+        self.selected_media.clear()
+        self._update_selection_ui()
+    
+    def _create_gallery_from_selection(self):
+        """Create a gallery from selected media."""
+        if not self.selected_media:
+            QMessageBox.warning(self, "No Selection", "Please select media files to create a gallery.")
             return
         
-        # Analyze selected media types
+        try:
+            # Get gallery name from user
+            gallery_name, ok = QInputDialog.getText(
+                self, 
+                "Create Gallery", 
+                "Enter gallery name:",
+                text=f"Gallery {len(self.selected_media)} items"
+            )
+            
+            if not ok or not gallery_name.strip():
+                return
+            
+            # Create gallery data
+            gallery_data = {
+                'name': gallery_name.strip(),
+                'media_files': list(self.selected_media),
+                'created_date': datetime.now().isoformat(),
+                'type': 'mixed' if self._has_mixed_media_types() else self._get_media_type_from_selection()
+            }
+            
+            # Create gallery as a collection
+            gallery_id = self.library_manager.create_collection(
+                name=gallery_name.strip(),
+                description=f"Gallery with {len(self.selected_media)} media items"
+            )
+            
+            if gallery_id:
+                QMessageBox.information(
+                    self, 
+                    "Gallery Created", 
+                    f"Gallery '{gallery_name}' created successfully with {len(self.selected_media)} items."
+                )
+                
+                # Clear selection
+                self._clear_selection()
+                
+                # Refresh content
+                self.refresh_content()
+                
+                self.logger.info(f"Gallery created: {gallery_name} with {len(self.selected_media)} items")
+            else:
+                QMessageBox.warning(self, "Error", "Failed to create gallery.")
+                
+        except Exception as e:
+            self.logger.error(f"Error creating gallery: {e}")
+            QMessageBox.warning(self, "Error", f"Could not create gallery: {str(e)}")
+    
+    def _delete_selected_media(self):
+        """Delete selected media files."""
+        if not self.selected_media:
+            QMessageBox.warning(self, "No Selection", "Please select media files to delete.")
+            return
+        
+        # Confirm deletion
+        reply = QMessageBox.question(
+            self,
+            "Confirm Deletion",
+            f"Are you sure you want to delete {len(self.selected_media)} selected media files?\n\n"
+            "This action cannot be undone.",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No
+        )
+        
+        if reply != QMessageBox.StandardButton.Yes:
+            return
+        
+        try:
+            deleted_count = 0
+            failed_files = []
+            
+            for media_path in list(self.selected_media):
+                try:
+                    if os.path.exists(media_path):
+                        os.remove(media_path)
+                        deleted_count += 1
+                        self.logger.info(f"Deleted media file: {media_path}")
+                    else:
+                        self.logger.warning(f"Media file not found: {media_path}")
+                except Exception as e:
+                    self.logger.error(f"Failed to delete {media_path}: {e}")
+                    failed_files.append(os.path.basename(media_path))
+            
+            # Clear selection and refresh
+            self._clear_selection()
+            self.refresh_content()
+            
+            # Show result message
+            if failed_files:
+                QMessageBox.warning(
+                    self,
+                    "Deletion Complete",
+                    f"Deleted {deleted_count} files successfully.\n\n"
+                    f"Failed to delete {len(failed_files)} files:\n" + "\n".join(failed_files)
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "Deletion Complete",
+                    f"Successfully deleted {deleted_count} media files."
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error deleting selected media: {e}")
+            QMessageBox.warning(self, "Error", f"Could not delete media: {str(e)}")
+    
+    def _has_mixed_media_types(self) -> bool:
+        """Check if selection contains both photos and videos."""
         has_photos = False
         has_videos = False
         
-        for post_data in self.selected_finished_posts:
-            post_type = post_data.get("type", "").lower()
-            media_path = post_data.get("path", "").lower()
-            
-            if "photo" in post_type or any(ext in media_path for ext in ['.jpg', '.jpeg', '.png', '.gif', '.webp']):
-                has_photos = True
-            elif "video" in post_type or any(ext in media_path for ext in ['.mp4', '.mov', '.avi', '.mkv']):
+        for media_path in self.selected_media:
+            if any(ext in media_path.lower() for ext in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']):
                 has_videos = True
-        
-        # Platform validation warnings
-        warnings = []
-        
-        if has_photos and has_videos:
-            warnings.append("Mixed media galleries (photos + videos) may not be supported on all platforms:")
-            warnings.append("• Instagram: Supports mixed carousels (photos + videos)")
-            warnings.append("• TikTok: Supports photo carousels but videos must be separate")
-            warnings.append("• Pinterest: Primarily supports photo galleries")
-            warnings.append("• Twitter/X: Supports mixed media in threads")
-            warnings.append("• LinkedIn: Limited mixed media support")
-        
-        if len(self.selected_finished_posts) > 10:
-            warnings.append("Large galleries may have platform limitations:")
-            warnings.append("• Instagram: Max 10 items per carousel")
-            warnings.append("• TikTok: Max 35 photos per carousel")
-            warnings.append("• Pinterest: No strict limit but performance may vary")
-        
-        # Show warnings if any
-        if warnings:
-            warning_message = "\n".join(warnings)
-            warning_message += "\n\nDo you want to continue creating the gallery?"
-            
-            reply = QMessageBox.question(
-                self,
-                "Platform Compatibility Warning",
-                warning_message,
-                QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
-                QMessageBox.StandardButton.Yes
-            )
-            
-            if reply == QMessageBox.StandardButton.No:
-                return
-        
-        # Proceed with gallery creation
-        self.logger.info(f"Creating gallery from {len(self.selected_finished_posts)} selected posts")
-        
-        # Extract media paths
-        media_paths = []
-        for post_data in self.selected_finished_posts:
-            media_path = post_data.get("path")
-            if media_path and os.path.exists(media_path):
-                media_paths.append(media_path)
-        
-        if media_paths:
-            # Open gallery creation dialog (you may need to implement this)
-            from PySide6.QtWidgets import QInputDialog
-            
-            gallery_name, ok = QInputDialog.getText(
-                self,
-                "Gallery Name",
-                "Enter a name for your gallery:",
-                text=f"Gallery_{len(media_paths)}_items"
-            )
-            
-            if ok and gallery_name:
-                # Save the gallery using crowseye handler
-                caption = f"Gallery with {len(media_paths)} items"
-                success = self.crowseye_handler.save_gallery(gallery_name, media_paths, caption)
-                
-                if success:
-                    QMessageBox.information(
-                        self,
-                        "Gallery Created",
-                        f"Gallery '{gallery_name}' created successfully with {len(media_paths)} items!"
-                    )
-                    self._clear_finished_posts_selection()
-                    self.refresh_content()
-                else:
-                    QMessageBox.critical(
-                        self,
-                        "Gallery Creation Failed",
-                        "Failed to create gallery. Please try again."
-                    )
-        
-    def _load_finished_posts_to_grid(self, grid_layout, post_type):
-        """Load finished posts from library manager into the grid."""
-        try:
-            # Get finished posts from library manager
-            if post_type == "Photo Posts":
-                # Load both photos and videos for photo posts
-                posts = self.library_manager.get_all_post_ready_items()
-            elif post_type == "Videos/Reels":
-                # Load only videos
-                posts = self.library_manager.get_post_ready_videos()
             else:
-                # For now, other types show empty
-                posts = []
+                has_photos = True
             
-            if not posts:
-                # Show placeholder if no posts
-                placeholder_label = QLabel(f"No {post_type.lower()} posts found\n\nCreate posts using the 'Create Post' feature")
-                placeholder_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-                placeholder_label.setStyleSheet("color: #666666; font-size: 14px; padding: 40px;")
-                placeholder_label.setWordWrap(True)
-                grid_layout.addWidget(placeholder_label, 0, 0)
-                return
-            
-            # Add posts to grid
-            row, col = 0, 0
-            max_cols = 4
-            
-            for post in posts:
-                post_widget = self._create_post_thumbnail(post)
-                grid_layout.addWidget(post_widget, row, col)
-                
-                col += 1
-                if col >= max_cols:
-                    col = 0
-                    row += 1
-                    
-        except Exception as e:
-            self.logger.error(f"Error loading finished posts: {e}")
-            # Show error message
-            error_label = QLabel(f"Error loading posts: {str(e)}")
-            error_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-            error_label.setStyleSheet("color: #ff0000; font-size: 14px; padding: 40px;")
-            grid_layout.addWidget(error_label, 0, 0) 
+            if has_photos and has_videos:
+                return True
+        
+        return False
+    
+    def _get_media_type_from_selection(self) -> str:
+        """Get the media type from current selection."""
+        if not self.selected_media:
+            return 'mixed'
+        
+        # Check first file to determine type
+        first_file = next(iter(self.selected_media))
+        if any(ext in first_file.lower() for ext in ['.mp4', '.mov', '.avi', '.mkv', '.wmv']):
+            return 'video'
+        else:
+            return 'photo'
+ 
