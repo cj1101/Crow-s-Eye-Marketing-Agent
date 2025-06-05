@@ -1,0 +1,837 @@
+/* Global application styles with high contrast */
+
+/* Base styling for the whole application */
+QMainWindow, QDialog, QWidget {
+    background-color: #808080; /* Medium gray background */
+    color: #000000; /* Black text for maximum contrast */
+}
+
+/* All text labels have black text by default on light background */
+QLabel {
+    color: #000000;
+    background-color: transparent;
+}
+
+/* Ensure all UI elements use appropriate contrast text colors */
+* {
+    color: #000000; /* Default black text color for all elements */
+}
+
+/* Darker backgrounds should use light text */
+QWidget[bgColor="dark"] * {
+    color: #FFFFFF;
+}
+
+/* Heading styles */
+QLabel#appTitle {
+    font-size: 24px;
+    font-weight: bold;
+    color: #000000;
+    padding: 10px;
+    border-bottom: 3px solid #3498db;
+    border-radius: 8px;
+    background: #b0b0b0; /* Lighter gray background for titles */
+    margin: 5px 20px;
+}
+
+QLabel#sectionTitle {
+    font-size: 16px;
+    font-weight: bold;
+    color: #000000;
+    padding: 5px;
+    margin-top: 10px;
+    border-bottom: 1px solid #3498db;
+    background-color: #b0b0b0; /* Lighter gray for section titles */
+}
+
+/* Button styling with good contrast */
+QPushButton {
+    background-color: #3498db;
+    color: white;
+    font-weight: bold;
+    border-radius: 5px;
+    padding: 8px 15px;
+    min-height: 30px;
+    border: 2px solid #2980b9; /* Add visible border */
+}
+
+QPushButton:hover {
+    background-color: #2980b9;
+    border-bottom: 3px solid #1d6fa5;
+}
+
+QPushButton:pressed {
+    background-color: #2574a9;
+    padding-top: 2px;
+    border-bottom: 1px solid #1d6fa5;
+}
+
+QPushButton:disabled {
+    background-color: #95a5a6;
+    color: #ffffff; /* White text on disabled buttons for visibility */
+}
+
+/* Text input components with black text for readability */
+QTextEdit, QLineEdit, QPlainTextEdit {
+    border: 2px solid #505050;
+    border-radius: 5px;
+    padding: 5px;
+    background-color: #e0e0e0; /* Light gray background */
+    color: black;
+    selection-background-color: #3498db;
+    selection-color: white;
+}
+
+QTextEdit:focus, QLineEdit:focus, QPlainTextEdit:focus {
+    border: 2px solid #3498db;
+    background-color: #f8fafc;
+}
+
+/* Add hover effects for QLineEdit */
+QLineEdit:hover {
+    border: 2px solid #505050;
+    background-color: #f5f5f5;
+}
+
+/* Style for read-only QLineEdit */
+QLineEdit:read-only {
+    background-color: #d0d0d0;
+    color: #000000; /* Black text for readability */
+    border: 2px solid #a0a0a0;
+}
+
+/* Style for disabled QLineEdit */
+QLineEdit:disabled {
+    background-color: #c0c0c0;
+    color: #404040; /* Dark gray text on light gray background */
+    border: 2px solid #a0a0a0;
+}
+
+/* Improve selection highlight */
+QLineEdit::selection {
+    background-color: #3498db;
+    color: white;
+}
+
+/* Search input styling */
+QLineEdit#search_input {
+    border: 2px solid #505050;
+    border-radius: 15px;
+    padding: 5px 10px 5px 30px;
+    background-color: #e0e0e0;
+    background-position: 8px center;
+    background-repeat: no-repeat;
+    color: #000000;
+    font-style: italic;
+}
+
+QLineEdit#search_input:focus {
+    border: 2px solid #3498db;
+    background-color: white;
+    font-style: normal;
+}
+
+QLineEdit#search_input:hover {
+    border: 2px solid #505050;
+    background-color: #f8f9fa;
+}
+
+/* List and combo box with contrast */
+QListWidget, QComboBox {
+    border: 2px solid #505050;
+    border-radius: 5px;
+    padding: 5px;
+    background-color: #e0e0e0;
+    color: black;
+    selection-background-color: #3498db;
+    selection-color: white;
+}
+
+QListWidget:focus, QComboBox:focus {
+    border: 2px solid #3498db;
+}
+
+QListWidget::item:selected {
+    background-color: #3498db;
+    color: white;
+}
+
+QComboBox QAbstractItemView {
+    background-color: #e0e0e0;
+    color: black;
+    selection-background-color: #3498db;
+    selection-color: white;
+    border: 1px solid #505050;
+}
+
+/* Table widgets with better contrast */
+QTableWidget {
+    border: 2px solid #505050;
+    border-radius: 5px;
+    background-color: #e0e0e0;
+    color: black;
+    gridline-color: #707070;
+    selection-background-color: #3498db;
+    selection-color: white;
+}
+
+QTableWidget::item {
+    padding: 5px;
+    color: black;
+}
+
+QTableWidget::item:selected {
+    background-color: #3498db;
+    color: white;
+}
+
+QHeaderView::section {
+    background-color: #b0b0b0;
+    color: black;
+    padding: 5px;
+    border: 1px solid #505050;
+    font-weight: bold;
+}
+
+/* Status bar with better contrast */
+QStatusBar {
+    background-color: #606060;
+    color: white;
+    padding: 3px;
+}
+
+/* Progress bar */
+QProgressBar {
+    border: 2px solid #505050;
+    border-radius: 5px;
+    background-color: #d0d0d0;
+    text-align: center;
+    color: #000000;
+}
+
+QProgressBar::chunk {
+    background-color: #3498db;
+    width: 20px;
+}
+
+/* Group Box styling */
+QGroupBox {
+    border: 2px solid #505050;
+    border-radius: 5px;
+    margin-top: 20px;
+    padding-top: 15px;
+    color: #000000;
+    background-color: #909090;
+}
+
+QGroupBox::title {
+    subcontrol-origin: margin;
+    subcontrol-position: top center;
+    padding: 0 5px;
+    background-color: #909090;
+    color: #000000;
+    font-weight: bold;
+}
+
+/* Checkbox and Radio button styling for better contrast */
+QCheckBox, QRadioButton {
+    color: black;
+    spacing: 5px;
+    background-color: transparent;
+}
+
+QCheckBox::indicator, QRadioButton::indicator {
+    width: 18px;
+    height: 18px;
+    border: 2px solid #505050;
+    border-radius: 4px;
+}
+
+QCheckBox::indicator:checked, QRadioButton::indicator:checked {
+    background-color: #3498db;
+    border: 2px solid #3498db;
+}
+
+/* Scroll bars with better visibility */
+QScrollBar:horizontal {
+    border: 1px solid #505050;
+    background: #c0c0c0;
+    height: 15px;
+    margin: 0px 20px 0 20px;
+}
+
+QScrollBar:vertical {
+    border: 1px solid #505050;
+    background: #c0c0c0;
+    width: 15px;
+    margin: 20px 0 20px 0;
+}
+
+QScrollBar::handle:horizontal, QScrollBar::handle:vertical {
+    background: #808080;
+    border: 1px solid #505050;
+    border-radius: 2px;
+}
+
+QScrollBar::handle:horizontal {
+    min-width: 20px;
+}
+
+QScrollBar::handle:vertical {
+    min-height: 20px;
+}
+
+/* Frame styling for better visibility */
+QFrame {
+    border: 1px solid #505050;
+    background-color: #909090;
+}
+
+/* Ensure transparent backgrounds inherit parent color */
+QWidget[transparent="true"] {
+    background-color: transparent;
+}
+
+/* Library dialog specific styling */
+QLabel#original_label, QLabel#edited_label {
+    background-color: #3366cc;
+    color: white;
+    font-size: 12pt;
+    font-weight: bold;
+    border-top-left-radius: 8px;
+    border-top-right-radius: 8px;
+    padding: 6px;
+}
+
+QLabel#edited_label {
+    background-color: #33aa33;
+}
+
+/* Dialogs */
+QDialog {
+    background-color: #f5f7fa;
+}
+
+/* styles.qss - Modern Dark Theme */
+
+QMainWindow, QDialog, QMessageBox {
+    background-color: #282c34;
+    color: #abb2bf;
+}
+
+QToolTip {
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    padding: 3px;
+}
+
+QLabel {
+    color: #dcdcdc;
+}
+
+QTextEdit, QPlainTextEdit {
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    border-radius: 4px;
+    padding: 5px;
+    selection-background-color: #528bff;
+    selection-color: #ffffff;
+}
+
+QTextEdit:focus, QPlainTextEdit:focus {
+    border: 1px solid #528bff;
+}
+
+QTextEdit:hover, QPlainTextEdit:hover {
+    border: 1px solid #7a8294;
+}
+
+QTextEdit:disabled, QPlainTextEdit:disabled {
+    background-color: #2a2e36;
+    color: #7a8294;
+    border: 1px solid #3a3f4b;
+}
+
+QLineEdit {
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    border-radius: 4px;
+    padding: 5px;
+    selection-background-color: #528bff;
+    selection-color: #ffffff;
+    min-height: 25px; /* Ensure consistent height in both themes */
+}
+
+QLineEdit:focus {
+    border: 1px solid #528bff;
+}
+
+QLineEdit:hover {
+    border: 1px solid #7a8294;
+}
+
+QLineEdit:disabled {
+    background-color: #2a2e36;
+    color: #7a8294;
+    border: 1px solid #3a3f4b;
+}
+
+QListWidget {
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    border-radius: 4px;
+    padding: 5px;
+    alternate-background-color: #404552; /* Subtle row alternation */
+}
+QListWidget::item {
+    padding: 5px;
+    border-radius: 3px;
+}
+QListWidget::item:selected {
+    background-color: #528bff;
+    color: #ffffff;
+    border: none;
+}
+QListWidget::item:hover {
+    background-color: #4f5666;
+}
+
+QComboBox {
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    border-radius: 4px;
+    padding: 3px 5px;
+    min-height: 25px; /* Ensure consistent height */
+}
+QComboBox:editable {
+    background-color: #313640; /* Different bg if editable */
+}
+QComboBox:!editable:on, QComboBox::drop-down:editable:on {
+    background-color: #528bff; /* Highlight when dropdown open */
+}
+QComboBox QAbstractItemView { /* Style the dropdown list */
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    selection-background-color: #528bff;
+    selection-color: #ffffff;
+    padding: 3px;
+}
+QComboBox::down-arrow {
+    image: url(none); /* Consider adding a custom arrow icon later */
+}
+QComboBox::drop-down {
+    subcontrol-origin: padding;
+    subcontrol-position: top right;
+    width: 15px;
+    border-left-width: 1px;
+    border-left-color: #5c6370;
+    border-left-style: solid;
+    border-top-right-radius: 3px;
+    border-bottom-right-radius: 3px;
+    background-color: #4a4f5b;
+}
+QComboBox::drop-down:hover {
+    background-color: #5c6370;
+}
+
+QCheckBox {
+    spacing: 10px; /* Space between checkbox and text */
+    color: #abb2bf;
+    padding: 5px;
+}
+QCheckBox::indicator {
+    width: 16px;
+    height: 16px;
+    border: 1px solid #5c6370;
+    border-radius: 3px;
+    background-color: #3a3f4b;
+}
+QCheckBox::indicator:checked {
+    background-color: #528bff;
+    border: 1px solid #528bff;
+    /* image: url(:/icons/check.png); Add checkmark icon later */
+}
+QCheckBox::indicator:unchecked:hover {
+    border: 1px solid #7a8294;
+}
+QCheckBox::indicator:checked:hover {
+    background-color: #6a9ffc;
+    border: 1px solid #6a9ffc;
+}
+
+QPushButton {
+    background-color: #4a4f5b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    padding: 8px 15px;
+    border-radius: 4px;
+    min-width: 80px;
+}
+QPushButton:hover {
+    background-color: #5c6370;
+    border: 1px solid #7a8294;
+}
+QPushButton:pressed {
+    background-color: #528bff;
+    color: #ffffff;
+    border: 1px solid #528bff;
+}
+QPushButton:disabled {
+    background-color: #3a3f4b;
+    color: #7a8294;
+    border: 1px solid #4a4f5b;
+}
+
+/* Add specific button styling if needed using object names */
+/* e.g., QPushButton#myCoolButton { ... } */
+
+QMessageBox {
+    background-color: #313640;
+}
+QMessageBox QLabel { /* Style text inside message box */
+    color: #dcdcdc;
+}
+QMessageBox QPushButton { /* Buttons inside message box */
+     min-width: 70px;
+     padding: 5px 10px;
+}
+
+QFileDialog { /* Style file dialog (limited styling possible) */
+    background-color: #282c34;
+    color: #abb2bf;
+}
+
+/* Scroll Bars */
+QScrollBar:vertical {
+    border: 1px solid #4a4f5b;
+    background: #282c34;
+    width: 12px;
+    margin: 15px 0 15px 0;
+    border-radius: 6px;
+ }
+ QScrollBar::handle:vertical {
+    background: #5c6370;
+    min-height: 20px;
+    border-radius: 5px;
+ }
+ QScrollBar::handle:vertical:hover {
+    background: #7a8294;
+ }
+ QScrollBar::add-line:vertical, QScrollBar::sub-line:vertical {
+    border: none;
+    background: none;
+    height: 14px;
+    subcontrol-origin: margin;
+ }
+ QScrollBar::add-page:vertical, QScrollBar::sub-page:vertical {
+    background: none;
+ }
+
+QScrollBar:horizontal {
+    border: 1px solid #4a4f5b;
+    background: #282c34;
+    height: 12px;
+    margin: 0 15px 0 15px;
+    border-radius: 6px;
+ }
+ QScrollBar::handle:horizontal {
+    background: #5c6370;
+    min-width: 20px;
+    border-radius: 5px;
+ }
+ QScrollBar::handle:horizontal:hover {
+    background: #7a8294;
+ }
+ QScrollBar::add-line:horizontal, QScrollBar::sub-line:horizontal {
+    border: none;
+    background: none;
+    width: 14px;
+    subcontrol-origin: margin;
+ }
+ QScrollBar::add-page:horizontal, QScrollBar::sub-page:horizontal {
+    background: none;
+ }
+
+/* Dark theme search input styling */
+QLineEdit#search_input {
+    background-color: #313640;
+    color: #abb2bf;
+    border: 1px solid #5c6370;
+    border-radius: 15px;
+    padding: 5px 10px 5px 30px;
+    background-image: url('search_dark.png'); /* Optional: Add a search icon if available */
+    background-position: 8px center;
+    background-repeat: no-repeat;
+    font-style: italic;
+}
+
+QLineEdit#search_input:focus {
+    border: 1px solid #528bff;
+    background-color: #3a3f4b;
+    font-style: normal;
+}
+
+QLineEdit#search_input:hover {
+    border: 1px solid #7a8294;
+    background-color: #3a3f4b;
+}
+
+QListWidget {
+    background-color: #3a3f4b;
+    color: #dcdcdc;
+    border: 1px solid #5c6370;
+    border-radius: 4px;
+    padding: 5px;
+    alternate-background-color: #404552; /* Subtle row alternation */
+}
+
+/* Dark mode toggle button hover in dark theme */
+QPushButton#dark_mode_button:hover {
+    background-color: #6a9ffc;
+}
+
+/* Media preview styling for better image display */
+#mediaPreviewFrame {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 0;
+}
+
+QLabel#previewLabel {
+    background-color: transparent;
+    color: #2c3e50;
+}
+
+/* Dark mode media preview - ensure complete dark styling */
+QMainWindow[darkMode="true"] .QWidget, 
+QDialog[darkMode="true"] .QWidget {
+    background-color: #2D2D30;
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QScrollArea, 
+QDialog[darkMode="true"] QScrollArea,
+QMainWindow[darkMode="true"] QScrollArea > QWidget,
+QDialog[darkMode="true"] QScrollArea > QWidget,
+QMainWindow[darkMode="true"] QScrollArea > QWidget > QWidget,
+QDialog[darkMode="true"] QScrollArea > QWidget > QWidget {
+    background-color: #282c34;
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QScrollBar,
+QDialog[darkMode="true"] QScrollBar {
+    background-color: #333337;
+}
+
+QMainWindow[darkMode="true"] QScrollBar::handle,
+QDialog[darkMode="true"] QScrollBar::handle {
+    background-color: #5c6370;
+}
+
+QMainWindow[darkMode="true"] QScrollBar::handle:hover,
+QDialog[darkMode="true"] QScrollBar::handle:hover {
+    background-color: #7a8294;
+}
+
+/* Ensure the media preview frame has consistent dark styling */
+QMainWindow[darkMode="true"] #mediaPreviewFrame,
+QDialog[darkMode="true"] #mediaPreviewFrame {
+    background-color: #282c34;
+    border: 2px solid #3F3F46;
+}
+
+/* Media section title in dark mode */
+QMainWindow[darkMode="true"] QLabel#sectionTitle,
+QDialog[darkMode="true"] QLabel#sectionTitle {
+    color: #E0E0E0;
+    background-color: transparent;
+    border-bottom: 1px solid #528bff;
+}
+
+/* Media title specialized styling */
+QMainWindow[darkMode="true"] QLabel[objectName="sectionTitle"]:contains(Media),
+QDialog[darkMode="true"] QLabel[objectName="sectionTitle"]:contains(Media) {
+    color: #00AAFF;
+    background-color: transparent;
+}
+
+/* Ensure all surrounding areas in media section are dark colored */
+QMainWindow[darkMode="true"] MediaSection,
+QMainWindow[darkMode="true"] MediaSection > QWidget,
+QDialog[darkMode="true"] MediaSection,
+QDialog[darkMode="true"] MediaSection > QWidget {
+    background-color: #2D2D30;
+}
+
+/* Knowledge buttons with orange theme */
+QPushButton#knowledge_simulator_button,
+QPushButton#knowledge_management_button {
+    background-color: #e67e22;
+    color: white;
+    font-weight: bold;
+}
+
+QPushButton#knowledge_simulator_button:hover,
+QPushButton#knowledge_management_button:hover {
+    background-color: #d35400;
+}
+
+/* Improved Dark Mode Styles */
+QMainWindow[darkMode="true"], QDialog[darkMode="true"], QWidget[darkMode="true"] {
+    background-color: #2D2D30;
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QLabel {
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QPushButton {
+    background-color: #0E639C;
+    color: white;
+    border: 1px solid #1177BB;
+}
+
+QMainWindow[darkMode="true"] QPushButton:hover {
+    background-color: #1177BB;
+}
+
+QMainWindow[darkMode="true"] QPushButton:pressed {
+    background-color: #0D5289;
+}
+
+QMainWindow[darkMode="true"] QToolBar {
+    background-color: #2D2D30;
+    border-bottom: 1px solid #3F3F46;
+}
+
+QMainWindow[darkMode="true"] QLineEdit, 
+QMainWindow[darkMode="true"] QTextEdit, 
+QMainWindow[darkMode="true"] QPlainTextEdit {
+    background-color: #1E1E1E;
+    color: #F0F0F0;
+    border: 1px solid #3F3F46;
+}
+
+QMainWindow[darkMode="true"] QLineEdit:focus, 
+QMainWindow[darkMode="true"] QTextEdit:focus, 
+QMainWindow[darkMode="true"] QPlainTextEdit:focus {
+    background-color: #2A2A2A;
+    color: #F0F0F0;
+    border: 1px solid #3498db;
+}
+
+QMainWindow[darkMode="true"] QScrollBar {
+    background-color: #333337;
+}
+
+QMainWindow[darkMode="true"] QScrollBar::handle {
+    background-color: #3E3E40;
+}
+
+QMainWindow[darkMode="true"] QStatusBar {
+    background-color: #2D2D30;
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QGroupBox {
+    border: 1px solid #3F3F46;
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QGroupBox::title {
+    color: #F0F0F0;
+}
+
+/* Light mode media preview styling */
+#mediaPreviewFrame {
+    background-color: #ffffff;
+    border: 1px solid #dee2e6;
+    border-radius: 5px;
+    padding: 0;
+}
+
+/* Dark mode styling for entire media window */
+QMainWindow[darkMode="true"] {
+    background-color: #2D2D30;
+    color: #F0F0F0;
+}
+
+/* Dark scrollbars */
+QMainWindow[darkMode="true"] QScrollBar:vertical,
+QMainWindow[darkMode="true"] QScrollBar:horizontal,
+QDialog[darkMode="true"] QScrollBar:vertical,
+QDialog[darkMode="true"] QScrollBar:horizontal {
+    background-color: #333337;
+    border: none;
+}
+
+QMainWindow[darkMode="true"] QScrollBar::handle:vertical,
+QMainWindow[darkMode="true"] QScrollBar::handle:horizontal,
+QDialog[darkMode="true"] QScrollBar::handle:vertical,
+QDialog[darkMode="true"] QScrollBar::handle:horizontal {
+    background-color: #5c6370;
+    border-radius: 4px;
+}
+
+/* Ensure all media preview elements match dark theme */
+QMainWindow[darkMode="true"] #mediaPreviewFrame {
+    background-color: #282c34;
+    border: 1px solid #3F3F46;
+    color: #F0F0F0;
+}
+
+/* Make the white background of media preview section dark in dark mode */
+QMainWindow[darkMode="true"] .QWidget#centralWidget > QWidget > QSplitter > QWidget {
+    background-color: #2D2D30;
+}
+
+/* Make ALL white widgets dark in dark mode */
+QMainWindow[darkMode="true"] * {
+    background-color: #2D2D30;
+}
+
+/* Then re-specify elements that need different backgrounds */
+QMainWindow[darkMode="true"] QMenuBar,
+QMainWindow[darkMode="true"] QToolBar {
+    background-color: #252526;
+}
+
+QMainWindow[darkMode="true"] QLineEdit,
+QMainWindow[darkMode="true"] QTextEdit,
+QMainWindow[darkMode="true"] QPlainTextEdit {
+    background-color: #1E1E1E;
+    color: #F0F0F0;
+}
+
+QMainWindow[darkMode="true"] QPushButton {
+    background-color: #0E639C;
+}
+
+QMainWindow[darkMode="true"] QPushButton:hover {
+    background-color: #1177BB;
+}
+
+/* Specific fix for the entire media preview container in dark mode */
+QMainWindow[darkMode="true"] MediaSection {
+    background-color: #2D2D30;
+    border: none;
+}
+
+QMainWindow[darkMode="true"] QLabel#mediaInfoLabel {
+    color: #F0F0F0;
+    background-color: transparent;
+}
+
+QMainWindow[darkMode="true"] QLabel#previewLabel {
+    color: #F0F0F0;
+    background-color: transparent;
+}

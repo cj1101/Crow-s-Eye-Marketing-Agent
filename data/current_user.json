@@ -1,0 +1,31 @@
+{
+  "user_id": "KMkKyGgNDbSIo0kTioM9m5reVBw2",
+  "email": "charlie@suarezhouse.net",
+  "username": "charlie",
+  "created_at": "2025-05-27T20:32:02.581000+00:00",
+  "subscription": {
+    "tier": "enterprise",
+    "start_date": "2025-05-27T22:11:37.601472",
+    "end_date": null,
+    "auto_renew": true,
+    "payment_method": "super_user_upgrade"
+  },
+  "usage_stats": {
+    "social_accounts": 0,
+    "ai_content_credits_this_month": 0,
+    "ai_image_edits_this_month": 0,
+    "storage_used_gb": 0.0,
+    "context_files_used": 0,
+    "team_members_used": 0,
+    "video_processing_used": 0,
+    "posts_created_this_month": 0,
+    "videos_generated_this_month": 0,
+    "ai_requests_this_month": 0,
+    "storage_used_mb": 0.0,
+    "last_reset_date": "2025-05-27T22:11:37.601504"
+  },
+  "preferences": {
+    "is_super_user": true,
+    "super_user_upgraded_at": "2025-05-27T22:11:37.601508"
+  }
+}

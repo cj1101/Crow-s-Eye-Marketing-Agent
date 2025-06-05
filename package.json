@@ -1,0 +1,49 @@
+{
+  "name": "crows-eye-marketing-suite",
+  "version": "1.1.0",
+  "description": "Crow's Eye Marketing Suite - Complete social media management platform with AI-powered content creation and multi-platform scheduling",
+  "main": "backend/dist/index.js",
+  "scripts": {
+    "dev": "cd backend && npm run dev",
+    "build": "cd backend && npm run build",
+    "start": "cd backend && npm start",
+    "backend:install": "cd backend && npm install",
+    "backend:dev": "cd backend && npm run dev",
+    "backend:build": "cd backend && npm run build",
+    "backend:start": "cd backend && npm start",
+    "setup": "npm run backend:install",
+    "deploy": "npm run build",
+    "test": "cd backend && npm test",
+    "create-superuser": "cd backend && node create-superuser.js"
+  },
+  "keywords": [
+    "social-media",
+    "marketing",
+    "content-creation",
+    "scheduling",
+    "analytics",
+    "ai-powered",
+    "multi-platform",
+    "instagram",
+    "twitter",
+    "facebook",
+    "linkedin"
+  ],
+  "author": "Charlie Suarez <charlie@suarezhouse.net>",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/charliesuarez/crows-eye-marketing-suite.git"
+  },
+  "bugs": {
+    "url": "https://github.com/charliesuarez/crows-eye-marketing-suite/issues"
+  },
+  "homepage": "https://github.com/charliesuarez/crows-eye-marketing-suite#readme",
+  "engines": {
+    "node": ">=18.0.0",
+    "npm": ">=8.0.0"
+  },
+  "workspaces": [
+    "backend"
+  ]
+} 

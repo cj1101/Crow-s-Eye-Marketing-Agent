@@ -1,0 +1,96 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: crow-eye-postgres
+    environment:
+      POSTGRES_DB: crow_eye_db
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - crow-eye-network
+
+  # Redis for caching and job queues
+  redis:
+    image: redis:7-alpine
+    container_name: crow-eye-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - crow-eye-network
+    command: redis-server --appendonly yes
+
+  # Backend API (Development)
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: crow-eye-api
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      DATABASE_URL: postgresql://postgres:postgres123@postgres:5432/crow_eye_db
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: development-secret-key-change-in-production
+      JWT_REFRESH_SECRET: development-refresh-secret-key-change-in-production
+      CORS_ORIGINS: http://localhost:3000,https://crows-eye-website.web.app
+    ports:
+      - "3001:3001"
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      - postgres
+      - redis
+    networks:
+      - crow-eye-network
+    command: sh -c "npx prisma migrate deploy && npm run dev"
+
+  # pgAdmin for database management (optional)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: crow-eye-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@crowseye.tech
+      PGADMIN_DEFAULT_PASSWORD: admin123
+    ports:
+      - "5050:80"
+    depends_on:
+      - postgres
+    networks:
+      - crow-eye-network
+    profiles:
+      - tools
+
+  # Redis Commander for Redis management (optional)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: crow-eye-redis-commander
+    environment:
+      REDIS_HOSTS: local:redis:6379
+    ports:
+      - "8081:8081"
+    depends_on:
+      - redis
+    networks:
+      - crow-eye-network
+    profiles:
+      - tools
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  crow-eye-network:
+    driver: bridge 

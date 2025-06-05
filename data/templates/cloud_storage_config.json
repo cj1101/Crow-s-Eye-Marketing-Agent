@@ -1,0 +1,31 @@
+{
+    "storage_type": "local",
+    "local_storage_path": "output",
+    "local_storage_base_url": "http://localhost:8000/output",
+    
+    "provider": "mock",
+    "base_url": "https://example.com/uploads/",
+    
+    "aws_s3": {
+        "bucket_name": "your-s3-bucket-name",
+        "region": "us-east-1",
+        "access_key_id": "",
+        "secret_access_key": ""
+    },
+    
+    "azure_blob": {
+        "connection_string": "",
+        "container_name": "your-container-name"
+    },
+    
+    "gcs": {
+        "project_id": "your-gcp-project-id",
+        "bucket_name": "your-gcs-bucket-name"
+    },
+    
+    "cloudinary": {
+        "cloud_name": "your-cloud-name",
+        "api_key": "",
+        "api_secret": ""
+    }
+} 

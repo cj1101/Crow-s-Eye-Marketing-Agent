@@ -1,0 +1,155 @@
+{
+  "8d6a9e0576acde0a": {
+    "user_id": "8d6a9e0576acde0a",
+    "email": "charlie@suarezhouse.net",
+    "username": "Charlie",
+    "created_at": "2025-05-27T20:56:10.410802",
+    "subscription": {
+      "tier": "free",
+      "start_date": "2025-05-27T20:56:10.410804",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T20:56:10.410809"
+    },
+    "preferences": {},
+    "password_hash": "ecd71870d1963316a97e3ac3408c9835ad8cf0f3c1bc703527c30265534f75ae"
+  },
+  "501033aee95766e8": {
+    "user_id": "501033aee95766e8",
+    "email": "test_free@example.com",
+    "username": "password123",
+    "created_at": "2025-05-27T21:20:05.615434",
+    "subscription": {
+      "tier": "free",
+      "start_date": "2025-05-27T21:20:05.615436",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T21:20:05.615440"
+    },
+    "preferences": {},
+    "password_hash": "380d976ed82f6ea19229d711e0ec239f1e39f6e4d20ac7617b2ce29d05097bf6"
+  },
+  "4434f67b51d3bd01": {
+    "user_id": "4434f67b51d3bd01",
+    "email": "test_free@example.com",
+    "username": "password123",
+    "created_at": "2025-05-27T21:24:00.144889",
+    "subscription": {
+      "tier": "free",
+      "start_date": "2025-05-27T21:24:00.144892",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T21:24:00.144898"
+    },
+    "preferences": {},
+    "password_hash": "380d976ed82f6ea19229d711e0ec239f1e39f6e4d20ac7617b2ce29d05097bf6"
+  },
+  "494a37a2be97bd87": {
+    "user_id": "494a37a2be97bd87",
+    "email": "test_free@example.com",
+    "username": "Test Free User",
+    "created_at": "2025-05-27T21:30:45.471253",
+    "subscription": {
+      "tier": "pro",
+      "start_date": "2025-05-27T21:30:45.471255",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T21:30:45.471260"
+    },
+    "preferences": {}
+  },
+  "ba7d8b055157c732": {
+    "user_id": "ba7d8b055157c732",
+    "email": "test@example.com",
+    "username": "testuser",
+    "created_at": "2025-05-27T21:30:57.160415",
+    "subscription": {
+      "tier": "free",
+      "start_date": "2025-05-27T21:30:57.160417",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T21:30:57.160422"
+    },
+    "preferences": {},
+    "password_hash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f"
+  },
+  "de540057b40d2f8f": {
+    "user_id": "de540057b40d2f8f",
+    "email": "test@example.com",
+    "username": "testuser",
+    "created_at": "2025-05-27T21:31:30.740099",
+    "subscription": {
+      "tier": "free",
+      "start_date": "2025-05-27T21:31:30.740101",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T21:31:30.740104"
+    },
+    "preferences": {},
+    "password_hash": "ef92b778bafe771e89245b89ecbc08a44a4e166c06659911881f383d4473e94f"
+  },
+  "c36bbe331d266a78": {
+    "user_id": "c36bbe331d266a78",
+    "email": "charlie@suarezhouse.net",
+    "username": "cjs1101",
+    "created_at": "2025-05-27T21:34:11.534568",
+    "subscription": {
+      "tier": "free",
+      "start_date": "2025-05-27T21:34:11.534574",
+      "end_date": null,
+      "auto_renew": true,
+      "payment_method": null
+    },
+    "usage_stats": {
+      "posts_created_this_month": 0,
+      "videos_generated_this_month": 0,
+      "ai_requests_this_month": 0,
+      "storage_used_mb": 0.0,
+      "last_reset_date": "2025-05-01T21:34:11.534583"
+    },
+    "preferences": {},
+    "password_hash": "3cf97ad67f94f8a8f46a19e916b4891249e3bfad1a6a4364cf861608f426b580"
+  }
+}
