@@ -70,7 +70,7 @@ async def get_current_user(
             username="Enterprise User",
             created_at=datetime.now().isoformat(),
             subscription=SubscriptionInfo(
-                tier=SubscriptionTier.ENTERPRISE,
+                tier=SubscriptionTier.BUSINESS,
                 start_date=datetime.now().isoformat()
             ),
             usage_stats=UsageStats(),
@@ -97,7 +97,7 @@ async def get_current_user(
         username=email.split("@")[0],
         created_at=datetime.now().isoformat(),
         subscription=SubscriptionInfo(
-            tier=SubscriptionTier(payload.get("tier", "spark")),
+            tier=SubscriptionTier(payload.get("tier", "free")),
             start_date=datetime.now().isoformat()
         ),
         usage_stats=UsageStats(),
@@ -112,11 +112,10 @@ def require_tier(required_tier: SubscriptionTier):
     def tier_dependency(current_user: User = Depends(get_current_user)) -> User:
         # Check if user has required tier or higher
         tier_hierarchy = {
-            SubscriptionTier.SPARK: 0,
+            SubscriptionTier.FREE: 0,
             SubscriptionTier.CREATOR: 1,
-            SubscriptionTier.GROWTH: 2,
-            SubscriptionTier.PRO_AGENCY: 3,
-            SubscriptionTier.ENTERPRISE: 4
+            SubscriptionTier.PRO: 2,
+            SubscriptionTier.BUSINESS: 3
         }
         
         user_tier_level = tier_hierarchy.get(current_user.subscription.tier, 0)
@@ -151,10 +150,10 @@ def require_feature(feature: Feature):
 
 
 # Common tier dependencies
-require_free = require_tier(SubscriptionTier.SPARK)
+require_free = require_tier(SubscriptionTier.FREE)
 require_creator = require_tier(SubscriptionTier.CREATOR)
-require_pro = require_tier(SubscriptionTier.PRO_AGENCY)
-require_enterprise = require_tier(SubscriptionTier.ENTERPRISE)
+require_pro = require_tier(SubscriptionTier.PRO)
+require_business = require_tier(SubscriptionTier.BUSINESS)
 
 # Import missing classes
 from src.models.user import SubscriptionInfo, UsageStats 
