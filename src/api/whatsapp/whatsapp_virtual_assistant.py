@@ -10,7 +10,7 @@ from typing import Dict, Any, Optional, List, Tuple
 
 from PySide6.QtCore import QObject, Signal
 
-from ...api.ai.gemini_handler import GeminiHandler
+
 from ...config import constants as const
 
 # Constants for intent detection
@@ -58,6 +58,74 @@ DEFAULT_BUSINESS_INFO = {
     'languages': ['English', 'Spanish', 'French']
 }
 
+# Knowledge base for responses - only respond from this information
+KNOWLEDGE_BASE = {
+    'greeting': {
+        'responses': [
+            "Hello! Welcome to {business_name}. We specialize in {industry}. How can I help you today?",
+            "Hi there! Thank you for contacting {business_name}. What can I assist you with?",
+            "Good day! I'm here to help you with information about our digital marketing services. What would you like to know?"
+        ],
+        'triggers': ['hello', 'hi', 'hey', 'good morning', 'good afternoon', 'good evening', 'greetings']
+    },
+    'services': {
+        'responses': [
+            "We offer the following services:\n• {services}\n\nWhich service interests you most?",
+            "Our main services include {services}. We're experts in {industry}. Would you like details about any specific service?",
+            "At {business_name}, we provide {services}. Each service is tailored to help grow your business. What can I tell you more about?"
+        ],
+        'triggers': ['services', 'what do you do', 'what do you offer', 'help with', 'specialize', 'provide'],
+        'details': {
+            'social media management': "Our Social Media Management includes content planning, posting schedules, community management, and engagement strategies across all major platforms.",
+            'content creation': "We create high-quality content including graphics, videos, blog posts, and social media posts that align with your brand voice and marketing goals.",
+            'digital marketing strategy': "We develop comprehensive digital marketing strategies that include market analysis, competitor research, goal setting, and campaign planning.",
+            'influencer marketing': "Our influencer marketing service connects you with relevant influencers in your industry to expand your reach and build authentic relationships.",
+            'brand development': "We help develop and strengthen your brand identity, including logo design, brand guidelines, messaging, and visual consistency.",
+            'analytics & reporting': "We provide detailed analytics and reporting to track your marketing performance, ROI, and provide actionable insights for improvement."
+        }
+    },
+    'pricing': {
+        'responses': [
+            "Our pricing varies based on your specific needs and goals. I'd recommend scheduling a free consultation to discuss a custom package. Contact us at {phone} or {email}.",
+            "We offer flexible pricing packages tailored to different business sizes and needs. For accurate pricing, please contact us at {email} or call {phone} for a personalized quote.",
+            "Pricing depends on the services you need and the scope of your project. We'd be happy to provide a custom quote. Please reach out to {email} or {phone}."
+        ],
+        'triggers': ['price', 'cost', 'pricing', 'quote', 'estimate', 'rate', 'fee', 'charge', 'how much', '$']
+    },
+    'contact': {
+        'responses': [
+            "You can reach us at:\n📞 Phone: {phone}\n📧 Email: {email}\n🌐 Website: {website}\n🕒 Hours: {hours}",
+            "Here's how to contact us:\n• Phone: {phone}\n• Email: {email}\n• Website: {website}\nOur business hours are {hours}",
+            "Contact information:\nPhone: {phone}\nEmail: {email}\nWebsite: {website}\nWe're available {hours}"
+        ],
+        'triggers': ['contact', 'phone', 'email', 'address', 'location', 'hours', 'reach', 'call']
+    },
+    'scheduling': {
+        'responses': [
+            "I'd be happy to help you schedule a consultation! Please contact us at {phone} or email {email} to book an appointment. We're available {hours}.",
+            "To schedule a meeting or consultation, please call {phone} or email {email}. We offer free initial consultations to discuss your needs.",
+            "You can schedule a consultation by calling {phone} or emailing {email}. Our team is available {hours} to set up a meeting that works for you."
+        ],
+        'triggers': ['schedule', 'appointment', 'meeting', 'consultation', 'call', 'demo', 'book']
+    },
+    'support': {
+        'responses': [
+            "I'm here to help! Please describe your specific question or issue, and I'll do my best to assist you. For complex technical issues, I can connect you with our support team.",
+            "What specific support do you need? I can help with general questions about our services. For technical issues, please contact {email} or type 'human' to speak with our team.",
+            "I'm happy to help! Please let me know what you need assistance with. If I can't answer your question, I'll connect you with one of our specialists."
+        ],
+        'triggers': ['help', 'support', 'issue', 'problem', 'trouble', 'question', 'assist']
+    },
+    'feedback': {
+        'responses': [
+            "Thank you for your feedback! We value your input and use it to improve our services. If you'd like to share more details, please email us at {email}.",
+            "We appreciate your feedback! Your experience is important to us. Feel free to share more at {email} or call {phone}.",
+            "Thank you for taking the time to provide feedback. We'd love to hear more about your experience - please contact us at {email}."
+        ],
+        'triggers': ['feedback', 'review', 'testimonial', 'opinion', 'experience', 'rating']
+    }
+}
+
 # Default assistant configuration
 DEFAULT_ASSISTANT_CONFIG = {
     'name': 'Bread Assistant',
@@ -91,7 +159,6 @@ class WhatsAppVirtualAssistant:
         self.logger = logging.getLogger(self.__class__.__name__)
         self.signals = WhatsAppVirtualAssistantSignals()
         self.api_handler = api_handler
-        self.ai_handler = GeminiHandler()
         
         # Conversation memory - in production, use a database
         self.conversations = {}
@@ -141,8 +208,8 @@ class WhatsAppVirtualAssistant:
             # Detect message intent
             intent = self._detect_intent(cleaned_message)
             
-            # Generate AI response based on intent and context
-            response = self._generate_ai_response(user_id, cleaned_message, intent, context)
+            # Generate response based on knowledge base
+            response = self._generate_knowledge_response(user_id, cleaned_message, intent, context)
             
             # Add response to conversation history
             self._add_to_conversation(user_id, 'assistant', response)
@@ -151,8 +218,8 @@ class WhatsAppVirtualAssistant:
             metadata = {
                 'intent': intent,
                 'escalated': False,
-                'response_type': 'ai_generated',
-                'confidence': 0.8,
+                'response_type': 'knowledge_base' if intent != 'unknown' else 'unknown_query',
+                'confidence': 1.0 if intent != 'unknown' else 0.0,
                 'processing_time': datetime.now().isoformat()
             }
             
@@ -161,8 +228,8 @@ class WhatsAppVirtualAssistant:
             
         except Exception as e:
             self.logger.error(f"Error processing message: {e}")
-            error_response = "I apologize, but I'm having technical difficulties. Please try again in a moment, or type 'human' to speak with one of our team members."
-            return error_response, {'error': True, 'escalated': False}
+            error_response = self._get_unknown_response()
+            return error_response, {'error': True, 'escalated': False, 'response_type': 'error'}
     
     def _clean_message(self, message: str) -> str:
         """Clean and normalize the message text."""
@@ -229,136 +296,106 @@ class WhatsAppVirtualAssistant:
         return False
     
     def _detect_intent(self, message: str) -> str:
-        """Detect the intent of the user's message."""
+        """Detect the intent of the user's message based on knowledge base."""
         message_lower = message.lower()
         
-        # Check against defined intent keywords
-        for intent, keywords in INTENT_KEYWORDS.items():
-            if any(keyword in message_lower for keyword in keywords):
+        # Check against knowledge base triggers
+        for intent, knowledge in KNOWLEDGE_BASE.items():
+            triggers = knowledge.get('triggers', [])
+            if any(trigger in message_lower for trigger in triggers):
                 return intent
         
-        # Additional specific patterns
-        if any(word in message_lower for word in ['how much', '$']):
-            return 'pricing'
-        if any(word in message_lower for word in ['what do you do', 'book']):
-            return 'services' if 'what do you do' in message_lower else 'scheduling'
-        
-        return 'general_inquiry'
+        return 'unknown'
     
-    def _generate_ai_response(self, user_id: str, message: str, intent: str, context: Dict[str, Any]) -> str:
-        """Generate AI-powered response based on message and intent."""
+    def _generate_knowledge_response(self, user_id: str, message: str, intent: str, context: Dict[str, Any]) -> str:
+        """Generate response based only on knowledge base information."""
         try:
-            # Get conversation history for context
-            conversation_history = self.conversations.get(user_id, {}).get('messages', [])
-            user_name = self.conversations.get(user_id, {}).get('user_info', {}).get('name', 'Customer')
+            # If intent is unknown, we can't provide a response
+            if intent == 'unknown':
+                return self._get_unknown_response()
             
-            # Build context for AI
-            system_prompt = self._build_system_prompt(intent, user_name)
-            conversation_context = self._build_conversation_context(conversation_history)
+            # Get response from knowledge base
+            knowledge = KNOWLEDGE_BASE.get(intent, {})
+            responses = knowledge.get('responses', [])
             
-            # Generate response using AI
-            full_prompt = f"{system_prompt}\n\nConversation history:\n{conversation_context}\n\nUser message: {message}\n\nResponse:"
+            if not responses:
+                return self._get_unknown_response()
             
-            ai_response = self.ai_handler.generate_response(full_prompt)
+            # Choose the first response (you could randomize this if desired)
+            response_template = responses[0]
             
-            # Post-process the response
-            processed_response = self._post_process_response(ai_response, intent)
+            # Check if user is asking about specific service details
+            if intent == 'services':
+                service_details = self._check_for_service_details(message)
+                if service_details:
+                    return service_details
             
-            return processed_response
+            # Format response with business information
+            formatted_response = self._format_response(response_template)
+            
+            return formatted_response
             
         except Exception as e:
-            self.logger.error(f"Error generating AI response: {e}")
-            return self._get_fallback_response(intent)
+            self.logger.error(f"Error generating knowledge response: {e}")
+            return self._get_unknown_response()
     
-    def _build_system_prompt(self, intent: str, user_name: str) -> str:
-        """Build system prompt for AI based on intent and context."""
-        base_prompt = f"""You are {self.assistant_config['name']}, a professional virtual assistant for {self.business_info['name']}.
-
-Business Information:
-- Company: {self.business_info['name']}
-- Industry: {self.business_info['industry']}
-- Services: {', '.join(self.business_info['services'])}
-- Contact: {self.business_info['contact']['email']} | {self.business_info['contact']['phone']}
-- Hours: {self.business_info['contact']['hours']}
-- Website: {self.business_info['contact']['website']}
-
-Your personality: {self.assistant_config['personality']}
-
-Instructions:
-1. Be helpful, professional, and friendly
-2. Keep responses under {self.assistant_config['max_response_length']} characters
-3. Always provide accurate information about our services
-4. If you can't help, suggest contacting our human team
-5. Use the customer's name ({user_name}) when appropriate
-6. Include relevant contact information when helpful
-"""
+    def _check_for_service_details(self, message: str) -> Optional[str]:
+        """Check if user is asking about specific service details."""
+        message_lower = message.lower()
+        services_details = KNOWLEDGE_BASE['services'].get('details', {})
         
-        # Add intent-specific instructions
-        intent_prompts = {
-            'greeting': "Provide a warm greeting and ask how you can help today.",
-            'pricing': "Provide clear pricing information and offer to schedule a consultation for detailed quotes.",
-            'service_inquiry': "Explain our services clearly and how they can benefit the customer.",
-            'scheduling': "Help schedule a consultation or meeting. Get preferred dates/times.",
-            'support': "Provide helpful troubleshooting or escalate to human support if needed.",
-            'contact_info': "Provide accurate contact information and hours.",
-            'feedback': "Thank them for feedback and encourage them to share more details."
+        for service, details in services_details.items():
+            # Check if the service name is mentioned in the message
+            if service.replace(' ', '') in message_lower.replace(' ', '') or any(word in message_lower for word in service.split()):
+                return f"About {service.title()}:\n{details}\n\nWould you like to know about our other services or schedule a consultation? Contact us at {self.business_info['contact']['phone']} or {self.business_info['contact']['email']}."
+        
+        return None
+    
+    def _format_response(self, response_template: str) -> str:
+        """Format response template with business information."""
+        # Prepare formatting variables
+        format_vars = {
+            'business_name': self.business_info['name'],
+            'industry': self.business_info['industry'],
+            'services': '\n• '.join(self.business_info['services']),
+            'phone': self.business_info['contact']['phone'],
+            'email': self.business_info['contact']['email'],
+            'website': self.business_info['contact']['website'],
+            'hours': self.business_info['contact']['hours']
         }
         
-        specific_prompt = intent_prompts.get(intent, "Respond helpfully to their inquiry.")
-        
-        return f"{base_prompt}\n\nSpecific task: {specific_prompt}"
+        try:
+            return response_template.format(**format_vars)
+        except KeyError as e:
+            self.logger.warning(f"Missing format variable: {e}")
+            return response_template
     
-    def _build_conversation_context(self, messages: List[Dict]) -> str:
-        """Build conversation context from message history."""
-        if not messages:
-            return "This is the start of the conversation."
-        
-        context_lines = []
-        for msg in messages[-5:]:  # Last 5 messages for context
-            role = "Customer" if msg['role'] == 'user' else "Assistant"
-            context_lines.append(f"{role}: {msg['content']}")
-        
-        return "\n".join(context_lines)
+    def _get_unknown_response(self) -> str:
+        """Get response when we don't have knowledge base information."""
+        return f"""I'd be happy to help, but I can only provide information about our specific services and business details. 
+
+I can help you with:
+• Information about our services
+• Pricing and consultation scheduling
+• Contact information
+• General business questions
+
+For other questions or detailed assistance, please contact our team directly:
+📞 {self.business_info['contact']['phone']}
+📧 {self.business_info['contact']['email']}
+
+Or type 'human' to speak with one of our specialists!"""
     
-    def _post_process_response(self, response: str, intent: str) -> str:
-        """Post-process AI response for quality and consistency."""
-        if not response:
-            return self._get_fallback_response(intent)
-        
-        # Clean up the response
-        response = response.strip()
-        
-        # Ensure proper length
-        if len(response) > self.assistant_config['max_response_length']:
-            # Truncate at last complete sentence
-            sentences = response.split('.')
-            truncated = ""
-            for sentence in sentences:
-                if len(truncated + sentence + ".") <= self.assistant_config['max_response_length']:
-                    truncated += sentence + "."
-                else:
-                    break
-            response = truncated.strip()
-        
-        # Add helpful closing for certain intents
-        if intent == 'support' and 'human' not in response.lower():
-            response += "\n\nIf you need further assistance, type 'human' to speak with our team."
-        
-        return response
+
     
     def _get_fallback_response(self, intent: str) -> str:
-        """Get fallback response when AI fails."""
-        fallback_responses = {
-            'greeting': f"Hello! Welcome to {self.business_info['name']}. How can I help you today?",
-            'pricing': f"I'd be happy to discuss our pricing. Please contact us at {self.business_info['contact']['email']} for detailed information.",
-            'service_inquiry': f"We offer {', '.join(self.business_info['services'][:3])} and more. Visit {self.business_info['contact']['website']} for details.",
-            'scheduling': f"I'd love to help you schedule a consultation. Please call us at {self.business_info['contact']['phone']} or email {self.business_info['contact']['email']}.",
-            'support': "I'm here to help! Please describe your issue, or type 'human' to speak with our support team.",
-            'contact_info': f"You can reach us at {self.business_info['contact']['phone']} or {self.business_info['contact']['email']}. Hours: {self.business_info['contact']['hours']}",
-            'feedback': "Thank you for your feedback! We value your input and use it to improve our services."
-        }
+        """Get fallback response from knowledge base."""
+        if intent in KNOWLEDGE_BASE:
+            responses = KNOWLEDGE_BASE[intent].get('responses', [])
+            if responses:
+                return self._format_response(responses[0])
         
-        return fallback_responses.get(intent, f"Thank you for contacting {self.business_info['name']}. How can I assist you today?")
+        return self._get_unknown_response()
     
     def _handle_escalation(self, user_id: str, message: str, context: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
         """Handle escalation to human agent."""
