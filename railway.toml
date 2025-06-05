@@ -1,0 +1,14 @@
+[build]
+builder = "DOCKERFILE"
+dockerfilePath = "Dockerfile"
+
+[deploy]
+healthcheckPath = "/health"
+healthcheckTimeout = 300
+restartPolicyType = "ON_FAILURE"
+
+[env]
+PORT = "8000"
+PYTHONPATH = "/app/src"
+PYTHONDONTWRITEBYTECODE = "1"
+PYTHONUNBUFFERED = "1" 

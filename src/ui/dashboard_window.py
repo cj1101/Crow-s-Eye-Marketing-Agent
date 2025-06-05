@@ -101,6 +101,7 @@ class DashboardTile(QFrame):
             'library': '📚',
             'campaign_manager': '📅',
             'customer_handler': '💬',
+            'whatsapp_help_desk': '📱',
             'data': '📊',
             'tools': '🔧',
             'presets': '⚙️'
@@ -121,6 +122,7 @@ class DashboardWindow(BaseMainWindow):
     library_requested = Signal()
     campaign_manager_requested = Signal()
     customer_handler_requested = Signal()
+    whatsapp_help_desk_requested = Signal()
     data_requested = Signal()
     tools_requested = Signal()
     presets_requested = Signal()
@@ -347,6 +349,11 @@ class DashboardWindow(BaseMainWindow):
                 'feature_name': 'customer_handler'
             },
             {
+                'title': self.tr('WhatsApp Help Desk'),
+                'description': self.tr('AI-powered virtual assistant for customer support'),
+                'feature_name': 'whatsapp_help_desk'
+            },
+            {
                 'title': self.tr('Data'),
                 'description': self.tr('Analytics & compliance monitoring'),
                 'feature_name': 'data'
@@ -363,7 +370,7 @@ class DashboardWindow(BaseMainWindow):
             }
         ]
         
-        # Create tiles in a 3x2 grid
+        # Create tiles in a 3-column grid
         for i, tile_data in enumerate(tiles_data):
             tile = DashboardTile(
                 title=tile_data['title'],
@@ -409,6 +416,11 @@ class DashboardWindow(BaseMainWindow):
                 'feature_name': 'customer_handler'
             },
             {
+                'title': self.tr('WhatsApp Help Desk'),
+                'description': self.tr('AI-powered virtual assistant for customer support'),
+                'feature_name': 'whatsapp_help_desk'
+            },
+            {
                 'title': self.tr('Data'),
                 'description': self.tr('Analytics & compliance monitoring'),
                 'feature_name': 'data'
@@ -449,6 +461,8 @@ class DashboardWindow(BaseMainWindow):
             self.campaign_manager_requested.emit()
         elif feature_name == 'customer_handler':
             self.customer_handler_requested.emit()
+        elif feature_name == 'whatsapp_help_desk':
+            self.whatsapp_help_desk_requested.emit()
         elif feature_name == 'data':
             self.data_requested.emit()
         elif feature_name == 'tools':
