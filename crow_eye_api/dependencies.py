@@ -14,7 +14,8 @@ from datetime import datetime, timedelta
 # Add src to path for imports
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
-# Import core models and handlers
+# Try to import core functionality - use mocks if not available
+CORE_IMPORTS_AVAILABLE = False
 try:
     from src.models.user import User, SubscriptionTier, user_manager, SubscriptionInfo, UsageStats
     from src.features.subscription.access_control import SubscriptionAccessControl, Feature
@@ -26,30 +27,36 @@ try:
     from src.features.media_processing.video_handler import VideoHandler
     from src.features.media_processing.image_edit_handler import ImageEditHandler
     CORE_IMPORTS_AVAILABLE = True
+    print("✅ Core dependencies loaded successfully")
 except ImportError as e:
-    print(f"Warning: Core imports not available: {e}")
-    CORE_IMPORTS_AVAILABLE = False
+    print(f"⚠️  Core imports not available, using mocks: {e}")
     
-    # Mock classes for when core imports fail
+    # Mock classes for demonstration/fallback purposes
     class MockUser:
-        def __init__(self):
-            self.user_id = "mock_user"
-            self.email = "test@example.com"
-            self.username = "Test User"
+        def __init__(self, user_id="demo_user", email="demo@crowseye.com", username="Demo User"):
+            self.user_id = user_id
+            self.email = email
+            self.username = username
             self.subscription = MockSubscription()
+            self.created_at = datetime.now().isoformat()
+            self.usage_stats = {}
+            self.preferences = {}
     
     class MockSubscription:
-        def __init__(self):
-            self.tier = "CREATOR"
+        def __init__(self, tier="CREATOR"):
+            self.tier = tier
+            self.start_date = datetime.now().isoformat()
     
     class MockAppState:
         def __init__(self):
             self.media_generation_status = {}
+            self.user_sessions = {}
     
     class MockHandler:
         def __init__(self, *args, **kwargs):
-            pass
+            self.initialized = True
     
+    # Use mock classes
     User = MockUser
     AppState = MockAppState
     MediaHandler = MockHandler
@@ -64,77 +71,71 @@ SECRET_KEY = os.getenv("JWT_SECRET_KEY", "crow-eye-secret-key-change-in-producti
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_DAYS = 30
 
-security = HTTPBearer()
+security = HTTPBearer(auto_error=False)
 
-# Global instances (initialized once)
-_app_state = None
-_media_handler = None
-_crowseye_handler = None
-_library_manager = None
-_analytics_handler = None
-_video_handler = None
-_image_edit_handler = None
-_access_control = None
+# Global service instances (singleton pattern)
+_service_instances = {
+    "app_state": None,
+    "media_handler": None,
+    "crowseye_handler": None,
+    "library_manager": None,
+    "analytics_handler": None,
+    "video_handler": None,
+    "image_edit_handler": None,
+    "access_control": None
+}
 
 def get_app_state() -> AppState:
     """Get or create the global app state instance."""
-    global _app_state
-    if _app_state is None:
-        _app_state = AppState()
-    return _app_state
+    if _service_instances["app_state"] is None:
+        _service_instances["app_state"] = AppState()
+    return _service_instances["app_state"]
 
 def get_media_handler() -> MediaHandler:
     """Get or create the global media handler instance."""
-    global _media_handler
-    if _media_handler is None:
+    if _service_instances["media_handler"] is None:
         app_state = get_app_state()
-        _media_handler = MediaHandler(app_state)
-    return _media_handler
+        _service_instances["media_handler"] = MediaHandler(app_state)
+    return _service_instances["media_handler"]
 
 def get_library_manager() -> LibraryManager:
     """Get or create the global library manager instance."""
-    global _library_manager
-    if _library_manager is None:
-        _library_manager = LibraryManager()
-    return _library_manager
+    if _service_instances["library_manager"] is None:
+        _service_instances["library_manager"] = LibraryManager()
+    return _service_instances["library_manager"]
 
 def get_crowseye_handler() -> CrowsEyeHandler:
     """Get or create the global Crow's Eye handler instance."""
-    global _crowseye_handler
-    if _crowseye_handler is None:
+    if _service_instances["crowseye_handler"] is None:
         app_state = get_app_state()
         media_handler = get_media_handler()
         library_manager = get_library_manager()
-        _crowseye_handler = CrowsEyeHandler(app_state, media_handler, library_manager)
-    return _crowseye_handler
+        _service_instances["crowseye_handler"] = CrowsEyeHandler(app_state, media_handler, library_manager)
+    return _service_instances["crowseye_handler"]
 
 def get_analytics_handler() -> AnalyticsHandler:
     """Get or create the global analytics handler instance."""
-    global _analytics_handler
-    if _analytics_handler is None:
-        _analytics_handler = AnalyticsHandler()
-    return _analytics_handler
+    if _service_instances["analytics_handler"] is None:
+        _service_instances["analytics_handler"] = AnalyticsHandler()
+    return _service_instances["analytics_handler"]
 
 def get_video_handler() -> VideoHandler:
     """Get or create the global video handler instance."""
-    global _video_handler
-    if _video_handler is None:
-        _video_handler = VideoHandler()
-    return _video_handler
+    if _service_instances["video_handler"] is None:
+        _service_instances["video_handler"] = VideoHandler()
+    return _service_instances["video_handler"]
 
 def get_image_edit_handler() -> ImageEditHandler:
     """Get or create the global image edit handler instance."""
-    global _image_edit_handler
-    if _image_edit_handler is None:
-        _image_edit_handler = ImageEditHandler()
-    return _image_edit_handler
+    if _service_instances["image_edit_handler"] is None:
+        _service_instances["image_edit_handler"] = ImageEditHandler()
+    return _service_instances["image_edit_handler"]
 
 def get_access_control() -> "SubscriptionAccessControl":
     """Get or create the global access control instance.""" 
-    global _access_control
-    if _access_control is None and CORE_IMPORTS_AVAILABLE:
-        _access_control = SubscriptionAccessControl()
-    return _access_control
+    if _service_instances["access_control"] is None and CORE_IMPORTS_AVAILABLE:
+        _service_instances["access_control"] = SubscriptionAccessControl()
+    return _service_instances["access_control"]
 
 def create_access_token(user: User) -> str:
     """Create JWT access token for user."""
@@ -164,91 +165,111 @@ def verify_token(token: str) -> dict:
         )
 
 async def get_current_user(
-    credentials: Annotated[HTTPAuthorizationCredentials, Depends(security)] = None,
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)] = None,
     x_user_api_key: Annotated[Optional[str], Header()] = None
 ) -> User:
-    """Get current authenticated user."""
+    """Get current authenticated user with flexible authentication."""
     
-    # For demo purposes, create a test user if no auth provided
+    # For demo/development purposes, create a test user if no auth provided
     if not credentials and not x_user_api_key:
         return User(
+            user_id="demo_user",
+            email="demo@crowseye.com",
+            username="Demo User"
+        ) if not CORE_IMPORTS_AVAILABLE else User(
             user_id="demo_user",
             email="demo@crowseye.com",
             username="Demo User",
             created_at=datetime.now().isoformat(),
             subscription=SubscriptionInfo(
-                tier=SubscriptionTier.CREATOR if CORE_IMPORTS_AVAILABLE else "CREATOR",
+                tier=SubscriptionTier.CREATOR,
                 start_date=datetime.now().isoformat()
-            ) if CORE_IMPORTS_AVAILABLE else MockSubscription(),
-            usage_stats=UsageStats() if CORE_IMPORTS_AVAILABLE else {},
+            ),
+            usage_stats=UsageStats(),
             preferences={}
         )
     
-    # Check for BYO API key (Enterprise feature)
+    # Handle BYO API key (Enterprise feature)
     if x_user_api_key:
         return User(
             user_id="enterprise_user",
             email="enterprise@example.com",
+            username="Enterprise User"
+        ) if not CORE_IMPORTS_AVAILABLE else User(
+            user_id="enterprise_user",
+            email="enterprise@example.com", 
             username="Enterprise User",
             created_at=datetime.now().isoformat(),
             subscription=SubscriptionInfo(
-                tier=SubscriptionTier.BUSINESS if CORE_IMPORTS_AVAILABLE else "BUSINESS",
+                tier=SubscriptionTier.BUSINESS,
                 start_date=datetime.now().isoformat()
-            ) if CORE_IMPORTS_AVAILABLE else MockSubscription(),
-            usage_stats=UsageStats() if CORE_IMPORTS_AVAILABLE else {},
+            ),
+            usage_stats=UsageStats(),
             preferences={}
         )
     
-    # Verify JWT token
+    # Handle JWT token authentication
     if credentials:
-        payload = verify_token(credentials.credentials)
+        token = credentials.credentials
+        payload = verify_token(token)
+        
+        # Get user from token payload
+        user_id = payload.get("user_id")
         email = payload.get("sub")
+        tier = payload.get("tier", "FREE")
         
-        if not email:
-            raise HTTPException(
-                status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid token payload"
-            )
-        
-        # Create user from token data
-        user = User(
-            user_id=payload.get("user_id", "token_user"),
+        return User(
+            user_id=user_id,
             email=email,
-            username=email.split("@")[0],
+            username=f"User_{user_id[-8:]}"
+        ) if not CORE_IMPORTS_AVAILABLE else User(
+            user_id=user_id,
+            email=email,
+            username=f"User_{user_id[-8:]}",
             created_at=datetime.now().isoformat(),
             subscription=SubscriptionInfo(
-                tier=SubscriptionTier(payload.get("tier", "FREE")) if CORE_IMPORTS_AVAILABLE else payload.get("tier", "FREE"),
+                tier=getattr(SubscriptionTier, tier, SubscriptionTier.FREE),
                 start_date=datetime.now().isoformat()
-            ) if CORE_IMPORTS_AVAILABLE else MockSubscription(),
-            usage_stats=UsageStats() if CORE_IMPORTS_AVAILABLE else {},
+            ),
+            usage_stats=UsageStats(),
             preferences={}
         )
-        
-        return user
     
-    raise HTTPException(
-        status_code=status.HTTP_401_UNAUTHORIZED,
-        detail="Authentication required"
+    # Fallback to demo user
+    return User(
+        user_id="fallback_user",
+        email="fallback@crowseye.com",
+        username="Fallback User"
     )
 
-def require_tier(required_tier):
-    """Dependency factory for tier requirements."""
-    def tier_dependency(current_user: User = Depends(get_current_user)) -> User:
-        if not CORE_IMPORTS_AVAILABLE:
-            return current_user  # Skip tier checking if imports unavailable
-            
-        # Check if user has required tier or higher
+async def get_current_user_optional(
+    credentials: Annotated[Optional[HTTPAuthorizationCredentials], Depends(security)] = None
+) -> Optional[User]:
+    """Get current user if authenticated, otherwise return None."""
+    try:
+        if credentials:
+            return await get_current_user(credentials)
+        return None
+    except HTTPException:
+        return None
+
+def require_tier(required_tier: str):
+    """Dependency to require a specific subscription tier."""
+    async def tier_dependency(current_user: User = Depends(get_current_user)) -> User:
+        user_tier = getattr(current_user.subscription, 'tier', 'FREE')
+        
+        # Define tier hierarchy for comparison
         tier_hierarchy = {
-            "FREE": 0,
-            "CREATOR": 1, 
-            "PRO": 2,
-            "BUSINESS": 3
+            'FREE': 0,
+            'CREATOR': 1,
+            'BUSINESS': 2,
+            'ENTERPRISE': 3
         }
         
-        user_tier_level = tier_hierarchy.get(str(current_user.subscription.tier), 0)
-        required_tier_level = tier_hierarchy.get(str(required_tier), 0)
+        required_level = tier_hierarchy.get(required_tier, 0)
+        user_level = tier_hierarchy.get(user_tier, 0)
         
-        if user_tier_level < required_tier_level:
+        if user_level < required_level:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"This feature requires {required_tier} tier or higher"
@@ -258,39 +279,26 @@ def require_tier(required_tier):
     
     return tier_dependency
 
-def require_feature(feature):
-    """Dependency factory for feature requirements."""
-    def feature_dependency(current_user: User = Depends(get_current_user)) -> User:
+def require_feature(feature_name: str):
+    """Dependency to require access to a specific feature."""
+    async def feature_dependency(current_user: User = Depends(get_current_user)) -> User:
+        # In demo mode, allow all features
         if not CORE_IMPORTS_AVAILABLE:
-            return current_user  # Skip feature checking if imports unavailable
+            return current_user
             
         access_control = get_access_control()
-        if access_control:
-            # Set current user in user manager for access control
-            if hasattr(user_manager, '_current_user'):
-                user_manager._current_user = current_user
-            
-            if not access_control.has_feature_access(feature):
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail=f"This feature is not available in your current subscription tier"
-                )
+        if access_control and not access_control.has_access(current_user, feature_name):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Access to {feature_name} is not available in your subscription tier"
+            )
         
         return current_user
     
     return feature_dependency
 
-# Common dependencies
-def get_current_user_optional() -> Optional[User]:
-    """Get current user without requiring authentication."""
-    try:
-        return get_current_user()
-    except:
-        return None
-
-# Service dependencies
 def get_services():
-    """Get all core services as a dependency."""
+    """Get all initialized service instances."""
     return {
         "app_state": get_app_state(),
         "media_handler": get_media_handler(),
@@ -299,6 +307,6 @@ def get_services():
         "analytics_handler": get_analytics_handler(),
         "video_handler": get_video_handler(),
         "image_edit_handler": get_image_edit_handler(),
-        "core_imports_available": CORE_IMPORTS_AVAILABLE
-    } d e f   r e q u i r e _ e n t e r p r i s e ( c u r r e n t _ u s e r   =   D e p e n d s ( g e t _ c u r r e n t _ u s e r ) ) :   r e t u r n   c u r r e n t _ u s e r  
- 
+        "access_control": get_access_control(),
+        "core_available": CORE_IMPORTS_AVAILABLE
+    } 

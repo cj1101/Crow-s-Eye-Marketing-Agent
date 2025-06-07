@@ -7,7 +7,7 @@ pydantic==2.10.3
 PyJWT==2.8.0
 python-multipart==0.0.12
 
-# Core dependencies (minimal set for deployment)
+# Core dependencies
 requests==2.32.3
 python-dateutil==2.8.2
 python-dotenv==1.0.1
@@ -15,8 +15,12 @@ python-dotenv==1.0.1
 # AI dependencies (if needed for API)
 google-generativeai==0.8.3
 
-# Optional dependencies
+# Utility libraries
 pytz==2023.3
 
-# Testing (minimal)
-httpx>=0.28.1,<1.0.0 
+# Testing and development
+httpx>=0.28.1,<1.0.0
+
+# Optional: For enhanced functionality if available
+# Pillow==10.0.0  # For image processing
+# opencv-python==4.8.0  # For video processing 
