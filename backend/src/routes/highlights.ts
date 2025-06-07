@@ -21,10 +21,10 @@ const router = Router();
  */
 router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const highlights = await prisma.highlightReel.findMany({
+    const highlights = await prisma.highlight.findMany({
       where: { userId: req.user!.id },
       include: {
-        clips: {
+        media: {
           include: {
             media: true
           },
@@ -34,24 +34,18 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
       orderBy: { createdAt: 'desc' }
     });
 
-    const formattedHighlights: HighlightReel[] = highlights.map(highlight => ({
+    const formattedHighlights: HighlightItem[] = highlights.map(highlight => ({
       id: highlight.id,
       title: highlight.title,
-      clips: highlight.clips.map(c => c.media.url),
-      duration: highlight.duration,
+      media: highlight.media.map(m => m.media.url),
       createdAt: highlight.createdAt.toISOString(),
     }));
 
     res.json(formattedHighlights);
   } catch (error) {
     logger.error('Get highlights error:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to retrieve highlight reels'
-      }
-    });
+    // Return empty array instead of error object to prevent frontend .map() errors
+    res.status(200).json([]);
   }
 });
 

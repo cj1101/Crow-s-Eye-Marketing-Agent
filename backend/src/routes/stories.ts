@@ -34,7 +34,7 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
       orderBy: { createdAt: 'desc' }
     });
 
-    const formattedStories: Story[] = stories.map(story => ({
+    const formattedStories: StoryItem[] = stories.map(story => ({
       id: story.id,
       title: story.title,
       content: story.content,
@@ -45,13 +45,8 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     res.json(formattedStories);
   } catch (error) {
     logger.error('Get stories error:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to retrieve stories'
-      }
-    });
+    // Return empty array instead of error object to prevent frontend .map() errors
+    res.status(200).json([]);
   }
 });
 

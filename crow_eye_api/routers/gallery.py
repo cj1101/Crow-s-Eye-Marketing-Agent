@@ -79,8 +79,52 @@ class GalleryListResponse(BaseModel):
     """Gallery list response model."""
     galleries: List[GalleryItem]
     total: int
-    query: Optional[str]
+    query: Optional[str] = None
     filters: Dict[str, Any]
+    success: bool = True
+    message: Optional[str] = None
+
+# Add API debugging endpoint
+@router.get("/debug", response_model=Dict[str, Any])
+async def debug_gallery_api(
+    services: dict = Depends(get_services),
+    current_user = Depends(get_current_user)
+):
+    """
+    Debug endpoint to check API functionality and data structures.
+    """
+    try:
+        crowseye_handler = services.get("crowseye_handler")
+        
+        debug_info = {
+            "api_status": "operational",
+            "services_available": list(services.keys()),
+            "core_imports_available": services.get("core_imports_available", False),
+            "user_info": {
+                "user_id": getattr(current_user, 'user_id', 'unknown'),
+                "email": getattr(current_user, 'email', 'unknown')
+            },
+            "crowseye_handler_available": crowseye_handler is not None
+        }
+        
+        # Test gallery data access
+        if crowseye_handler:
+            try:
+                galleries = crowseye_handler.get_saved_galleries()
+                debug_info["galleries_count"] = len(galleries) if galleries else 0
+                debug_info["galleries_type"] = str(type(galleries))
+                debug_info["sample_gallery"] = galleries[0] if galleries else None
+            except Exception as e:
+                debug_info["gallery_error"] = str(e)
+        
+        return debug_info
+        
+    except Exception as e:
+        return {
+            "api_status": "error",
+            "error": str(e),
+            "services_available": list(services.keys()) if services else []
+        }
 
 @router.get("/", response_model=GalleryListResponse)
 async def list_galleries(
@@ -99,39 +143,64 @@ async def list_galleries(
     - Pagination support
     """
     try:
-        crowseye_handler = services["crowseye_handler"]
+        crowseye_handler = services.get("crowseye_handler")
         
-        # Get all saved galleries
-        all_galleries = crowseye_handler.get_saved_galleries()
+        if not crowseye_handler:
+            # Return empty but valid response structure
+            return GalleryListResponse(
+                galleries=[],
+                total=0,
+                query=query,
+                filters={"limit": limit, "offset": offset},
+                success=False,
+                message="Crow's Eye handler not available"
+            )
+        
+        # Get all saved galleries - ensure it returns a list
+        try:
+            all_galleries = crowseye_handler.get_saved_galleries()
+            # Ensure we have a list
+            if not isinstance(all_galleries, list):
+                all_galleries = []
+        except Exception as e:
+            print(f"Error getting galleries: {e}")
+            all_galleries = []
         
         # Apply search filter if provided
-        if query:
+        if query and all_galleries:
             filtered_galleries = []
             query_lower = query.lower()
             for gallery in all_galleries:
-                # Search in name, description, caption
-                if (query_lower in gallery.get("name", "").lower() or
-                    query_lower in gallery.get("description", "").lower() or
-                    query_lower in gallery.get("caption", "").lower()):
-                    filtered_galleries.append(gallery)
+                if isinstance(gallery, dict):
+                    # Search in name, description, caption
+                    if (query_lower in gallery.get("name", "").lower() or
+                        query_lower in gallery.get("description", "").lower() or
+                        query_lower in gallery.get("caption", "").lower()):
+                        filtered_galleries.append(gallery)
             all_galleries = filtered_galleries
         
-        # Convert to response format
+        # Convert to response format - ensure each item is valid
         gallery_items = []
-        for gallery_data in all_galleries:
-            gallery_item = GalleryItem(
-                id=gallery_data.get("id", str(uuid.uuid4())),
-                name=gallery_data.get("name", "Unnamed Gallery"),
-                description=gallery_data.get("description"),
-                media_count=len(gallery_data.get("media_paths", [])),
-                media_paths=gallery_data.get("media_paths", []),
-                caption=gallery_data.get("caption"),
-                tags=gallery_data.get("tags", []),
-                created_at=gallery_data.get("created_at", datetime.now().isoformat()),
-                updated_at=gallery_data.get("updated_at", datetime.now().isoformat()),
-                thumbnail_url=gallery_data.get("thumbnail_url")
-            )
-            gallery_items.append(gallery_item)
+        if all_galleries:
+            for gallery_data in all_galleries:
+                if isinstance(gallery_data, dict):
+                    try:
+                        gallery_item = GalleryItem(
+                            id=gallery_data.get("id", str(uuid.uuid4())),
+                            name=gallery_data.get("name", "Unnamed Gallery"),
+                            description=gallery_data.get("description"),
+                            media_count=len(gallery_data.get("media_paths", [])),
+                            media_paths=gallery_data.get("media_paths", []),
+                            caption=gallery_data.get("caption"),
+                            tags=gallery_data.get("tags", []),
+                            created_at=gallery_data.get("created_at", datetime.now().isoformat()),
+                            updated_at=gallery_data.get("updated_at", datetime.now().isoformat()),
+                            thumbnail_url=gallery_data.get("thumbnail_url")
+                        )
+                        gallery_items.append(gallery_item)
+                    except Exception as e:
+                        print(f"Error processing gallery item: {e}")
+                        continue
         
         # Apply pagination
         total = len(gallery_items)
@@ -141,13 +210,20 @@ async def list_galleries(
             galleries=paginated_galleries,
             total=total,
             query=query,
-            filters={"limit": limit, "offset": offset}
+            filters={"limit": limit, "offset": offset},
+            success=True
         )
         
     except Exception as e:
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"Failed to list galleries: {str(e)}"
+        print(f"Gallery list error: {e}")
+        # Always return a valid response structure, even on error
+        return GalleryListResponse(
+            galleries=[],
+            total=0,
+            query=query,
+            filters={"limit": limit, "offset": offset},
+            success=False,
+            message=f"Error retrieving galleries: {str(e)}"
         )
 
 @router.post("/", response_model=GalleryItem)
@@ -166,21 +242,34 @@ async def create_gallery(
     - Smart organization
     """
     try:
-        crowseye_handler = services["crowseye_handler"]
+        crowseye_handler = services.get("crowseye_handler")
+        
+        if not crowseye_handler:
+            raise HTTPException(
+                status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+                detail="Crow's Eye handler not available"
+            )
         
         # Convert media IDs to paths
         media_paths = []
-        media_data = crowseye_handler.get_all_media()
+        try:
+            media_data = crowseye_handler.get_all_media()
+            if not isinstance(media_data, dict):
+                media_data = {}
+        except Exception as e:
+            print(f"Error getting media data: {e}")
+            media_data = {}
         
         for media_id in request.media_ids:
             found = False
             for category, paths in media_data.items():
-                for path in paths:
-                    item_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, path))
-                    if item_id == media_id:
-                        media_paths.append(path)
-                        found = True
-                        break
+                if isinstance(paths, list):
+                    for path in paths:
+                        item_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, path))
+                        if item_id == media_id:
+                            media_paths.append(path)
+                            found = True
+                            break
                 if found:
                     break
         

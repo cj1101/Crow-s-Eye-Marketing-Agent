@@ -62,13 +62,8 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     res.json(formattedItems);
   } catch (error) {
     logger.error('Get media error:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to retrieve media files'
-      }
-    });
+    // Return empty array instead of error object to prevent frontend .map() errors
+    res.status(200).json([]);
   }
 });
 

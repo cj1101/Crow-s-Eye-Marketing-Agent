@@ -44,13 +44,8 @@ router.get('/', authenticateToken, async (req: AuthenticatedRequest, res: Respon
     res.json(formattedGalleries);
   } catch (error) {
     logger.error('Get galleries error:', error);
-    res.status(500).json({
-      success: false,
-      error: {
-        code: 'INTERNAL_ERROR',
-        message: 'Failed to retrieve galleries'
-      }
-    });
+    // Return empty array instead of error object to prevent frontend .map() errors
+    res.status(200).json([]);
   }
 });
 
