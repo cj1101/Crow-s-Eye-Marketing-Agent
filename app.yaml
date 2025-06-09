@@ -1,0 +1,58 @@
+runtime: python39
+
+service: crow-eye-api
+
+env_variables:
+  # API Configuration
+  API_V1_STR: "/api/v1"
+  PROJECT_NAME: "Crow's Eye API"
+  
+  # Database Configuration (Cloud SQL or external)
+  DATABASE_URL: "sqlite+aiosqlite:///./data/crow_eye.db"
+  
+  # JWT Configuration
+  JWT_SECRET_KEY: "your-production-secret-key-change-this"
+  ALGORITHM: "HS256"
+  ACCESS_TOKEN_EXPIRE_MINUTES: "10080"  # 7 days
+  
+  # Google Cloud Configuration
+  GOOGLE_CLOUD_PROJECT: "your-project-id"
+  GOOGLE_CLOUD_STORAGE_BUCKET: "your-bucket-name"
+  
+  # API Keys (set these in Google Cloud Console)
+  GOOGLE_API_KEY: "your-google-api-key"
+  GEMINI_API_KEY: "your-gemini-api-key"
+  OPENAI_API_KEY: "your-openai-api-key"
+
+# Health check configuration
+liveness_check:
+  path: "/health"
+  check_interval_sec: 30
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+
+readiness_check:
+  path: "/health"
+  check_interval_sec: 5
+  timeout_sec: 4
+  failure_threshold: 2
+  success_threshold: 2
+  app_start_timeout_sec: 300
+
+# Automatic scaling
+automatic_scaling:
+  min_instances: 1
+  max_instances: 10
+  target_cpu_utilization: 0.6
+
+# Resource allocation
+resources:
+  cpu: 1
+  memory_gb: 0.5
+  disk_size_gb: 10
+
+handlers:
+- url: /.*
+  script: auto
+  secure: always 
