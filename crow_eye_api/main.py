@@ -2,6 +2,16 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 import logging
 
+import sys
+import os
+
+# Add the parent directory to the Python path to resolve imports
+current_dir = os.path.dirname(os.path.abspath(__file__))
+parent_dir = os.path.dirname(current_dir)
+sys.path.insert(0, parent_dir)
+sys.path.insert(0, current_dir)
+
+# Import with proper module path
 from crow_eye_api.core.config import settings
 from crow_eye_api.api.api_v1.api import api_router
 

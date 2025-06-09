@@ -89,4 +89,34 @@ class MediaSearchResponse(BaseModel):
     total: int
     limit: int
     offset: int
-    has_more: bool 
+    has_more: bool
+
+
+class MediaEditFormattingOptions(BaseModel):
+    """Formatting options for media editing."""
+    aspect_ratio: Optional[str] = None  # "16:9", "9:16", "4:5", "1:1", etc.
+    vertical_optimization: bool = False
+    caption_overlay: bool = False
+
+
+class MediaEditRequest(BaseModel):
+    """Request schema for media editing."""
+    instructions: str  # Natural language editing instructions
+    formatting_options: Optional[MediaEditFormattingOptions] = None
+
+
+class MediaEditResponse(BaseModel):
+    """Response schema for media editing job creation."""
+    job_id: str
+    status: str  # "processing", "completed", "failed"
+    message: str
+
+
+class MediaEditStatusResponse(BaseModel):
+    """Response schema for media editing job status."""
+    job_id: str
+    status: str  # "processing", "completed", "failed"
+    progress: int  # 0-100
+    message: str
+    error: Optional[str] = None
+    result_media_id: Optional[str] = None 

@@ -15,4 +15,8 @@ class User(Base):
     
     # Relationships
     media_items = relationship("MediaItem", back_populates="user", cascade="all, delete-orphan")
-    galleries = relationship("Gallery", back_populates="user", cascade="all, delete-orphan") 
+    galleries = relationship("Gallery", back_populates="user", cascade="all, delete-orphan")
+    posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
+    schedules = relationship("Schedule", back_populates="user", cascade="all, delete-orphan")
+    templates = relationship("Template", back_populates="user", cascade="all, delete-orphan")
+    analytics_summaries = relationship("AnalyticsSummary", back_populates="user", cascade="all, delete-orphan") 

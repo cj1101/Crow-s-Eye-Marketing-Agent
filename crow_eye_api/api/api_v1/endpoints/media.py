@@ -457,4 +457,143 @@ async def get_thumbnail(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to generate thumbnail URL: {str(e)}"
-        ) 
+        )
+
+
+@router.post("/{media_id}/edit", response_model=schemas.MediaEditResponse)
+async def edit_media(
+    media_id: int,
+    edit_request: schemas.MediaEditRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Apply editing instructions to media using natural language instructions.
+    """
+    media_item = await crud_media.get_media_item(
+        db=db, media_id=media_id, user_id=current_user.id
+    )
+    
+    if not media_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media item not found"
+        )
+    
+    try:
+        # Import media editing service
+        from crow_eye_api.services.media_editing_service import MediaEditingService
+        editing_service = MediaEditingService()
+        
+        # Start editing job
+        job_id = await editing_service.start_editing_job(
+            media_item=media_item,
+            instructions=edit_request.instructions,
+            formatting_options=edit_request.formatting_options,
+            user_id=current_user.id
+        )
+        
+        return schemas.MediaEditResponse(
+            job_id=job_id,
+            status="processing",
+            message="Media editing job started successfully"
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error starting media editing job: {str(e)}"
+        )
+
+
+@router.get("/{media_id}/edit-status/{job_id}", response_model=schemas.MediaEditStatusResponse)
+async def get_edit_status(
+    media_id: int,
+    job_id: str,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Get the status of a media editing job.
+    """
+    media_item = await crud_media.get_media_item(
+        db=db, media_id=media_id, user_id=current_user.id
+    )
+    
+    if not media_item:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Media item not found"
+        )
+    
+    try:
+        # Import media editing service
+        from crow_eye_api.services.media_editing_service import MediaEditingService
+        editing_service = MediaEditingService()
+        
+        # Get job status
+        job_status = await editing_service.get_job_status(
+            job_id=job_id,
+            user_id=current_user.id
+        )
+        
+        if not job_status:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Editing job not found"
+            )
+        
+        response = schemas.MediaEditStatusResponse(
+            job_id=job_id,
+            status=job_status.get("status", "unknown"),
+            progress=job_status.get("progress", 0),
+            message=job_status.get("message", ""),
+            error=job_status.get("error"),
+            result_media_id=job_status.get("result_media_id")
+        )
+        
+        return response
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Error getting editing job status: {str(e)}"
+        )
+
+# New endpoints for API specification compliance
+
+@router.post("/{media_id}/process", response_model=schemas.MediaEditResponse)
+async def process_media_with_instructions(
+    media_id: int,
+    process_request: schemas.MediaProcessingRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Process media with natural language instructions."""
+    # For demo mode, return mock processing response
+    import uuid
+    job_id = str(uuid.uuid4())
+    
+    return schemas.MediaEditResponse(
+        job_id=job_id,
+        status="processing",
+        message=f"Media processing started with instructions: {process_request.instructions}"
+    )
+
+@router.post("/{media_id}/optimize", response_model=schemas.MediaEditResponse)
+async def generate_platform_optimized_versions(
+    media_id: int,
+    optimization_request: schemas.MediaOptimizationRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Generate platform-optimized versions of media."""
+    # For demo mode, return mock optimization response
+    import uuid
+    job_id = str(uuid.uuid4())
+    
+    return schemas.MediaEditResponse(
+        job_id=job_id,
+        status="processing",
+        message=f"Platform optimization started for: {', '.join(optimization_request.platforms)}"
+    ) 

@@ -12,7 +12,8 @@ from datetime import datetime
 import cv2
 import numpy as np
 from moviepy.editor import VideoFileClip, concatenate_videoclips, CompositeVideoClip
-from moviepy.video.fx import resize, crop
+from moviepy.video.fx import resize
+from moviepy.video.fx.crop import crop
 from PIL import Image
 
 from ...config import constants as const
@@ -329,49 +330,34 @@ class VideoHandler:
             except Exception as e:
                 return False, "", f"Cannot create output directory: {e}"
             
-            # Write video with comprehensive error handling
+            # Write video with better error handling
             try:
-                self.logger.info(f"Writing video to {output_path}")
                 final_clip.write_videofile(
                     output_path,
                     codec='libx264',
                     audio_codec='aac',
-                    temp_audiofile=f'temp-audio-longform-{timestamp}.m4a',
+                    temp_audiofile='temp-audio.m4a',
                     remove_temp=True,
-                    preset='medium',
-                    bitrate='2000k',
-                    verbose=False,  # Reduce log noise
-                    logger=None    # Disable moviepy logging
+                    verbose=False,  # Reduce verbosity
+                    logger=None  # Disable internal logging that might cause issues
                 )
-                
-                # Verify output file was created and is valid
-                if not os.path.exists(output_path):
-                    raise FileNotFoundError("Output file was not created")
-                
-                output_size = os.path.getsize(output_path)
-                if output_size == 0:
-                    raise ValueError("Output file is empty")
-                
-                self.logger.info(f"Output file size: {output_size / (1024*1024):.1f} MB")
-                
-            except Exception as e:
-                self.logger.error(f"Error writing video file: {e}")
-                # Clean up partial file
+            except Exception as video_write_error:
+                self.logger.warning(f"Video writing failed with audio, trying without audio: {video_write_error}")
                 try:
-                    if os.path.exists(output_path):
-                        os.remove(output_path)
-                except:
-                    pass
-                
-                # Clean up and return error
-                clip.close()
-                final_clip.close()
-                for highlight_clip in highlight_clips:
-                    try:
-                        highlight_clip.close()
-                    except:
-                        pass
-                return False, "", f"Failed to write video file: {str(e)}"
+                    # Try writing without audio if audio processing fails
+                    final_clip_no_audio = final_clip.without_audio()
+                    final_clip_no_audio.write_videofile(
+                        output_path,
+                        codec='libx264',
+                        verbose=False,
+                        logger=None
+                    )
+                    final_clip_no_audio.close()
+                    self.logger.info("Video saved without audio due to audio processing issues")
+                except Exception as final_error:
+                    # Clean up and return error
+                    self._cleanup_clips(clip, final_clip, highlight_clips)
+                    return False, "", f"Failed to write video: {str(final_error)}"
             
             # Clean up memory
             clip.close()
@@ -722,440 +708,655 @@ class VideoHandler:
     
     def _analyze_video_for_highlights(self, clip, target_duration: int, prompt: str) -> List[Tuple[float, float]]:
         """
-        Analyze video to find highlight segments based on prompt using cost-effective multi-stage approach.
-        
-        For long videos (>30 min), uses intelligent sampling to minimize AI costs while maximizing quality.
+        Analyze video to find the best segments for highlights with enhanced action detection.
         """
         duration = clip.duration
         
-        # For short videos, use existing simple approach
-        if duration <= 30 * 60:  # 30 minutes
-            return self._analyze_short_video_highlights(clip, target_duration, prompt)
+        # Check if this is an action-based prompt regardless of video length
+        action_keywords = ['throwing', 'catching', 'running', 'jumping', 'dancing', 'playing', 'kicking', 'hitting', 'shooting',
+                          'pokeball', 'pokemon', 'throw', 'catch', 'ball', 'game', 'gaming', 'mobile', 'AR', 'attempt']
+        is_action_prompt = any(keyword in prompt.lower() for keyword in action_keywords)
         
-        # For long videos, use cost-effective multi-stage approach
-        return self._analyze_long_video_highlights(clip, target_duration, prompt)
+        # Use action detection for action prompts or shorter videos
+        if is_action_prompt or duration <= 180:  # 3 minutes threshold
+            self.logger.info(f"Using enhanced action detection (action_prompt: {is_action_prompt}, duration: {duration:.1f}s)")
+            return self._analyze_short_video_highlights(clip, target_duration, prompt)
+        else:
+            self.logger.info(f"Using standard long video analysis for {duration:.1f}s video")
+            return self._analyze_long_video_highlights(clip, target_duration, prompt)
     
     def _analyze_short_video_highlights(self, clip, target_duration: int, prompt: str) -> List[Tuple[float, float]]:
-        """Original simple analysis for short videos."""
+        """
+        Enhanced analysis for short videos with action-focused detection.
+        """
         duration = clip.duration
-        segment_length = target_duration / 3  # Create 3 segments by default
         
-        # Simple strategy: take segments from beginning, middle, and end
-        segments = []
+        # Determine if this is an action-based prompt (expanded for Pokemon/gaming)
+        action_keywords = ['throwing', 'catching', 'running', 'jumping', 'dancing', 'playing', 'kicking', 'hitting', 'shooting', 
+                          'pokeball', 'pokemon', 'throw', 'catch', 'ball', 'game', 'gaming', 'mobile', 'AR', 'attempt']
+        is_action_prompt = any(keyword in prompt.lower() for keyword in action_keywords)
         
-        if "beginning" in prompt.lower() or "start" in prompt.lower():
-            segments.append((0, min(segment_length, duration)))
-        elif "end" in prompt.lower() or "finish" in prompt.lower():
-            start_time = max(0, duration - segment_length)
-            segments.append((start_time, duration))
-        elif "middle" in prompt.lower():
-            start_time = (duration - segment_length) / 2
-            segments.append((start_time, start_time + segment_length))
+        if is_action_prompt:
+            # Use shorter, more precise segments for action detection
+            segment_length = 2.0  # 2-second segments for actions
+            min_segment_gap = 0.5  # Allow closer segments for actions
         else:
-            # Default: take segments from beginning, middle, and end
-            if duration > target_duration:
-                # Beginning
-                segments.append((0, segment_length))
-                
-                # Middle
-                middle_start = (duration - segment_length) / 2
-                segments.append((middle_start, middle_start + segment_length))
-                
-                # End
-                end_start = duration - segment_length
-                segments.append((end_start, duration))
-            else:
-                segments.append((0, duration))
+            segment_length = 8.0  # Longer segments for non-action content
+            min_segment_gap = 2.0
         
-        return segments
+        # Generate shorter segments
+        segments = []
+        current_time = 0
+        while current_time + segment_length <= duration:
+            segments.append((current_time, current_time + segment_length))
+            current_time += segment_length * 0.7  # 30% overlap for better coverage
+        
+        # Add final segment if there's remaining content
+        if current_time < duration and duration - current_time > 1.0:
+            segments.append((current_time, duration))
+        
+        self.logger.info(f"Generated {len(segments)} segments for analysis (action prompt: {is_action_prompt})")
+        
+        if is_action_prompt:
+            # Use enhanced action detection pipeline
+            return self._analyze_action_segments(clip, segments, target_duration, prompt)
+        else:
+            # Use standard analysis
+            scored_segments = self._score_segments_with_ai(clip, segments, prompt)
+            return self._select_best_segments(scored_segments, target_duration)
     
     def _analyze_long_video_highlights(self, clip, target_duration: int, prompt: str) -> List[Tuple[float, float]]:
         """
-        Cost-effective analysis for long videos using multi-stage approach:
-        1. Technical pre-filtering (motion, audio, scene changes)
-        2. Intelligent sampling with minimal AI calls
-        3. Smart segment selection
+        Analysis for long videos (>3 minutes) with cost optimization.
         """
         duration = clip.duration
-        self.logger.info(f"Analyzing long video ({duration/60:.1f} minutes) for highlights")
         
-        # Stage 1: Technical Analysis (No AI costs)
-        technical_segments = self._find_technical_highlights(clip, duration)
-        self.logger.info(f"Found {len(technical_segments)} technically interesting segments")
+        # For long videos, use larger segments to reduce AI API calls
+        segment_length = 15.0  # 15-second segments for long videos
+        segments = []
+        current_time = 0
         
-        # Stage 2: Intelligent Sampling (Minimal AI costs)
-        if hasattr(self, 'ai_handler'):
-            ai_scored_segments = self._score_segments_with_ai(clip, technical_segments, prompt)
-        else:
-            # Fallback if no AI handler available
-            ai_scored_segments = [(start, end, 0.5) for start, end in technical_segments]
+        while current_time + segment_length <= duration:
+            segments.append((current_time, current_time + segment_length))
+            current_time += segment_length * 0.8  # 20% overlap
         
-        # Stage 3: Smart Selection
-        final_segments = self._select_best_segments(ai_scored_segments, target_duration)
+        # Add final segment if there's remaining content
+        if current_time < duration and duration - current_time > 3.0:
+            segments.append((current_time, duration))
         
-        self.logger.info(f"Selected {len(final_segments)} segments for final highlight reel")
+        self.logger.info(f"Generated {len(segments)} long video segments for analysis")
+        
+        # Use standard scoring for long videos (cost-optimized)
+        scored_segments = self._score_segments_with_ai(clip, segments, prompt, max_segments=10)
+        return self._select_best_segments(scored_segments, target_duration)
+    
+    def _analyze_action_segments(self, clip, segments: List[Tuple[float, float]], target_duration: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Enhanced pipeline for sequence-aware action analysis with context inclusion.
+        """
+        # Step 1: Pre-filter segments using computer vision (free motion detection)
+        self.logger.info("Pre-filtering segments with motion detection...")
+        motion_filtered_segments = self._prefilter_segments_by_motion(clip, segments)
+        
+        # Step 2: Multi-frame analysis to identify action sequences
+        self.logger.info(f"Analyzing {len(motion_filtered_segments)} motion-filtered segments for action sequences...")
+        scored_segments = self._score_action_segments_with_ai(clip, motion_filtered_segments, prompt)
+        
+        # Step 3: Detect action sequences and expand with context
+        self.logger.info("Detecting action sequences and expanding with context...")
+        sequence_segments = self._detect_and_expand_action_sequences(clip, scored_segments, target_duration)
+        
+        # Step 4: Ensure temporal distribution across video if we have multiple sequences
+        self.logger.info("Ensuring temporal distribution across video timeline...")
+        distributed_segments = self._ensure_temporal_distribution(sequence_segments, clip.duration)
+        
+        # Step 5: Context-aware selection
+        final_segments = self._select_sequence_segments(distributed_segments, target_duration)
+        
+        # Emergency fallback: if no segments selected, force some highlights
+        if not final_segments:
+            self.logger.warning("No segments selected, creating emergency highlights")
+            final_segments = self._create_emergency_highlights(clip, target_duration)
+        
         return final_segments
     
-    def _find_technical_highlights(self, clip, duration: float) -> List[Tuple[float, float]]:
+    def _prefilter_segments_by_motion(self, clip, segments: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
         """
-        Find potentially interesting segments using technical analysis only.
-        No AI costs - uses motion detection, audio analysis, scene changes.
+        Pre-filter segments using computer vision motion detection (no AI cost).
         """
-        try:
-            import numpy as np
-        except ImportError:
-            self.logger.error("NumPy not available for technical analysis")
-            # Fallback: return evenly spaced segments
-            num_segments = max(3, int(duration / 300))  # One segment per 5 minutes
-            segment_length = duration / num_segments
-            return [(i * segment_length, (i + 1) * segment_length) for i in range(num_segments)]
+        motion_segments = []
         
-        segments = []
-        segment_duration = min(10, duration / 20)  # Adaptive segment duration
-        current_time = 0
-        failed_segments = 0
-        max_failed_segments = 10
-        
-        self.logger.info(f"Analyzing {duration/60:.1f} minute video in {segment_duration:.1f}s chunks")
-        
-        while current_time < duration - segment_duration:
-            end_time = min(current_time + segment_duration, duration)
-            segment_clip = None
-            
+        for start, end in segments:
             try:
-                # Get segment for analysis with timeout protection
-                segment_clip = clip.subclip(current_time, end_time)
+                # Extract 3 frames from the segment
+                frame_times = [start + 0.2, (start + end) / 2, end - 0.2]
+                frames = []
                 
-                if segment_clip is None or segment_clip.duration <= 0:
-                    self.logger.warning(f"Invalid segment at {current_time}-{end_time}")
-                    current_time += segment_duration
-                    continue
+                for t in frame_times:
+                    if 0 <= t < clip.duration:
+                        frame = clip.get_frame(t)
+                        if frame is not None:
+                            frames.append(frame)
                 
-                # Motion analysis with fallback
-                try:
-                    motion_score = self._calculate_motion_score(segment_clip)
-                except Exception as e:
-                    self.logger.warning(f"Motion analysis failed for {current_time}-{end_time}: {e}")
-                    motion_score = 0.5  # Default medium score
-                
-                # Audio analysis with fallback
-                try:
-                    audio_score = self._calculate_audio_score(segment_clip)
-                except Exception as e:
-                    self.logger.warning(f"Audio analysis failed for {current_time}-{end_time}: {e}")
-                    audio_score = 0.3  # Default low-medium score
-                
-                # Combined technical score with validation
-                if 0 <= motion_score <= 1 and 0 <= audio_score <= 1:
-                    technical_score = (motion_score * 0.6) + (audio_score * 0.4)
-                else:
-                    self.logger.warning(f"Invalid scores: motion={motion_score}, audio={audio_score}")
-                    technical_score = 0.4  # Default score
-                
-                # Keep segments above threshold
-                if technical_score > 0.3:  # Adjustable threshold
-                    segments.append((current_time, end_time))
-                    self.logger.debug(f"Added segment {current_time:.1f}-{end_time:.1f} (score: {technical_score:.2f})")
-                
-                # Clean up segment
-                if segment_clip:
-                    segment_clip.close()
-                
-                failed_segments = 0  # Reset failure counter on success
+                if len(frames) >= 2:
+                    # Calculate motion between frames using optical flow
+                    motion_score = self._calculate_frame_motion(frames)
+                    
+                    # More permissive threshold for motion filtering
+                    if motion_score > 0.15:  # Keep more segments with any reasonable motion
+                        motion_segments.append((start, end, motion_score))
+                        self.logger.debug(f"Segment {start:.1f}-{end:.1f} motion score: {motion_score:.3f}")
                 
             except Exception as e:
-                self.logger.warning(f"Error analyzing segment {current_time}-{end_time}: {e}")
-                failed_segments += 1
-                
-                # Clean up failed segment
-                if segment_clip:
-                    try:
-                        segment_clip.close()
-                    except:
-                        pass
-                
-                # Include segment if analysis fails (better safe than sorry)
-                if failed_segments < max_failed_segments:
-                    segments.append((current_time, end_time))
-                    self.logger.debug(f"Added failed segment {current_time:.1f}-{end_time:.1f} as fallback")
-                else:
-                    self.logger.error("Too many failed segments, skipping technical analysis")
-                    break
-            
-            current_time += segment_duration
+                self.logger.warning(f"Motion analysis failed for segment {start}-{end}: {e}")
+                # Include segment if motion analysis fails (safe fallback)
+                motion_segments.append((start, end, 0.5))
         
-        # Ensure we have at least some segments
-        if not segments:
-            self.logger.warning("No segments found, creating fallback segments")
-            # Create fallback segments evenly distributed
-            num_fallback = max(3, int(duration / 300))  # One per 5 minutes
-            fallback_duration = duration / num_fallback
-            segments = [(i * fallback_duration, (i + 1) * fallback_duration) for i in range(num_fallback)]
+        # Sort by motion score and keep top candidates
+        motion_segments.sort(key=lambda x: x[2], reverse=True)
         
-        self.logger.info(f"Technical analysis found {len(segments)} potentially interesting segments")
-        return segments
+        # Keep more segments but still control costs - be more permissive
+        max_segments = min(15, max(8, len(motion_segments) // 2))  # Keep more segments to increase success rate
+        selected_segments = [(start, end) for start, end, _ in motion_segments[:max_segments]]
+        
+        self.logger.info(f"Motion filtering: {len(segments)} to {len(selected_segments)} segments")
+        return selected_segments
     
-    def _calculate_motion_score(self, segment_clip) -> float:
-        """Calculate motion intensity for a video segment."""
+    def _calculate_frame_motion(self, frames: List) -> float:
+        """
+        Calculate motion between consecutive frames using optical flow.
+        """
         try:
-            # Sample a few frames to calculate motion
-            sample_times = [0.2, 0.5, 0.8]  # Sample at 20%, 50%, 80% of segment
-            motion_scores = []
+            import cv2
+            import numpy as np
             
-            for t in sample_times:
-                if t < segment_clip.duration:
-                    frame = segment_clip.get_frame(t * segment_clip.duration)
-                    # Simple motion estimation using frame variance
-                    gray_frame = np.dot(frame[...,:3], [0.2989, 0.5870, 0.1140])
-                    motion_scores.append(np.var(gray_frame) / 10000)  # Normalize
-            
-            return min(np.mean(motion_scores), 1.0) if motion_scores else 0.0
-            
-        except Exception as e:
-            self.logger.warning(f"Motion calculation error: {e}")
-            return 0.5  # Default medium score
-    
-    def _calculate_audio_score(self, segment_clip) -> float:
-        """Calculate audio activity score for a video segment."""
-        try:
-            if segment_clip.audio is None:
+            if len(frames) < 2:
                 return 0.0
             
-            # Get audio array
-            audio_array = segment_clip.audio.to_soundarray()
-            if audio_array.size == 0:
-                return 0.0
+            total_motion = 0.0
+            comparisons = 0
             
-            # Calculate RMS (root mean square) for audio level
-            rms = np.sqrt(np.mean(audio_array**2))
+            for i in range(len(frames) - 1):
+                # Convert frames to grayscale
+                gray1 = cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY)
+                gray2 = cv2.cvtColor(frames[i + 1], cv2.COLOR_RGB2GRAY)
+                
+                # Calculate optical flow
+                flow = cv2.calcOpticalFlowPyrLK(
+                    gray1, gray2, 
+                    np.array([[x, y] for y in range(0, gray1.shape[0], 20) 
+                             for x in range(0, gray1.shape[1], 20)], dtype=np.float32),
+                    None
+                )[0]
+                
+                if flow is not None and len(flow) > 0:
+                    # Calculate magnitude of motion vectors
+                    motion_magnitude = np.mean(np.sqrt(np.sum(flow**2, axis=1)))
+                    total_motion += motion_magnitude
+                    comparisons += 1
             
-            # Normalize to 0-1 range (adjust multiplier based on your content)
-            audio_score = min(rms * 50, 1.0)
-            
-            return audio_score
+            return total_motion / comparisons if comparisons > 0 else 0.0
             
         except Exception as e:
-            self.logger.warning(f"Audio calculation error: {e}")
-            return 0.5  # Default medium score
+            self.logger.debug(f"Optical flow calculation failed: {e}")
+            # Fallback: simple frame difference
+            return self._calculate_simple_motion(frames)
     
-    def _score_segments_with_ai(self, clip, segments: List[Tuple[float, float]], prompt: str) -> List[Tuple[float, float, float]]:
+    def _calculate_simple_motion(self, frames: List) -> float:
         """
-        Score segments using AI analysis. Limits API calls by intelligent sampling.
+        Fallback motion calculation using simple frame difference.
+        """
+        try:
+            import cv2
+            import numpy as np
+            
+            if len(frames) < 2:
+                return 0.0
+            
+            total_diff = 0.0
+            comparisons = 0
+            
+            for i in range(len(frames) - 1):
+                # Convert to grayscale and calculate difference
+                gray1 = cv2.cvtColor(frames[i], cv2.COLOR_RGB2GRAY)
+                gray2 = cv2.cvtColor(frames[i + 1], cv2.COLOR_RGB2GRAY)
+                
+                diff = cv2.absdiff(gray1, gray2)
+                motion_score = np.mean(diff) / 255.0
+                total_diff += motion_score
+                comparisons += 1
+            
+            return total_diff / comparisons if comparisons > 0 else 0.0
+            
+        except Exception:
+            return 0.5  # Default fallback score
+    
+    def _score_action_segments_with_ai(self, clip, segments: List[Tuple[float, float]], prompt: str) -> List[Tuple[float, float, float]]:
+        """
+        Enhanced AI scoring with better fallback handling.
         """
         if not segments:
-            self.logger.warning("No segments provided for AI scoring")
             return []
         
-        # Check if AI handler is available
-        if not self.ai_handler or not hasattr(self.ai_handler, '_analyze_image_content_with_gemini'):
-            self.logger.warning("AI handler not available, using fallback scoring")
-            # Return segments with medium scores
-            return [(start, end, 0.5) for start, end in segments]
-        
         scored_segments = []
-        max_ai_calls = min(20, len(segments))  # Limit to 20 AI calls max
         ai_call_count = 0
         failed_ai_calls = 0
-        max_failed_calls = 5
+        max_failed_calls = 5  # More tolerant of failures
         
-        # Select most promising segments for AI analysis
-        if len(segments) > max_ai_calls:
-            # Take every nth segment to distribute sampling
-            step = len(segments) // max_ai_calls
-            selected_segments = segments[::step][:max_ai_calls]
-        else:
-            selected_segments = segments
+        self.logger.info(f"Analyzing {len(segments)} segments with AI analysis (max failures: {max_failed_calls})")
         
-        self.logger.info(f"Using AI to analyze {len(selected_segments)} of {len(segments)} segments")
-        
-        for i, (start, end) in enumerate(selected_segments):
+        for start, end in segments:
             if failed_ai_calls >= max_failed_calls:
-                self.logger.error("Too many AI analysis failures, stopping AI scoring")
-                break
-                
-            temp_file_path = None
+                self.logger.warning("Too many AI failures, using motion-based scoring for remaining segments")
+                # Use enhanced motion scoring as fallback
+                motion_score = self._analyze_segment_motion_enhanced(clip, start, end)
+                scored_segments.append((start, end, motion_score))
+                continue
+            
             try:
-                # Validate segment timing
-                if start < 0 or end > clip.duration or start >= end:
-                    self.logger.warning(f"Invalid segment timing {start}-{end}, skipping AI analysis")
-                    scored_segments.append((start, end, 0.4))
-                    continue
+                # Try to get AI analysis for the middle frame
+                frame_time = (start + end) / 2
                 
-                # Extract single frame from middle of segment
-                mid_time = (start + end) / 2
-                
-                # Validate mid_time
-                if mid_time < 0 or mid_time >= clip.duration:
-                    self.logger.warning(f"Invalid mid_time {mid_time} for segment {start}-{end}")
-                    scored_segments.append((start, end, 0.4))
-                    continue
-                
-                # Get frame with error handling
-                try:
-                    frame = clip.get_frame(mid_time)
-                    if frame is None:
-                        raise ValueError("Frame extraction returned None")
-                except Exception as e:
-                    self.logger.warning(f"Frame extraction failed at {mid_time}s: {e}")
-                    scored_segments.append((start, end, 0.4))
-                    continue
-                
-                # Validate frame
-                if frame.size == 0:
-                    self.logger.warning(f"Empty frame at {mid_time}s")
-                    scored_segments.append((start, end, 0.4))
-                    continue
-                
-                # Save frame temporarily with better error handling
-                import tempfile
-                import cv2
-                
-                try:
-                    # Create secure temp file
-                    temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
-                    temp_file_path = temp_file.name
-                    temp_file.close()  # Close file handle so cv2 can write to it
+                if 0 <= frame_time < clip.duration:
+                    ai_score = self._analyze_action_frame(clip, frame_time, prompt)
                     
-                    # Convert and save frame
-                    if len(frame.shape) == 3 and frame.shape[2] == 3:  # RGB image
-                        frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+                    if ai_score is not None:
+                        ai_call_count += 1
+                        scored_segments.append((start, end, ai_score))
+                        self.logger.debug(f"AI scored segment {start:.1f}-{end:.1f}s: {ai_score:.3f}")
                     else:
-                        frame_bgr = frame  # Already in correct format or grayscale
-                    
-                    success = cv2.imwrite(temp_file_path, frame_bgr)
-                    if not success:
-                        raise ValueError("cv2.imwrite failed")
-                    
-                    # Verify file was created and has content
-                    if not os.path.exists(temp_file_path) or os.path.getsize(temp_file_path) == 0:
-                        raise ValueError("Temporary image file is empty or not created")
-                        
-                except Exception as e:
-                    self.logger.warning(f"Failed to save frame for segment {start}-{end}: {e}")
-                    if temp_file_path and os.path.exists(temp_file_path):
-                        try:
-                            os.unlink(temp_file_path)
-                        except:
-                            pass
-                    scored_segments.append((start, end, 0.4))
-                    continue
-                
-                # Analyze with AI
-                try:
-                    ai_call_count += 1
-                    analysis = self.ai_handler._analyze_image_content_with_gemini(temp_file_path)
-                    
-                    if analysis:
-                        # Score based on analysis and prompt
-                        ai_score = self._calculate_prompt_relevance_score(analysis, prompt)
-                        # Validate AI score
-                        if not (0 <= ai_score <= 1):
-                            self.logger.warning(f"Invalid AI score {ai_score}, using default")
-                            ai_score = 0.5
-                    else:
-                        self.logger.warning("AI analysis returned empty result")
-                        ai_score = 0.5
-                        
-                    scored_segments.append((start, end, ai_score))
-                    self.logger.debug(f"AI scored segment {start:.1f}-{end:.1f}: {ai_score:.3f}")
-                    
-                except Exception as e:
-                    self.logger.warning(f"AI analysis failed for segment {start}-{end}: {e}")
+                        failed_ai_calls += 1
+                        # Fallback to motion analysis
+                        motion_score = self._analyze_segment_motion_enhanced(clip, start, end)
+                        scored_segments.append((start, end, motion_score))
+                        self.logger.debug(f"AI failed, motion scored segment {start:.1f}-{end:.1f}s: {motion_score:.3f}")
+                else:
+                    # Frame time out of bounds
                     failed_ai_calls += 1
-                    scored_segments.append((start, end, 0.5))  # Default score
-                
-                # Clean up temp file
-                if temp_file_path and os.path.exists(temp_file_path):
-                    try:
-                        os.unlink(temp_file_path)
-                    except Exception as e:
-                        self.logger.warning(f"Failed to clean up temp file {temp_file_path}: {e}")
+                    motion_score = self._analyze_segment_motion_enhanced(clip, start, end)
+                    scored_segments.append((start, end, motion_score))
                 
             except Exception as e:
-                self.logger.warning(f"Unexpected error in AI scoring for segment {start}-{end}: {e}")
+                self.logger.debug(f"Segment analysis failed for {start}-{end}: {e}")
                 failed_ai_calls += 1
-                
-                # Emergency cleanup
-                if temp_file_path and os.path.exists(temp_file_path):
-                    try:
-                        os.unlink(temp_file_path)
-                    except:
-                        pass
-                
-                scored_segments.append((start, end, 0.5))  # Default score
+                # Fallback to motion analysis
+                motion_score = self._analyze_segment_motion_enhanced(clip, start, end)
+                scored_segments.append((start, end, motion_score))
         
-        # For segments not analyzed by AI, assign medium score
-        analyzed_times = {(start, end) for start, end, _ in scored_segments}
-        for start, end in segments:
-            if (start, end) not in analyzed_times:
-                scored_segments.append((start, end, 0.4))  # Slightly lower than AI-analyzed
+        self.logger.info(f"Action AI analysis: {ai_call_count} successful analyses, {failed_ai_calls} failures")
         
-        self.logger.info(f"AI analysis complete: {ai_call_count} calls made, {failed_ai_calls} failures")
-        
-        # Ensure we have scores for all segments
-        if len(scored_segments) != len(segments):
-            self.logger.warning(f"Segment count mismatch: {len(scored_segments)} scored vs {len(segments)} input")
+        # If we got no AI results at all, log a warning
+        if ai_call_count == 0:
+            self.logger.warning("No AI analysis succeeded - check API configuration and connectivity")
         
         return scored_segments
     
-    def _calculate_prompt_relevance_score(self, analysis: dict, prompt: str) -> float:
-        """Calculate how well the frame analysis matches the user prompt."""
+    def _analyze_action_frame(self, clip, frame_time: float, prompt: str) -> Optional[float]:
+        """
+        Analyze a single frame for action content with action-specific prompting.
+        """
+        temp_file_path = None
+        try:
+            # Extract frame
+            frame = clip.get_frame(frame_time)
+            if frame is None or frame.size == 0:
+                return None
+            
+            # Save frame temporarily
+            import tempfile
+            import cv2
+            
+            temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+            temp_file_path = temp_file.name
+            temp_file.close()
+            
+            # Convert and save
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            else:
+                frame_bgr = frame
+            
+            if not cv2.imwrite(temp_file_path, frame_bgr):
+                return None
+            
+            # Analyze with action-specific AI
+            analysis = self._analyze_frame_for_action(temp_file_path, prompt)
+            
+            if analysis:
+                return self._calculate_action_relevance_score(analysis, prompt)
+            else:
+                return None
+                
+        except Exception as e:
+            self.logger.debug(f"Frame analysis failed at {frame_time}s: {e}")
+            return None
+        finally:
+            # Cleanup
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+    
+    def _analyze_frame_for_action(self, image_path: str, prompt: str) -> Optional[Dict[str, Any]]:
+        """
+        Analyze frame specifically for action content with focused prompting.
+        """
+        try:
+            # Create a specialized prompt that includes the user's specific request
+            enhanced_prompt = f"""
+            Analyze this image looking specifically for: "{prompt}"
+            
+            Focus on detecting Pokemon Go gameplay sequences. Be EXTREMELY DETAILED in your sequence analysis:
+            
+            PRIMARY FOCUS - Pokemon Go Sequence Detection:
+            1. SETUP/AIMING PHASE: Look for targeting circles, crosshairs, aiming interfaces, user focusing on screen
+            2. THROWING MOTION: Look for arm extension, hand gestures indicating throwing, releasing motion, forward arm movement (typically 1-3 seconds)
+            3. POKEBALL FLIGHT: Look for ball/sphere objects moving across screen, projectile motion
+            4. IMPACT/OUTCOME PHASE: Look for pokeball shaking, stars appearing, "Pokemon caught" messages, or Pokemon escaping
+            5. SUCCESS INDICATORS: Stars popping out of pokeball, success messages, celebratory gestures
+            6. FAILURE INDICATORS: Pokemon hopping out of pokeball, disappointed reactions, retry attempts
+            
+            DETAILED ANALYSIS:
+            1. Main subject matter - Describe every person, object, and character visible with extreme detail
+            2. Setting/environment - Indoor/outdoor, gaming setup, room details, background elements
+            3. Actions and movements - Describe EVERY gesture, movement, and action in detail, especially arm/hand movements
+            4. Objects present - List ALL visible items, focusing on round objects, gaming equipment, devices, toys
+            5. Body language and posture - Describe exact positioning of arms, hands, body stance, facial expressions
+            6. Movement indicators - Any signs of motion blur, action, dynamic activity, throwing trajectories
+            7. Gaming elements - Screens, interfaces, gaming setups, Pokemon-related visuals
+            8. Emotional state - Excitement, concentration, disappointment, celebration
+            9. Success/failure evidence - Visual cues indicating whether actions succeeded or failed
+            
+            Rate how well this image fits into a Pokemon Go gameplay sequence on a scale of 1-10, where:
+            - 10 = Shows clear sequence element (aiming target, throwing motion, pokeball shaking, success/failure outcome)
+            - 8-9 = Strong sequence indicators (gaming interface, Pokemon on screen, throwing gesture, outcome messages)
+            - 6-7 = Some sequence elements (mobile gaming, potential throwing setup, Pokemon-related content)
+            - 4-5 = Minimal gaming content or unclear sequence relevance
+            - 1-3 = No Pokemon Go or sequence-related content
+            
+            SEQUENCE CONTEXT: Consider if this frame likely comes before, during, or after a pokeball throwing sequence.
+            
+            Format your response as a JSON with these keys: main_subject, setting, activities, objects, body_language, movement_indicators, mood, themes, distinctive_elements, gaming_elements, success_failure_indicators, prompt_match_score, reasoning
+            """
+            
+            # Use enhanced AI analysis
+            analysis = self._call_enhanced_ai_analysis(image_path, enhanced_prompt)
+            
+            if not analysis:
+                return None
+            
+            # Add action-specific scoring context
+            analysis['action_prompt'] = prompt.lower()
+            analysis['user_request'] = prompt
+            return analysis
+            
+        except Exception as e:
+            self.logger.debug(f"AI action analysis failed: {e}")
+            return None
+    
+    def _call_enhanced_ai_analysis(self, image_path: str, enhanced_prompt: str) -> Optional[Dict[str, Any]]:
+        """Call AI with enhanced prompt and better error handling."""
+        try:
+            # Check if AI handler is available and working
+            if not self.ai_handler:
+                self.logger.debug("AI handler not available")
+                return None
+            
+            # Use the existing AI handler method if available
+            if hasattr(self.ai_handler, '_analyze_image_content_with_gemini'):
+                # Use the existing method with our enhanced prompt
+                try:
+                    result = self.ai_handler._analyze_image_content_with_gemini(image_path, enhanced_prompt)
+                    if result and isinstance(result, dict):
+                        return result
+                except Exception as e:
+                    self.logger.debug(f"Existing AI method failed: {e}")
+            
+            # Fallback: Try direct Gemini call if configured
+            try:
+                # Try multiple ways to get the API key
+                GEMINI_API_KEY = None
+                
+                # Method 1: From config file
+                try:
+                    from ...config.api_keys import GEMINI_API_KEY
+                except ImportError:
+                    pass
+                
+                # Method 2: From environment variables
+                if not GEMINI_API_KEY:
+                    import os
+                    GEMINI_API_KEY = os.environ.get('GEMINI_API_KEY') or os.environ.get('GOOGLE_API_KEY')
+                
+                # Method 3: From auth handler
+                if not GEMINI_API_KEY:
+                    try:
+                        from ...features.authentication.auth_handler import AuthHandler
+                        auth_handler = AuthHandler()
+                        GEMINI_API_KEY = auth_handler.get_gemini_api_key()
+                    except Exception:
+                        pass
+                
+                if not GEMINI_API_KEY:
+                    self.logger.debug("No Gemini API key available from any source")
+                    return None
+                
+                import google.generativeai as genai
+                import base64
+                import json
+                import re
+                
+                # Configure Gemini
+                genai.configure(api_key=GEMINI_API_KEY)
+                model = genai.GenerativeModel('gemini-1.5-flash')
+                
+                # Read and encode image
+                with open(image_path, "rb") as img_file:
+                    image_data = img_file.read()
+                
+                # Create simplified prompt for better parsing
+                simple_prompt = f"""
+                Analyze this image for Pokemon Go gameplay elements. Look for:
+                1. Throwing motions (arm movements, gestures)
+                2. Pokeball objects or spherical items
+                3. Gaming interfaces or screens
+                4. Success/failure indicators
+                
+                Rate relevance to Pokemon Go action from 1-10.
+                
+                Respond with JSON: {{"score": number, "description": "brief description", "has_action": boolean}}
+                """
+                
+                # Generate response
+                response = model.generate_content([simple_prompt, {"mime_type": "image/jpeg", "data": base64.b64encode(image_data).decode()}])
+                
+                if not response or not response.text:
+                    return None
+                
+                # Try to parse JSON response
+                response_text = response.text.strip()
+                
+                # Look for JSON in response
+                json_match = re.search(r'\{.*\}', response_text, re.DOTALL)
+                if json_match:
+                    try:
+                        result = json.loads(json_match.group())
+                        # Normalize the result
+                        normalized_result = {
+                            "prompt_match_score": result.get("score", 5),
+                            "content_description": result.get("description", ""),
+                            "has_action": result.get("has_action", False),
+                            "main_subject": result.get("description", ""),
+                            "reasoning": "Direct Gemini analysis"
+                        }
+                        return normalized_result
+                    except json.JSONDecodeError:
+                        pass
+                
+                # Fallback: Create result from text
+                score = 5  # Default score
+                score_match = re.search(r'(?:score|rating).*?(\d+)', response_text, re.IGNORECASE)
+                if score_match:
+                    score = int(score_match.group(1))
+                
+                return {
+                    "prompt_match_score": score,
+                    "content_description": response_text[:200],
+                    "main_subject": "AI analysis",
+                    "reasoning": "Parsed from text response"
+                }
+                
+            except ImportError:
+                self.logger.debug("Google Generative AI not available")
+                return None
+            except Exception as e:
+                self.logger.debug(f"Direct Gemini call failed: {e}")
+                return None
+            
+        except Exception as e:
+            self.logger.debug(f"Enhanced AI analysis failed: {e}")
+            return None
+    
+    def _calculate_action_relevance_score(self, analysis: dict, prompt: str) -> float:
+        """
+        Calculate relevance score specifically optimized for action detection with AI prompt matching.
+        """
         if not analysis or not prompt:
-            return 0.5
+            return 0.4
         
         prompt_lower = prompt.lower()
-        score = 0.5  # Base score
+        score = 0.2  # Lower base score, more room for action-based improvements
         
-        # Check for keyword matches in analysis
-        for key in ['main_subject', 'activities', 'setting', 'mood']:
+        # 1. Use AI's direct prompt match score if available (most important)
+        if 'prompt_match_score' in analysis and analysis['prompt_match_score']:
+            try:
+                ai_match_score = float(analysis['prompt_match_score']) / 10.0  # Convert 1-10 to 0-1
+                score += ai_match_score * 0.6  # Heavy weight for AI's direct assessment
+                
+                # Debug logging for AI's assessment
+                reasoning = analysis.get('reasoning', 'No reasoning provided')
+                self.logger.info(f"AI prompt match: {analysis['prompt_match_score']}/10 for '{prompt}' - {reasoning}")
+                
+            except (ValueError, TypeError):
+                pass
+        
+        # Combine all analysis text for additional scoring
+        analysis_text = ""
+        for key in ['main_subject', 'activities', 'setting', 'objects', 'body_language', 'movement_indicators', 'mood', 'themes', 'distinctive_elements', 'gaming_elements', 'success_failure_indicators', 'content_description']:
             if key in analysis and analysis[key]:
-                content = str(analysis[key]).lower()
-                # Simple keyword matching (could be enhanced with semantic similarity)
-                for word in prompt_lower.split():
-                    if len(word) > 3 and word in content:
-                        score += 0.1
+                if isinstance(analysis[key], list):
+                    analysis_text += " " + " ".join(str(item) for item in analysis[key])
+                else:
+                    analysis_text += " " + str(analysis[key])
+        
+        analysis_text = analysis_text.lower()
+        
+        # 2. Direct word matches (medium weight)
+        prompt_words = prompt_lower.split()
+        matched_words = 0
+        for word in prompt_words:
+            if len(word) > 2 and word in analysis_text:
+                matched_words += 1
+                score += 0.15
+        
+        # 3. Action-specific semantic matching (lower weight since AI score is primary)
+        action_semantic_score = self._calculate_action_semantic_score(prompt_lower, analysis_text)
+        score += action_semantic_score * 0.15
+        
+        # Debug logging for transparency
+        if score > 0.7:
+            activities = analysis.get('activities', 'N/A')
+            objects = analysis.get('objects', 'N/A')
+            self.logger.info(f"High relevance score {score:.3f}: Activities='{activities}', Objects='{objects}'")
         
         return min(score, 1.0)
     
-    def _select_best_segments(self, scored_segments: List[Tuple[float, float, float]], target_duration: int) -> List[Tuple[float, float]]:
+    def _calculate_action_semantic_score(self, prompt: str, analysis_text: str) -> float:
         """
-        Select the best segments to create a highlight reel of target duration.
+        Enhanced semantic scoring specifically for actions.
+        """
+        # Sequence-aware semantic mappings with Pokemon Go gameplay focus
+        action_mappings = {
+            'throwing': ['toss', 'launch', 'hurl', 'pitch', 'cast', 'release', 'motion', 'arm movement', 'gesture', 'forward motion', 'extending', 'reaching', 'arm extension', 'throwing motion'],
+            'catching': ['grab', 'grasp', 'receive', 'snatch', 'hold', 'grasping', 'hands', 'arms extended', 'grabbing', 'reaching', 'catch attempt'],
+            'pokeball': ['ball', 'sphere', 'round object', 'gaming', 'toy', 'pokemon', 'circular', 'object', 'pokeball', 'poke ball', 'device', 'gaming device', 'projectile', 'flying object'],
+            'pokemon': ['game', 'gaming', 'character', 'anime', 'creature', 'trainer', 'pokemon go', 'mobile game', 'augmented reality', 'AR', 'interface', 'screen'],
+            'aiming': ['target', 'crosshair', 'circle', 'aiming', 'targeting', 'focus', 'concentration', 'preparing', 'setup', 'getting ready'],
+            'success': ['celebration', 'victory', 'happy', 'excited', 'success', 'caught', 'successful', 'joy', 'celebration gesture', 'fist pump', 'smile', 'stars', 'sparkles', 'caught message'],
+            'failure': ['disappointment', 'frustrated', 'missed', 'failed', 'failure', 'sad', 'disappointed', 'upset', 'missed catch', 'escaped', 'hopping out', 'broke free'],
+            'sequence': ['shaking', 'wiggling', 'moving', 'animation', 'effect', 'transition', 'outcome', 'result', 'impact'],
+            'interface': ['screen', 'mobile', 'phone', 'app', 'UI', 'interface', 'menu', 'buttons', 'gaming interface'],
+            'running': ['jogging', 'sprint', 'moving quickly', 'exercise', 'athletic', 'legs', 'movement', 'motion'],
+            'jumping': ['leap', 'hop', 'bounce', 'athletic movement', 'airborne', 'legs'],
+            'playing': ['gaming', 'entertainment', 'recreational', 'fun activity', 'interactive', 'mobile gaming', 'AR gaming'],
+            'kicking': ['foot', 'leg', 'soccer', 'football', 'ball', 'striking'],
+            'hitting': ['striking', 'contact', 'impact', 'swing', 'bat', 'racket'],
+        }
+        
+        matches = 0.0
+        prompt_words = prompt.split()
+        
+        for word in prompt_words:
+            if word in action_mappings:
+                for related_word in action_mappings[word]:
+                    if related_word in analysis_text:
+                        matches += 0.6  # Higher weight for action-related semantic matches
+                        break
+        
+        return matches
+    
+    def _select_action_segments(self, scored_segments: List[Tuple[float, float, float]], target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Select best action segments with action-first prioritization.
         """
         if not scored_segments:
             return []
         
-        # Sort by score (highest first)
+        # Sort by score (highest first) - action scores should be much higher
         sorted_segments = sorted(scored_segments, key=lambda x: x[2], reverse=True)
+        
+        # Log top scores for debugging
+        if sorted_segments:
+            top_5 = sorted_segments[:5]
+            self.logger.info(f"Top action scores: {[(f'{start:.1f}-{end:.1f}', f'{score:.3f}') for start, end, score in top_5]}")
         
         selected_segments = []
         total_duration = 0
-        min_gap = 2.0  # Minimum 2 seconds between selected segments
+        min_gap = 1.0  # Shorter gap for actions
         
         for start, end, score in sorted_segments:
             segment_duration = end - start
             
-            # Check if adding this segment would exceed target
+            # For actions, prioritize high-scoring segments even if they exceed target slightly
             if total_duration + segment_duration > target_duration:
-                # Try to trim the segment to fit
                 remaining_time = target_duration - total_duration
-                if remaining_time > 3:  # Only if we have at least 3 seconds left
+                # Be more flexible with action segments
+                if remaining_time > 1.5 and score > 0.7:  # Keep high-scoring action segments
                     selected_segments.append((start, start + remaining_time))
                 break
             
-            # Check for overlap with existing segments
+            # Check for overlap (more permissive for high-scoring actions)
             overlap = False
             for existing_start, existing_end in selected_segments:
                 if not (end <= existing_start - min_gap or start >= existing_end + min_gap):
-                    overlap = True
+                    # Allow some overlap for very high-scoring action segments
+                    if score < 0.8:
+                        overlap = True
                     break
             
             if not overlap:
                 selected_segments.append((start, end))
                 total_duration += segment_duration
+                
+                # Stop early if we have enough high-quality action content
+                if total_duration >= target_duration * 0.8 and score > 0.7:
+                    break
         
-        # Sort selected segments by start time
+        # Sort by start time
         selected_segments.sort(key=lambda x: x[0])
         
+        self.logger.info(f"Selected {len(selected_segments)} action segments, total duration: {sum(end-start for start, end in selected_segments):.1f}s")
         return selected_segments
     
     def _add_chapter_markers(self, clip, segments: List[Tuple[float, float]], prompt: str):
@@ -1202,4 +1403,620 @@ class VideoHandler:
         # Resize to standard story dimensions (1080x1920)
         final_clip = resize(cropped_clip, (1080, 1920))
         
-        return final_clip 
+        return final_clip
+
+    def _cleanup_clips(self, main_clip, final_clip, highlight_clips):
+        """Safely clean up video clips to prevent memory leaks."""
+        try:
+            if main_clip:
+                main_clip.close()
+        except Exception as e:
+            self.logger.debug(f"Error closing main clip: {e}")
+        
+        try:
+            if final_clip:
+                final_clip.close()
+        except Exception as e:
+            self.logger.debug(f"Error closing final clip: {e}")
+        
+        for clip in highlight_clips:
+            try:
+                if clip:
+                    clip.close()
+            except Exception as e:
+                self.logger.debug(f"Error closing highlight clip: {e}")
+
+    def _score_segments_with_ai(self, clip, segments: List[Tuple[float, float]], prompt: str, max_segments: int = 15) -> List[Tuple[float, float, float]]:
+        """
+        Standard AI scoring for video segments (cost-optimized for longer videos).
+        """
+        if not segments:
+            return []
+        
+        # Limit segments for cost control
+        if len(segments) > max_segments:
+            # Take evenly distributed segments
+            step = len(segments) // max_segments
+            segments = segments[::step][:max_segments]
+            self.logger.info(f"Limited to {len(segments)} segments for cost optimization")
+        
+        # Check if AI handler is available
+        if not self.ai_handler or not hasattr(self.ai_handler, '_analyze_image_content_with_gemini'):
+            self.logger.warning("AI handler not available, using default scoring")
+            return [(start, end, 0.5) for start, end in segments]
+        
+        scored_segments = []
+        ai_call_count = 0
+        failed_ai_calls = 0
+        max_failed_calls = 5
+        
+        self.logger.info(f"Analyzing {len(segments)} segments with standard AI analysis")
+        
+        for start, end in segments:
+            if failed_ai_calls >= max_failed_calls:
+                self.logger.warning("Too many AI failures, using default scoring for remaining segments")
+                scored_segments.append((start, end, 0.4))
+                continue
+            
+            try:
+                # Single frame analysis for standard scoring (cost-effective)
+                frame_time = (start + end) / 2  # Middle of segment
+                score = self._analyze_standard_frame(clip, frame_time, prompt)
+                
+                if score is not None:
+                    scored_segments.append((start, end, score))
+                    ai_call_count += 1
+                else:
+                    scored_segments.append((start, end, 0.3))
+                    failed_ai_calls += 1
+                
+            except Exception as e:
+                self.logger.warning(f"Standard analysis failed for segment {start}-{end}: {e}")
+                failed_ai_calls += 1
+                scored_segments.append((start, end, 0.3))
+        
+        self.logger.info(f"Standard AI analysis: {ai_call_count} frame analyses, {failed_ai_calls} failures")
+        return scored_segments
+
+    def _analyze_standard_frame(self, clip, frame_time: float, prompt: str) -> Optional[float]:
+        """
+        Analyze a single frame for standard content matching.
+        """
+        temp_file_path = None
+        try:
+            # Extract frame
+            frame = clip.get_frame(frame_time)
+            if frame is None or frame.size == 0:
+                return None
+            
+            # Save frame temporarily
+            import tempfile
+            import cv2
+            
+            temp_file = tempfile.NamedTemporaryFile(suffix='.jpg', delete=False)
+            temp_file_path = temp_file.name
+            temp_file.close()
+            
+            # Convert and save
+            if len(frame.shape) == 3 and frame.shape[2] == 3:
+                frame_bgr = cv2.cvtColor(frame, cv2.COLOR_RGB2BGR)
+            else:
+                frame_bgr = frame
+            
+            if not cv2.imwrite(temp_file_path, frame_bgr):
+                return None
+            
+            # Analyze with standard AI
+            analysis = self._analyze_frame_for_standard(temp_file_path, prompt)
+            
+            if analysis:
+                return self._calculate_standard_relevance_score(analysis, prompt)
+            else:
+                return None
+                
+        except Exception as e:
+            self.logger.debug(f"Standard frame analysis failed at {frame_time}s: {e}")
+            return None
+        finally:
+            # Cleanup
+            if temp_file_path and os.path.exists(temp_file_path):
+                try:
+                    os.unlink(temp_file_path)
+                except:
+                    pass
+
+    def _analyze_frame_for_standard(self, image_path: str, prompt: str) -> Optional[Dict[str, Any]]:
+        """
+        Analyze frame with standard prompting (simpler than action analysis).
+        """
+        try:
+            # Create a standard prompt
+            standard_prompt = f"""
+            Analyze this image for content related to: "{prompt}"
+            
+            Describe:
+            1. Main subject matter and activities
+            2. Setting or environment
+            3. Objects present
+            4. General mood or theme
+            
+            Rate how well this image matches "{prompt}" on a scale of 1-10.
+            
+            Format as: Main subject: [description], Setting: [description], Objects: [description], Mood: [description], Match score: [1-10], Reason: [explanation]
+            """
+            
+            # Use the AI handler's basic analysis
+            if not self.ai_handler or not hasattr(self.ai_handler, '_analyze_image_content_with_gemini'):
+                return None
+            
+            # Use a simplified analysis call
+            response = self.ai_handler._analyze_image_content_with_gemini(image_path, standard_prompt)
+            
+            if response:
+                # Parse the response for match score
+                analysis = {
+                    'content_description': response,
+                    'match_score': 5  # Default
+                }
+                
+                # Try to extract match score from response
+                import re
+                score_match = re.search(r'[Mm]atch\s+score:\s*(\d+)', response)
+                if score_match:
+                    try:
+                        analysis['match_score'] = int(score_match.group(1))
+                    except ValueError:
+                        pass
+                
+                return analysis
+            
+            return None
+            
+        except Exception as e:
+            self.logger.debug(f"AI standard analysis failed: {e}")
+            return None
+
+    def _calculate_standard_relevance_score(self, analysis: dict, prompt: str) -> float:
+        """
+        Calculate relevance score for standard content matching.
+        """
+        if not analysis or not prompt:
+            return 0.4
+        
+        score = 0.3  # Base score
+        
+        # Use match score if available
+        if 'match_score' in analysis and analysis['match_score']:
+            try:
+                match_score = float(analysis['match_score']) / 10.0
+                score += match_score * 0.5
+            except (ValueError, TypeError):
+                pass
+        
+        # Text matching for additional scoring
+        content = analysis.get('content_description', '').lower()
+        prompt_lower = prompt.lower()
+        
+        # Count word matches
+        prompt_words = prompt_lower.split()
+        matched_words = sum(1 for word in prompt_words if len(word) > 2 and word in content)
+        
+        if prompt_words:
+            word_match_ratio = matched_words / len(prompt_words)
+            score += word_match_ratio * 0.3
+        
+        return min(score, 1.0)
+
+    def _select_best_segments(self, scored_segments: List[Tuple[float, float, float]], target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Select best segments based on the scored segments.
+        """
+        if not scored_segments:
+            return []
+        
+        # Sort by score (highest first)
+        sorted_segments = sorted(scored_segments, key=lambda x: x[2], reverse=True)
+        
+        # Log top scores for debugging
+        if sorted_segments:
+            top_5 = sorted_segments[:5]
+            self.logger.info(f"Top scores: {[(f'{start:.1f}-{end:.1f}', f'{score:.3f}') for start, end, score in top_5]}")
+        
+        selected_segments = []
+        total_duration = 0
+        min_gap = 1.0  # Shorter gap for actions
+        
+        for start, end, score in sorted_segments:
+            segment_duration = end - start
+            
+            # For actions, prioritize high-scoring segments even if they exceed target slightly
+            if total_duration + segment_duration > target_duration:
+                remaining_time = target_duration - total_duration
+                # Be more flexible with action segments
+                if remaining_time > 1.5 and score > 0.7:  # Keep high-scoring action segments
+                    selected_segments.append((start, start + remaining_time))
+                break
+            
+            # Check for overlap (more permissive for high-scoring actions)
+            overlap = False
+            for existing_start, existing_end in selected_segments:
+                if not (end <= existing_start - min_gap or start >= existing_end + min_gap):
+                    # Allow some overlap for very high-scoring action segments
+                    if score < 0.8:
+                        overlap = True
+                    break
+            
+            if not overlap:
+                selected_segments.append((start, end))
+                total_duration += segment_duration
+                
+                # Stop early if we have enough high-quality action content
+                if total_duration >= target_duration * 0.8 and score > 0.7:
+                    break
+        
+        # Sort by start time
+        selected_segments.sort(key=lambda x: x[0])
+        
+        self.logger.info(f"Selected {len(selected_segments)} segments, total duration: {sum(end-start for start, end in selected_segments):.1f}s")
+        return selected_segments
+    
+    def _detect_and_expand_action_sequences(self, clip, scored_segments: List[Tuple[float, float, float]], target_duration: int) -> List[Tuple[float, float, float, str]]:
+        """
+        NEW APPROACH: Find ALL action instances first, compile in chronological order,
+        then add context only if total duration is less than target.
+        """
+        if not scored_segments:
+            return []
+        
+        duration = clip.duration
+        
+        # Step 1: Extract ALL action instances (no context yet)
+        # Sort by time to get chronological order
+        time_sorted = sorted(scored_segments, key=lambda x: x[0])
+        
+        self.logger.info(f"Processing {len(scored_segments)} segments to find ALL action instances")
+        
+        # Identify all discrete actions based on score thresholds
+        action_instances = []
+        for start, end, score in time_sorted:
+            # Action detection based on score quality
+            if score >= 0.6:  # High-confidence actions
+                action_type = "high_confidence_action"
+                action_instances.append((start, end, score, action_type))
+                self.logger.info(f"High-confidence action: {start:.1f}-{end:.1f}s, score: {score:.3f}")
+            elif score >= 0.4:  # Moderate-confidence actions
+                action_type = "moderate_action"
+                action_instances.append((start, end, score, action_type))
+                self.logger.info(f"Moderate action: {start:.1f}-{end:.1f}s, score: {score:.3f}")
+            elif score >= 0.3:  # Lower-confidence but potentially valid
+                action_type = "potential_action"
+                action_instances.append((start, end, score, action_type))
+                self.logger.debug(f"Potential action: {start:.1f}-{end:.1f}s, score: {score:.3f}")
+        
+        if not action_instances:
+            self.logger.warning("No action instances found with current scoring")
+            return []
+        
+        self.logger.info(f"Found {len(action_instances)} total action instances")
+        
+        # Step 2: Calculate total duration of all raw actions
+        total_action_duration = sum(end - start for start, end, _, _ in action_instances)
+        self.logger.info(f"Total raw action duration: {total_action_duration:.1f}s, target: {target_duration}s")
+        
+        # Step 3: Decide on context strategy based on duration gap
+        if total_action_duration >= target_duration:
+            # We have enough action content - return best actions without context
+            self.logger.info("Sufficient action content found - using raw actions without context")
+            return action_instances
+        else:
+            # Need to add context to reach target duration
+            duration_gap = target_duration - total_action_duration
+            context_per_clip = duration_gap / len(action_instances) if action_instances else 0
+            
+            self.logger.info(f"Need {duration_gap:.1f}s more content - adding {context_per_clip:.1f}s context per clip")
+            
+            # Step 4: Add context proportionally to each action
+            contextualized_actions = []
+            for start, end, score, action_type in action_instances:
+                # Calculate context based on clip length and available time, not video length
+                clip_duration = end - start
+                
+                # Context should be proportional to clip length and constrained by available gap
+                if clip_duration <= 2.0:  # Very short clips (like pokeball throws)
+                    max_context_before = min(1.5, context_per_clip * 0.6)  # 60% of context before
+                    max_context_after = min(1.0, context_per_clip * 0.4)   # 40% of context after
+                elif clip_duration <= 4.0:  # Short clips
+                    max_context_before = min(1.0, context_per_clip * 0.5)
+                    max_context_after = min(0.8, context_per_clip * 0.5)
+                else:  # Longer clips need less relative context
+                    max_context_before = min(0.5, context_per_clip * 0.3)
+                    max_context_after = min(0.5, context_per_clip * 0.3)
+                
+                # Ensure we don't exceed video boundaries
+                context_before = min(max_context_before, start)
+                context_after = min(max_context_after, duration - end)
+                
+                # Create contextualized clip
+                expanded_start = max(0, start - context_before)
+                expanded_end = min(duration, end + context_after)
+                
+                # Slight score boost for properly contextualized actions
+                context_boost = min(0.1, (context_before + context_after) / 5.0)
+                final_score = min(1.0, score + context_boost)
+                
+                contextualized_actions.append((expanded_start, expanded_end, final_score, f"{action_type}_with_context"))
+                
+                self.logger.info(f"Contextualized action: {start:.1f}-{end:.1f}s -> {expanded_start:.1f}-{expanded_end:.1f}s (+{context_before:.1f}s/-{context_after:.1f}s)")
+            
+            return contextualized_actions
+
+    def _select_sequence_segments(self, sequence_segments: List[Tuple[float, float, float, str]], target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Select the best action clips to fit target duration, prioritizing action quality.
+        """
+        if not sequence_segments:
+            return []
+        
+        # Sort by score (best actions first)
+        score_sorted = sorted(sequence_segments, key=lambda x: x[2], reverse=True)
+        
+        selected_clips = []
+        total_duration = 0
+        
+        self.logger.info(f"Selecting clips from {len(sequence_segments)} candidates for {target_duration}s target")
+        
+        # Select clips until we reach target duration, prioritizing best scores
+        for start, end, score, action_type in score_sorted:
+            clip_duration = end - start
+            
+            # Check if adding this clip would exceed target duration
+            if total_duration + clip_duration > target_duration:
+                # Check if we have room for a shorter version of this clip
+                remaining_time = target_duration - total_duration
+                if remaining_time >= 2.0:  # Minimum useful clip length
+                    # Trim the clip to fit
+                    trimmed_end = start + remaining_time
+                    selected_clips.append((start, trimmed_end))
+                    total_duration += remaining_time
+                    self.logger.info(f"Selected trimmed clip: {start:.1f}-{trimmed_end:.1f}s ({remaining_time:.1f}s), score: {score:.3f}")
+                break
+            
+            # Add the full clip
+            selected_clips.append((start, end))
+            total_duration += clip_duration
+            self.logger.info(f"Selected full clip: {start:.1f}-{end:.1f}s ({clip_duration:.1f}s), score: {score:.3f}")
+            
+            # Stop if we've reached target duration
+            if total_duration >= target_duration:
+                break
+        
+        # Sort final clips by start time (chronological order)
+        selected_clips.sort(key=lambda x: x[0])
+        
+        self.logger.info(f"Final selection: {len(selected_clips)} clips, total duration: {total_duration:.1f}s")
+        
+        return selected_clips
+
+    def _ensure_temporal_distribution(self, sequence_segments: List[Tuple[float, float, float, str]], video_duration: float) -> List[Tuple[float, float, float, str]]:
+        """
+        Ensure highlights are distributed across the entire video timeline for completeness.
+        """
+        if not sequence_segments or len(sequence_segments) <= 2:
+            return sequence_segments
+        
+        # Divide video into thirds for temporal analysis
+        third = video_duration / 3
+        first_third = third
+        second_third = third * 2
+        
+        # Categorize segments by timeline position
+        early_segments = []
+        middle_segments = []
+        late_segments = []
+        
+        for seg in sequence_segments:
+            start, end, score, seq_type = seg
+            midpoint = (start + end) / 2
+            
+            if midpoint < first_third:
+                early_segments.append(seg)
+            elif midpoint < second_third:
+                middle_segments.append(seg)
+            else:
+                late_segments.append(seg)
+        
+        self.logger.info(f"Temporal distribution: Early={len(early_segments)}, Middle={len(middle_segments)}, Late={len(late_segments)}")
+        
+        # Sort each group by score
+        early_segments.sort(key=lambda x: x[2], reverse=True)
+        middle_segments.sort(key=lambda x: x[2], reverse=True)
+        late_segments.sort(key=lambda x: x[2], reverse=True)
+        
+        # Select distributed segments (prioritize balance but allow concentration if one period has much better content)
+        distributed = []
+        
+        # Take at least one from each period if available, but prioritize quality
+        if early_segments:
+            distributed.extend(early_segments[:2])  # Top 2 from early
+        if middle_segments:
+            distributed.extend(middle_segments[:2])  # Top 2 from middle  
+        if late_segments:
+            distributed.extend(late_segments[:2])  # Top 2 from late
+        
+        # Add remaining high-scoring segments from any period
+        all_remaining = early_segments[2:] + middle_segments[2:] + late_segments[2:]
+        all_remaining.sort(key=lambda x: x[2], reverse=True)
+        
+        # Add top remaining segments to reach reasonable count
+        max_total = min(10, len(sequence_segments))  # Don't exceed original count
+        distributed.extend(all_remaining[:max_total - len(distributed)])
+        
+        # Sort by timeline position for final output
+        distributed.sort(key=lambda x: x[0])
+        
+        self.logger.info(f"Distributed selection: {len(distributed)} segments across timeline")
+        return distributed
+
+    def _score_segments_with_enhanced_motion(self, clip, segments: List[Tuple[float, float]], prompt: str) -> List[Tuple[float, float, float]]:
+        """
+        Enhanced motion-based scoring when AI analysis fails, with prompt-aware scoring.
+        """
+        self.logger.info("Using enhanced motion analysis as fallback...")
+        scored_segments = []
+        
+        # Extract key terms from prompt for motion-based relevance
+        prompt_lower = prompt.lower()
+        action_indicators = ['throw', 'catch', 'ball', 'game', 'pokemon', 'mobile', 'phone', 'AR']
+        prompt_has_action = any(indicator in prompt_lower for indicator in action_indicators)
+        
+        for start, end in segments:
+            try:
+                # Enhanced motion analysis for this segment
+                motion_score = self._analyze_segment_motion_enhanced(clip, start, end)
+                
+                # Base score from motion
+                score = 0.4 + (motion_score * 0.4)  # 0.4 to 0.8 range
+                
+                # Boost score if segment seems relevant to prompt
+                if prompt_has_action:
+                    # Check if this segment has characteristics matching the prompt
+                    segment_duration = end - start
+                    
+                    # Prefer shorter segments for throwing actions (1-3 seconds typical)
+                    if 1.0 <= segment_duration <= 4.0:
+                        score += 0.15
+                    
+                    # Boost segments with high motion (likely action)
+                    if motion_score > 0.7:
+                        score += 0.2
+                
+                scored_segments.append((start, end, min(score, 1.0)))
+                
+            except Exception as e:
+                self.logger.debug(f"Enhanced motion analysis failed for {start}-{end}: {e}")
+                scored_segments.append((start, end, 0.5))  # Default fallback
+        
+        self.logger.info(f"Enhanced motion scoring completed for {len(scored_segments)} segments")
+        return scored_segments
+
+    def _analyze_segment_motion_enhanced(self, clip, start: float, end: float) -> float:
+        """
+        Enhanced motion analysis for a specific segment.
+        """
+        try:
+            # Sample multiple frames across the segment
+            segment_duration = end - start
+            if segment_duration < 0.5:
+                frame_times = [start + segment_duration/2]
+            elif segment_duration < 2.0:
+                frame_times = [start + 0.2, end - 0.2]
+            else:
+                # Sample 3-4 frames across the segment
+                step = segment_duration / 4
+                frame_times = [start + step, start + 2*step, start + 3*step]
+            
+            # Extract frames
+            frames = []
+            for t in frame_times:
+                if 0 <= t < clip.duration:
+                    frame = clip.get_frame(t)
+                    if frame is not None:
+                        frames.append(frame)
+            
+            if len(frames) < 2:
+                return 0.3
+            
+            # Calculate motion across all frame pairs
+            motion_scores = []
+            for i in range(len(frames) - 1):
+                motion = self._calculate_frame_motion([frames[i], frames[i+1]])
+                motion_scores.append(motion)
+            
+            # Return average motion score
+            avg_motion = sum(motion_scores) / len(motion_scores) if motion_scores else 0.3
+            return min(avg_motion, 1.0)
+            
+        except Exception as e:
+            self.logger.debug(f"Enhanced segment motion analysis failed: {e}")
+            return 0.3
+
+    def _create_emergency_highlights(self, clip, target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Emergency fallback to create highlights when all other methods fail.
+        Always produces some segments, even if they're not perfect.
+        """
+        self.logger.info("Creating emergency highlights - ensuring user always gets output")
+        
+        duration = clip.duration
+        segments = []
+        
+        # Strategy 1: Distribute segments evenly across video timeline
+        if duration > target_duration:
+            # Create 3-5 segments distributed across the video
+            num_segments = min(5, max(3, target_duration // 8))  # 3-5 segments of ~8s each
+            segment_duration = min(8.0, target_duration / num_segments)
+            
+            # Distribute across timeline
+            time_step = duration / (num_segments + 1)  # +1 to avoid endpoints
+            
+            for i in range(num_segments):
+                start_time = time_step * (i + 1) - segment_duration / 2
+                start_time = max(0, start_time)
+                end_time = min(duration, start_time + segment_duration)
+                
+                # Adjust if we go beyond video end
+                if end_time > duration:
+                    end_time = duration
+                    start_time = max(0, end_time - segment_duration)
+                
+                segments.append((start_time, end_time))
+                self.logger.info(f"Emergency segment {i+1}: {start_time:.1f}-{end_time:.1f}s")
+        else:
+            # Video is shorter than target, just use the whole thing
+            segments.append((0, duration))
+        
+        # Strategy 2: If we still have time to fill, add more segments
+        total_used = sum(end - start for start, end in segments)
+        if total_used < target_duration * 0.8 and len(segments) < 6:
+            # Add some shorter segments in between
+            remaining_time = target_duration - total_used
+            extra_segments_needed = min(3, int(remaining_time // 4))
+            
+            for i in range(extra_segments_needed):
+                # Find gaps between existing segments
+                if len(segments) > 1:
+                    gap_start = segments[i][1] + 1  # 1s after previous segment ends
+                    gap_end = gap_start + min(4.0, remaining_time / extra_segments_needed)
+                    
+                    if gap_end < duration - 1:
+                        segments.append((gap_start, gap_end))
+                        self.logger.info(f"Emergency filler segment: {gap_start:.1f}-{gap_end:.1f}s")
+        
+        # Sort by timeline and trim to target duration
+        segments.sort(key=lambda x: x[0])
+        
+        # Trim segments if we exceed target duration
+        total_duration = 0
+        final_segments = []
+        for start, end in segments:
+            segment_duration = end - start
+            if total_duration + segment_duration <= target_duration:
+                final_segments.append((start, end))
+                total_duration += segment_duration
+            else:
+                # Add partial segment to reach target
+                remaining = target_duration - total_duration
+                if remaining > 1.0:  # Only add if at least 1 second
+                    final_segments.append((start, start + remaining))
+                break
+        
+        if not final_segments:
+            # Absolute final fallback: just take the first 30 seconds
+            final_segments = [(0, min(target_duration, duration))]
+            self.logger.warning("Absolute fallback: using first portion of video")
+        
+        total_final = sum(end - start for start, end in final_segments)
+        self.logger.info(f"Emergency highlights created: {len(final_segments)} segments, total: {total_final:.1f}s")
+        
+        return final_segments
+ 

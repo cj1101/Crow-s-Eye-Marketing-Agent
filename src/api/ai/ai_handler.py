@@ -281,15 +281,20 @@ class AIHandler:
             # Prompt Gemini to analyze the image content, not the technical aspects
             prompt = """
             Analyze this image and identify:
-            1. Main subject matter (what/who is in the image)
-            2. Setting or environment
-            3. Activities or actions shown
-            4. Mood or feeling conveyed
-            5. Any themes or concepts represented
-            6. Any distinctive visual elements
+            1. Main subject matter (what/who is in the image) - be specific about people, objects, characters
+            2. Setting or environment (indoor/outdoor, location type)
+            3. Activities or actions shown - describe any movements, gestures, or actions in detail (e.g., "person throwing object", "character jumping", "hand holding item")
+            4. Objects present - identify any items, tools, toys, balls, devices, or props visible
+            5. Body language and posture - describe how people are positioned, what they're doing with their hands/arms
+            6. Movement indicators - any signs of motion, action, or dynamic activity
+            7. Mood or feeling conveyed
+            8. Any distinctive visual elements or themes
             
-            Focus ONLY on what's actually in the image, not how it was created or edited.
-            Format your response as a JSON with these keys: main_subject, setting, activities, mood, themes, distinctive_elements
+            Focus ONLY on what's actually visible in the image. Be detailed about actions and objects.
+            For actions, use active verbs (throwing, catching, running, holding, pointing, etc.).
+            For objects, be specific about shape, type, and purpose (ball, sphere, gaming device, toy, etc.).
+            
+            Format your response as a JSON with these keys: main_subject, setting, activities, objects, body_language, movement_indicators, mood, themes, distinctive_elements
             """
             
             # Get response from Gemini
@@ -315,6 +320,9 @@ class AIHandler:
                         "main_subject": "",
                         "setting": "",
                         "activities": "",
+                        "objects": "",
+                        "body_language": "",
+                        "movement_indicators": "",
                         "mood": "",
                         "themes": [],
                         "distinctive_elements": []
@@ -326,6 +334,9 @@ class AIHandler:
                     "main_subject": "",
                     "setting": "",
                     "activities": "",
+                    "objects": "",
+                    "body_language": "",
+                    "movement_indicators": "",
                     "mood": "",
                     "themes": [],
                     "distinctive_elements": []
@@ -613,6 +624,9 @@ class AIHandler:
                     "main_subject": "",
                     "setting": "",
                     "activities": "",
+                    "objects": "",
+                    "body_language": "",
+                    "movement_indicators": "",
                     "mood": "",
                     "themes": [],
                     "distinctive_elements": []

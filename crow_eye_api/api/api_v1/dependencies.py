@@ -5,10 +5,10 @@ from pydantic import ValidationError
 from sqlalchemy.ext.asyncio import AsyncSession
 import logging
 
-from crow_eye_api.crud import crud_user
-from crow_eye_api import models, schemas
-from crow_eye_api.core.config import settings
-from crow_eye_api.database import get_db
+from ...crud import crud_user
+from ... import models, schemas
+from ...core.config import settings
+from ...database import get_db
 
 # Set up logging
 logger = logging.getLogger(__name__)

@@ -1,8 +1,8 @@
 from fastapi import APIRouter, Depends
 
 from crow_eye_api import models, schemas
-from .endpoints import login, users, media, galleries, ai
-from .dependencies import get_current_active_user
+from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks
+from crow_eye_api.api.api_v1.dependencies import get_current_active_user
 
 api_router = APIRouter()
 
@@ -12,6 +12,13 @@ api_router.include_router(users.router, prefix="/users", tags=["Users"])
 api_router.include_router(media.router, prefix="/media", tags=["Media"])
 api_router.include_router(galleries.router, prefix="/galleries", tags=["Galleries"])
 api_router.include_router(ai.router, prefix="/ai", tags=["AI"])
+api_router.include_router(posts.router, prefix="/posts", tags=["Posts"])
+api_router.include_router(platforms.router, prefix="/platforms", tags=["Platforms"])
+api_router.include_router(context_files.router, prefix="/context-files", tags=["Context Files"])
+api_router.include_router(schedules.router, prefix="/schedules", tags=["Schedules"])
+api_router.include_router(analytics.router, prefix="/analytics", tags=["Analytics"])
+api_router.include_router(templates.router, prefix="/templates", tags=["Templates"])
+api_router.include_router(webhooks.router, prefix="/webhooks", tags=["Webhooks"])
 
 
 # --- Test Endpoint for Authenticated Users ---

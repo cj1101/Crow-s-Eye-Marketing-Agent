@@ -1,0 +1,23 @@
+{
+  "summary": {
+    "total_tests": 2,
+    "passed_tests": 1,
+    "failed_tests": 1,
+    "success_rate": 50.0,
+    "timestamp": "2025-06-09T16:44:00.877131"
+  },
+  "results": [
+    {
+      "test": "API Health Check",
+      "success": true,
+      "details": "Status: 200",
+      "timestamp": "2025-06-09T16:44:00.813106"
+    },
+    {
+      "test": "Authentication",
+      "success": false,
+      "details": "Status: 400",
+      "timestamp": "2025-06-09T16:44:00.874667"
+    }
+  ]
+}
