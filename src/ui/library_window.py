@@ -509,17 +509,29 @@ class LibraryWindow(BaseMainWindow):
     def _on_post_now(self, post_data):
         """Handle post now request."""
         try:
-            # TODO: Implement actual posting logic
             platforms = post_data.get("platforms", [])
             media_path = post_data.get("media_path", "")
+            caption = post_data.get("caption", "")
+            
+            if not hasattr(self, 'post_publisher'):
+                from ..handlers.post_publisher import PostPublisher
+                self.post_publisher = PostPublisher()
+                
+                # Connect signals for feedback
+                self.post_publisher.publishing_completed.connect(self._on_publishing_completed)
+                self.post_publisher.publishing_failed.connect(self._on_publishing_failed)
+            
+            # Start publishing
+            job_id = self.post_publisher.publish_now(media_path, caption, platforms)
             
             platform_names = ", ".join(platforms)
             QMessageBox.information(
                 self, 
-                self.tr("Post Scheduled"), 
-                self.tr("Post will be published to {platforms}\n\nMedia: {media}").format(
+                self.tr("Publishing Started"), 
+                self.tr("Publishing to {platforms}...\n\nMedia: {media}\nJob ID: {job_id}").format(
                     platforms=platform_names, 
-                    media=os.path.basename(media_path)
+                    media=os.path.basename(media_path),
+                    job_id=job_id[:8]
                 )
             )
             
@@ -530,13 +542,29 @@ class LibraryWindow(BaseMainWindow):
     def _on_add_to_queue(self, post_data):
         """Handle add to queue request."""
         try:
-            # TODO: Implement actual queue logic
+            platforms = post_data.get("platforms", [])
             media_path = post_data.get("media_path", "")
+            caption = post_data.get("caption", "")
+            scheduled_at = post_data.get("scheduled_at")
+            
+            if not hasattr(self, 'post_publisher'):
+                from ..handlers.post_publisher import PostPublisher
+                self.post_publisher = PostPublisher()
+                
+                # Connect signals for feedback
+                self.post_publisher.publishing_completed.connect(self._on_publishing_completed)
+                self.post_publisher.publishing_failed.connect(self._on_publishing_failed)
+            
+            # Add to queue
+            job_id = self.post_publisher.add_to_queue(media_path, caption, platforms, scheduled_at)
             
             QMessageBox.information(
                 self, 
                 self.tr("Added to Queue"), 
-                self.tr("Post added to publishing queue\n\nMedia: {media}").format(media=os.path.basename(media_path))
+                self.tr("Post added to publishing queue\n\nMedia: {media}\nJob ID: {job_id}").format(
+                    media=os.path.basename(media_path),
+                    job_id=job_id[:8]
+                )
             )
             
         except Exception as e:
@@ -625,6 +653,49 @@ class LibraryWindow(BaseMainWindow):
         """Handle close."""
         event.accept()
     
+    def _on_publishing_completed(self, job_id: str):
+        """Handle publishing completion."""
+        try:
+            if hasattr(self, 'post_publisher'):
+                job = self.post_publisher.get_job_status(job_id)
+                if job:
+                    successful_platforms = [p for p, r in job.results.items() if r.get("status") == "success"]
+                    failed_platforms = [p for p, r in job.results.items() if r.get("status") == "failed"]
+                    
+                    if successful_platforms:
+                        QMessageBox.information(
+                            self,
+                            self.tr("Publishing Complete"),
+                            self.tr("Successfully published to: {platforms}").format(
+                                platforms=", ".join(successful_platforms)
+                            )
+                        )
+                    
+                    if failed_platforms:
+                        QMessageBox.warning(
+                            self,
+                            self.tr("Publishing Issues"),
+                            self.tr("Failed to publish to: {platforms}").format(
+                                platforms=", ".join(failed_platforms)
+                            )
+                        )
+        except Exception as e:
+            logging.error(f"Error handling publishing completion: {e}")
+    
+    def _on_publishing_failed(self, job_id: str, platform: str, error: str):
+        """Handle publishing failure."""
+        try:
+            QMessageBox.warning(
+                self,
+                self.tr("Publishing Failed"),
+                self.tr("Failed to publish to {platform}: {error}").format(
+                    platform=platform,
+                    error=error
+                )
+            )
+        except Exception as e:
+            logging.error(f"Error handling publishing failure: {e}")
+
     def retranslateUi(self):
         """Retranslate UI elements when language changes."""
         # Window title

@@ -1,38 +1,29 @@
-# Use Python 3.11 slim image
+# Use an official lightweight Python image.
 FROM python:3.11-slim
 
-# Set working directory
+# Set environment variables
+ENV PYTHONDONTWRITEBYTECODE 1
+ENV PYTHONUNBUFFERED 1
+
+# Set the working directory in the container
 WORKDIR /app
 
-# Set environment variables
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONPATH=/app
-ENV PORT=8000
-
-# Install system dependencies (minimal set)
-RUN apt-get update && apt-get install -y \
-    curl \
+# Install system dependencies that might be needed by Python packages
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements first for better caching
+# Copy the requirements file and install dependencies
 COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir -r requirements.txt
 
-# Install Python dependencies
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy the application code into the container
+COPY ./crow_eye_api /app/crow_eye_api
+COPY ./data /app/data
 
-# Copy application code
-COPY . .
-
-# Create necessary directories
-RUN mkdir -p data/media data/audio data/galleries
-
-# Expose port
-EXPOSE 8000
-
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:8000/health || exit 1
-
-# Run uvicorn directly with proper configuration for Cloud Run
-CMD exec uvicorn crow_eye_api.main:app --host 0.0.0.0 --port $PORT --workers 1 
+# The command to run the application
+# We use gunicorn for production instead of uvicorn's development server
+# The number of workers is a recommendation, can be tuned.
+# Gunicorn will bind to the port specified by the PORT environment variable.
+CMD exec gunicorn -w 4 -k uvicorn.workers.UvicornWorker --bind "0.0.0.0:${PORT}" crow_eye_api.main:app 

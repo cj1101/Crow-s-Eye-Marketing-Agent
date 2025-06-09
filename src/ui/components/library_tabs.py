@@ -1171,15 +1171,28 @@ class LibraryTabs(QWidget):
     def _handle_post_now(self, post_data):
         """Handle post now request from preview dialog."""
         try:
-            platforms = ", ".join(post_data.get('platforms', []))
+            platforms = post_data.get('platforms', [])
+            media_path = post_data.get('path', '')
+            caption = post_data.get('caption', '')
+            
             self.logger.info(f"Post now requested for platforms: {platforms}")
             
-            # TODO: Implement actual posting logic
+            if not hasattr(self, 'post_publisher'):
+                from ...handlers.post_publisher import PostPublisher
+                self.post_publisher = PostPublisher()
+                
+                # Connect signals for feedback
+                self.post_publisher.publishing_completed.connect(self._on_publishing_completed)
+                self.post_publisher.publishing_failed.connect(self._on_publishing_failed)
+            
+            # Start publishing
+            job_id = self.post_publisher.publish_now(media_path, caption, platforms)
+            
+            platform_names = ", ".join(platforms)
             QMessageBox.information(
                 self, 
-                "Post Now", 
-                f"Post would be published immediately to: {platforms}\n\n"
-                "(Publishing integration coming soon)"
+                "Publishing Started", 
+                f"Publishing to {platform_names}...\n\nMedia: {os.path.basename(media_path)}\nJob ID: {job_id[:8]}"
             )
             
         except Exception as e:
@@ -1207,16 +1220,62 @@ class LibraryTabs(QWidget):
     def _handle_schedule_post(self, post_data):
         """Handle schedule post request from preview dialog."""
         try:
-            platforms = ", ".join(post_data.get('platforms', []))
+            platforms = post_data.get('platforms', [])
+            media_path = post_data.get('path', '')
+            caption = post_data.get('caption', '')
+            
             self.logger.info(f"Schedule post requested for platforms: {platforms}")
             
-            # TODO: Implement scheduling dialog
-            QMessageBox.information(
-                self, 
-                "Schedule Post", 
-                f"Post would be scheduled for: {platforms}\n\n"
-                "(Scheduling interface coming soon)"
-            )
+            # Show scheduling dialog
+            from PySide6.QtWidgets import QDateTimeEdit
+            from PySide6.QtCore import QDateTime
+            
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Schedule Post")
+            dialog.setModal(True)
+            dialog.resize(400, 200)
+            
+            layout = QVBoxLayout(dialog)
+            
+            # Date/time picker
+            layout.addWidget(QLabel("Select publish date and time:"))
+            datetime_edit = QDateTimeEdit(dialog)
+            datetime_edit.setDateTime(QDateTime.currentDateTime().addSecs(3600))  # Default to 1 hour from now
+            datetime_edit.setCalendarPopup(True)
+            layout.addWidget(datetime_edit)
+            
+            # Buttons
+            button_layout = QHBoxLayout()
+            schedule_btn = QPushButton("Schedule")
+            cancel_btn = QPushButton("Cancel")
+            
+            schedule_btn.clicked.connect(dialog.accept)
+            cancel_btn.clicked.connect(dialog.reject)
+            
+            button_layout.addWidget(schedule_btn)
+            button_layout.addWidget(cancel_btn)
+            layout.addLayout(button_layout)
+            
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                scheduled_datetime = datetime_edit.dateTime().toString("yyyy-MM-ddThh:mm:ss")
+                
+                if not hasattr(self, 'post_publisher'):
+                    from ...handlers.post_publisher import PostPublisher
+                    self.post_publisher = PostPublisher()
+                    
+                    # Connect signals for feedback
+                    self.post_publisher.publishing_completed.connect(self._on_publishing_completed)
+                    self.post_publisher.publishing_failed.connect(self._on_publishing_failed)
+                
+                # Add to queue with scheduled time
+                job_id = self.post_publisher.add_to_queue(media_path, caption, platforms, scheduled_datetime)
+                
+                platform_names = ", ".join(platforms)
+                QMessageBox.information(
+                    self, 
+                    "Post Scheduled", 
+                    f"Post scheduled for {platform_names}\n\nScheduled: {scheduled_datetime}\nJob ID: {job_id[:8]}"
+                )
             
         except Exception as e:
             self.logger.error(f"Error scheduling post: {e}")
@@ -1434,4 +1493,40 @@ class LibraryTabs(QWidget):
             return 'video'
         else:
             return 'photo'
+    
+    def _on_publishing_completed(self, job_id: str):
+        """Handle publishing completion."""
+        try:
+            if hasattr(self, 'post_publisher'):
+                job = self.post_publisher.get_job_status(job_id)
+                if job:
+                    successful_platforms = [p for p, r in job.results.items() if r.get("status") == "success"]
+                    failed_platforms = [p for p, r in job.results.items() if r.get("status") == "failed"]
+                    
+                    if successful_platforms:
+                        QMessageBox.information(
+                            self,
+                            "Publishing Complete",
+                            f"Successfully published to: {', '.join(successful_platforms)}"
+                        )
+                    
+                    if failed_platforms:
+                        QMessageBox.warning(
+                            self,
+                            "Publishing Issues",
+                            f"Failed to publish to: {', '.join(failed_platforms)}"
+                        )
+        except Exception as e:
+            self.logger.error(f"Error handling publishing completion: {e}")
+    
+    def _on_publishing_failed(self, job_id: str, platform: str, error: str):
+        """Handle publishing failure."""
+        try:
+            QMessageBox.warning(
+                self,
+                "Publishing Failed",
+                f"Failed to publish to {platform}: {error}"
+            )
+        except Exception as e:
+            self.logger.error(f"Error handling publishing failure: {e}")
  

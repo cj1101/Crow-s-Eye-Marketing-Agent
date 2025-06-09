@@ -189,18 +189,20 @@ class InstagramAPIHandler:
     def _create_image_container(self, ig_account_id: str, media_path: str, caption: str, access_token: str) -> Tuple[bool, str]:
         """Create an image container for Instagram posting."""
         try:
-            # Upload image to a temporary hosting service or use Facebook's image upload
-            # For now, we'll assume the image is accessible via URL
-            # In production, you'd need to upload to a hosting service first
+            # First, upload image to Facebook's servers
+            upload_url = f"{self.graph_url}/{ig_account_id}/media"
             
-            container_url = f"{self.graph_url}/{ig_account_id}/media"
-            container_data = {
-                'image_url': media_path,  # This should be a public URL
-                'caption': caption,
-                'access_token': access_token
-            }
-            
-            response = requests.post(container_url, data=container_data, timeout=30)
+            # Read the image file
+            with open(media_path, 'rb') as image_file:
+                files = {
+                    'source': image_file
+                }
+                data = {
+                    'caption': caption,
+                    'access_token': access_token
+                }
+                
+                response = requests.post(upload_url, files=files, data=data, timeout=60)
             
             if response.status_code == 200:
                 result = response.json()
@@ -216,15 +218,20 @@ class InstagramAPIHandler:
     def _create_video_container(self, ig_account_id: str, media_path: str, caption: str, access_token: str) -> Tuple[bool, str]:
         """Create a video container for Instagram posting."""
         try:
-            container_url = f"{self.graph_url}/{ig_account_id}/media"
-            container_data = {
-                'video_url': media_path,  # This should be a public URL
-                'caption': caption,
-                'media_type': 'VIDEO',
-                'access_token': access_token
-            }
+            upload_url = f"{self.graph_url}/{ig_account_id}/media"
             
-            response = requests.post(container_url, data=container_data, timeout=30)
+            # Read the video file
+            with open(media_path, 'rb') as video_file:
+                files = {
+                    'source': video_file
+                }
+                data = {
+                    'caption': caption,
+                    'media_type': 'VIDEO',
+                    'access_token': access_token
+                }
+                
+                response = requests.post(upload_url, files=files, data=data, timeout=120)
             
             if response.status_code == 200:
                 result = response.json()
