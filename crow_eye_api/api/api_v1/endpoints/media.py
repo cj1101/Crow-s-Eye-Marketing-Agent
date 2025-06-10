@@ -596,4 +596,122 @@ async def generate_platform_optimized_versions(
         job_id=job_id,
         status="processing",
         message=f"Platform optimization started for: {', '.join(optimization_request.platforms)}"
-    ) 
+    )
+
+
+# Enhanced Video Processing and Thumbnail Generation
+
+@router.post("/video/process", response_model=schemas.VideoProcessingResponse)
+async def process_video(
+    request: schemas.VideoProcessingRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Process video with various operations (trim, resize, add captions, etc.).
+    """
+    try:
+        import uuid
+        import random
+        
+        # Verify video exists and belongs to user
+        media_item = await crud_media.get_media_item(
+            db=db, media_id=int(request.video_id), user_id=current_user.id
+        )
+        
+        if not media_item or media_item.media_type != 'video':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Video not found"
+            )
+        
+        # Generate job ID for processing
+        job_id = f"video_proc_{uuid.uuid4().hex[:8]}"
+        
+        # Simulate video processing (replace with actual video processing logic)
+        processed_video_url = f"https://processed-video-{job_id}.{request.output_format}"
+        
+        # Calculate estimated processing time based on operations
+        estimated_time = len(request.operations) * 15  # 15 seconds per operation
+        
+        operations_applied = [op.get("type", "unknown") for op in request.operations]
+        
+        return schemas.VideoProcessingResponse(
+            job_id=job_id,
+            status="processing",
+            processed_video_url=processed_video_url,
+            estimated_time=estimated_time,
+            operations_applied=operations_applied
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Video processing failed: {str(e)}"
+        )
+
+
+@router.post("/thumbnails/generate", response_model=schemas.ThumbnailGenerateResponse)
+async def generate_thumbnails(
+    request: schemas.ThumbnailGenerateRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate thumbnails for video content.
+    """
+    try:
+        import uuid
+        import random
+        
+        # Verify video exists and belongs to user
+        media_item = await crud_media.get_media_item(
+            db=db, media_id=int(request.video_id), user_id=current_user.id
+        )
+        
+        if not media_item or media_item.media_type != 'video':
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Video not found"
+            )
+        
+        # Generate thumbnails (simulate with mock data)
+        thumbnails = []
+        best_score = 0
+        best_thumbnail = None
+        
+        for i in range(request.count):
+            thumbnail_id = f"thumb_{uuid.uuid4().hex[:8]}"
+            timestamp = request.timestamp if request.timestamp else (i + 1) * 10.0
+            
+            # Simulate thumbnail quality scoring
+            quality_score = random.uniform(0.6, 0.95)
+            
+            thumbnail_data = {
+                "thumbnail_id": thumbnail_id,
+                "url": f"https://thumbnail-{thumbnail_id}.jpg",
+                "timestamp": timestamp,
+                "quality_score": quality_score,
+                "width": 1920,
+                "height": 1080,
+                "file_size": random.randint(50000, 200000)
+            }
+            
+            thumbnails.append(thumbnail_data)
+            
+            if quality_score > best_score:
+                best_score = quality_score
+                best_thumbnail = thumbnail_data
+        
+        return schemas.ThumbnailGenerateResponse(
+            thumbnails=thumbnails,
+            video_id=request.video_id,
+            total_generated=len(thumbnails),
+            best_thumbnail=best_thumbnail
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Thumbnail generation failed: {str(e)}"
+        ) 

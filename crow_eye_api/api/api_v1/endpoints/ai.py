@@ -6,18 +6,24 @@ from ....crud import crud_media
 from .... import schemas, models
 from ....database import get_db
 from ..dependencies import get_current_active_user
+import uuid
+import time
+from datetime import datetime, timedelta
 
 router = APIRouter()
 
+# In-memory job storage (in production, use Redis or database)
+job_storage = {}
 
-@router.post("/captions/generate", response_model=schemas.CaptionGenerateResponse)
-async def generate_caption(
+
+@router.post("/captions/generate-from-media", response_model=schemas.CaptionGenerateResponse)
+async def generate_caption_from_media(
     caption_params: schemas.CaptionGenerate,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Generate AI-powered captions for media items.
+    Generate AI-powered captions for existing media items using image analysis.
     """
     from ....services.ai import ai_service
     from ....services.storage import storage_service
@@ -87,13 +93,13 @@ async def generate_caption(
 
 
 @router.post("/highlights/generate", response_model=schemas.HighlightGenerateResponse)
-async def generate_highlight(
+async def generate_highlight_reel(
     highlight_params: schemas.HighlightGenerate,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
     """
-    Generate AI-powered highlights/reels from media items.
+    Generate AI-powered highlight reels from video media items.
     """
     from ....services.highlight import highlight_service
     import tempfile
@@ -126,6 +132,31 @@ async def generate_highlight(
         # In the future, we could combine multiple videos
         primary_video = video_items[0]
         
+        # Validate that at least one input is provided
+        has_example_segment = (highlight_params.example and 
+                             highlight_params.example.start_time is not None and 
+                             highlight_params.example.end_time is not None)
+        has_content_instructions = highlight_params.content_instructions and highlight_params.content_instructions.strip()
+        has_example_description = (highlight_params.example and 
+                                 highlight_params.example.description and 
+                                 highlight_params.example.description.strip())
+        
+        if not (has_example_segment or has_content_instructions or has_example_description):
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="At least one of the following must be provided: example segment (start_time + end_time), content_instructions, or example description"
+            )
+
+        # Prepare example data if provided
+        example_data = None
+        if highlight_params.example:
+            example_data = {
+                'start_time': highlight_params.example.start_time,
+                'end_time': highlight_params.example.end_time,
+                'description': highlight_params.example.description,
+                'has_segment': has_example_segment
+            }
+
         # Generate highlight reel
         result = await highlight_service.generate_highlight_reel(
             media_item=primary_video,
@@ -133,7 +164,10 @@ async def generate_highlight(
             highlight_type=highlight_params.highlight_type,
             style=highlight_params.style or "dynamic",
             include_text=highlight_params.include_text,
-            include_music=highlight_params.include_music
+            include_music=highlight_params.include_music,
+            example_data=example_data,
+            context_padding=highlight_params.context_padding or 2.0,
+            content_instructions=highlight_params.content_instructions
         )
         
         if not result.success:
@@ -159,19 +193,17 @@ async def generate_highlight(
         )
 
 
-@router.post("/media/{media_id}/tags")
-async def generate_ai_tags(
+@router.post("/media/{media_id}/tags/generate")
+async def generate_media_tags(
     media_id: int,
     max_tags: int = 10,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Generate AI tags for a specific media item.
-    """
+    """Generate AI tags for a specific media item."""
     from ....services.ai import ai_service
-    from ....services.storage import storage_service
     
+    # Get the media item
     media_item = await crud_media.get_media_item(
         db=db, media_id=media_id, user_id=current_user.id
     )
@@ -182,36 +214,17 @@ async def generate_ai_tags(
             detail="Media item not found"
         )
     
-    if media_item.media_type != 'image':
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST,
-            detail="AI tagging currently supports images only"
-        )
-    
     try:
-        # Download image from storage
-        blob = storage_service.bucket.blob(media_item.filename)
-        image_content = await storage_service.client.download_as_bytes(blob)
-        
-        # Generate tags using AI
+        # Generate tags using AI service
         tags = await ai_service.generate_tags(
-            image_content=image_content,
+            media_item=media_item,
             max_tags=max_tags
-        )
-        
-        # Update media item with generated tags
-        await crud_media.update_media_item(
-            db=db,
-            media_id=media_id,
-            user_id=current_user.id,
-            media_update=schemas.MediaItemUpdate(ai_tags=tags)
         )
         
         return {
             "media_id": media_id,
             "tags": tags,
-            "total_tags": len(tags),
-            "status": "success"
+            "total_tags": len(tags)
         }
         
     except Exception as e:
@@ -221,20 +234,17 @@ async def generate_ai_tags(
         )
 
 
-@router.post("/media/bulk-tag")
-async def bulk_generate_tags(
+@router.post("/media/tags/bulk-generate")
+async def bulk_generate_media_tags(
     media_ids: List[int],
     max_tags: int = 10,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """
-    Generate AI tags for multiple media items in bulk.
-    """
-    from crow_eye_api.services.ai import ai_service
-    from crow_eye_api.services.storage import storage_service
-    import asyncio
+    """Generate AI tags for multiple media items."""
+    from ....services.ai import ai_service
     
+    # Get media items
     media_items = await crud_media.get_media_items_by_ids(
         db=db, media_ids=media_ids, user_id=current_user.id
     )
@@ -248,68 +258,28 @@ async def bulk_generate_tags(
     results = []
     
     async def process_media_item(media_item):
-        """Process a single media item for tagging."""
         try:
-            if media_item.media_type != 'image':
-                return {
-                    "media_id": media_item.id,
-                    "tags": [],
-                    "status": "skipped",
-                    "message": "AI tagging currently supports images only"
-                }
-            
-            # Download image from storage
-            blob = storage_service.bucket.blob(media_item.filename)
-            image_content = await storage_service.client.download_as_bytes(blob)
-            
-            # Generate tags using AI
             tags = await ai_service.generate_tags(
-                image_content=image_content,
+                media_item=media_item,
                 max_tags=max_tags
             )
-            
-            # Update media item with generated tags
-            await crud_media.update_media_item(
-                db=db,
-                media_id=media_item.id,
-                user_id=current_user.id,
-                media_update=schemas.MediaItemUpdate(ai_tags=tags)
-            )
-            
             return {
                 "media_id": media_item.id,
                 "tags": tags,
-                "status": "success",
-                "message": f"Generated {len(tags)} tags"
+                "status": "success"
             }
-            
         except Exception as e:
             return {
                 "media_id": media_item.id,
                 "tags": [],
                 "status": "error",
-                "message": f"Tag generation failed: {str(e)}"
+                "error": str(e)
             }
     
-    # Process items in batches to avoid overwhelming the AI service
-    batch_size = 5
-    for i in range(0, len(media_items), batch_size):
-        batch = media_items[i:i + batch_size]
-        batch_results = await asyncio.gather(
-            *[process_media_item(item) for item in batch],
-            return_exceptions=True
-        )
-        
-        for result in batch_results:
-            if isinstance(result, Exception):
-                results.append({
-                    "media_id": None,
-                    "tags": [],
-                    "status": "error",
-                    "message": f"Processing error: {str(result)}"
-                })
-            else:
-                results.append(result)
+    # Process all media items
+    import asyncio
+    tasks = [process_media_item(item) for item in media_items]
+    results = await asyncio.gather(*tasks)
     
     success_count = len([r for r in results if r["status"] == "success"])
     
@@ -317,19 +287,17 @@ async def bulk_generate_tags(
         "results": results,
         "total_processed": len(results),
         "success_count": success_count,
-        "skipped_count": len([r for r in results if r["status"] == "skipped"]),
-        "error_count": len([r for r in results if r["status"] == "error"])
+        "error_count": len(results) - success_count
     }
 
-# New AI endpoints for API specification compliance
 
-@router.post("/caption")
-async def generate_caption_new(
+@router.post("/captions/generate-custom")
+async def generate_custom_caption(
     request: dict,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate caption with enhanced options."""
+    """Generate custom captions with specific tone and platform targeting."""
     # For demo mode, return mock caption
     tone = request.get("tone", "professional")
     platforms = request.get("platforms", ["instagram"])
@@ -368,13 +336,13 @@ async def generate_caption_new(
         "character_count": len(caption + hashtags)
     }
 
-@router.post("/hashtags")
+@router.post("/hashtags/generate")
 async def generate_hashtags(
     request: dict,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate hashtags for content."""
+    """Generate relevant hashtags for content."""
     content = request.get("content", "")
     platforms = request.get("platforms", ["instagram"])
     niche = request.get("niche", "general")
@@ -400,13 +368,13 @@ async def generate_hashtags(
         "formatted": " ".join(hashtags)
     }
 
-@router.post("/suggestions")
-async def content_suggestions(
+@router.post("/content/suggestions")
+async def generate_content_suggestions(
     request: dict,
     current_user: models.User = Depends(get_current_active_user),
     db: AsyncSession = Depends(get_db)
 ):
-    """Generate content suggestions for media."""
+    """Generate content suggestions and variations for media."""
     media_id = request.get("mediaId", "")
     platforms = request.get("platforms", ["instagram"])
     content_type = request.get("contentType", "caption")
@@ -438,4 +406,130 @@ async def content_suggestions(
         "content_type": content_type,
         "platforms": platforms,
         "variations_count": len(suggestions[:variations])
-    } 
+    }
+
+
+# Enhanced AI Endpoints for Web App Integration
+
+@router.post("/images/generate", response_model=schemas.ImageGenerateResponse)
+async def generate_ai_images(
+    request: schemas.ImageGenerateRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate AI images using Imagen 3.
+    """
+    try:
+        # Placeholder for Imagen 3 integration
+        # This would integrate with Google's Imagen 3 API
+        start_time = time.time()
+        
+        # Simulate image generation (replace with actual Imagen 3 API call)
+        generated_images = []
+        for i in range(request.count):
+            image_data = {
+                "image_url": f"https://generated-image-{uuid.uuid4().hex[:8]}.jpg",
+                "image_id": f"img_{uuid.uuid4().hex[:8]}",
+                "width": 1024 if request.aspect_ratio == "1:1" else 1920,
+                "height": 1024 if request.aspect_ratio == "1:1" else 1080,
+                "format": "jpg"
+            }
+            generated_images.append(image_data)
+        
+        generation_time = time.time() - start_time
+        
+        return schemas.ImageGenerateResponse(
+            images=generated_images,
+            generation_time=generation_time,
+            total_cost=0.05 * request.count,  # Placeholder cost
+            prompt_used=request.prompt,
+            style_applied=request.style
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Image generation failed: {str(e)}"
+        )
+
+
+@router.post("/videos/generate", response_model=schemas.VideoGenerateResponse)
+async def generate_ai_videos(
+    request: schemas.VideoGenerateRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate AI videos using Veo.
+    """
+    try:
+        # Placeholder for Veo integration
+        # This would integrate with Google's Veo API
+        start_time = time.time()
+        
+        # Simulate video generation (replace with actual Veo API call)
+        video_id = f"vid_{uuid.uuid4().hex[:8]}"
+        video_url = f"https://generated-video-{video_id}.mp4"
+        
+        generation_time = time.time() - start_time
+        
+        return schemas.VideoGenerateResponse(
+            video_url=video_url,
+            video_id=video_id,
+            duration=float(request.duration),
+            generation_time=generation_time,
+            total_cost=0.25 * request.duration,  # Placeholder cost
+            metadata={
+                "style": request.style,
+                "aspect_ratio": request.aspect_ratio,
+                "fps": request.fps,
+                "prompt": request.prompt
+            }
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Video generation failed: {str(e)}"
+        )
+
+
+@router.post("/content/ideas", response_model=schemas.ContentIdeasResponse)
+async def generate_content_ideas(
+    request: schemas.ContentIdeasRequest,
+    current_user: models.User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Generate creative content ideas based on trends and user preferences.
+    """
+    try:
+        # Placeholder for content idea generation
+        # This would integrate with trend analysis and AI services
+        
+        ideas = []
+        for i in range(request.count):
+            idea = {
+                "title": f"Content Idea #{i+1} for {request.niche}",
+                "description": f"Engaging {request.content_type} content focused on {request.niche}",
+                "platforms": request.platforms,
+                "estimated_engagement": "High",
+                "difficulty": "Medium",
+                "trending_score": 8.5
+            }
+            ideas.append(idea)
+        
+        return schemas.ContentIdeasResponse(
+            ideas=ideas,
+            total_ideas=len(ideas),
+            niche=request.niche,
+            content_type=request.content_type,
+            platforms=request.platforms
+        )
+        
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Content idea generation failed: {str(e)}"
+        ) 

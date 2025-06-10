@@ -78,6 +78,11 @@ class VideoHandler:
             # Analyze prompt for specific instructions
             segments = self._analyze_video_for_highlights(clip, target_duration, prompt)
             
+            # NEVER FAIL - always create something
+            if not segments:
+                self.logger.warning("No highlights found, creating emergency highlights")
+                segments = self._create_emergency_highlights(clip, target_duration)
+            
             # Create highlight reel
             highlight_clips = []
             for start, end in segments:
@@ -129,6 +134,988 @@ class VideoHandler:
         except Exception as e:
             self.logger.exception(f"Error generating highlight reel: {e}")
             return False, "", f"Error generating highlight reel: {str(e)}"
+    
+    def generate_example_based_highlight_reel(self, video_path: str, example_data: Dict[str, Any], 
+                                            target_duration: int = 30, context_padding: float = 2.0,
+                                            prompt: str = "") -> Tuple[bool, str, str]:
+        """
+        Generate a highlight reel using example segment-based similarity detection.
+        
+        Args:
+            video_path: Path to the source video
+            example_data: Dictionary containing example segment data (start_time, end_time, description)
+            target_duration: Target duration in seconds (default: 30)
+            context_padding: Seconds of context to add before each highlight scene
+            prompt: Additional natural language prompt for guidance
+            
+        Returns:
+            Tuple[bool, str, str]: (success, output_path, message)
+        """
+        try:
+            if not os.path.exists(video_path):
+                return False, "", f"Video file not found: {video_path}"
+                
+            if not example_data:
+                return False, "", "Example data is required for example-based detection"
+            
+            # Check if we have a segment or just instructions/description
+            has_segment = example_data.get('has_segment', False)
+            if not has_segment and not prompt:
+                return False, "", "Either example segment (start_time, end_time) or content instructions must be provided"
+            
+            self.logger.info(f"Generating example-based highlight reel from {video_path}")
+            if has_segment:
+                self.logger.info(f"Using example segment analysis")
+            else:
+                self.logger.info(f"Using prompt-based analysis with example context")
+            self.logger.info(f"Context padding: {context_padding}s")
+            
+            # Load video
+            clip = VideoFileClip(video_path)
+            original_duration = clip.duration
+            
+            if original_duration <= target_duration:
+                self.logger.info("Video is already shorter than target duration")
+                return True, video_path, "Video is already the right length"
+            
+            # Choose analysis method based on available data
+            if has_segment:
+                # Validate example segment
+                start_time = example_data['start_time']
+                end_time = example_data['end_time']
+                
+                if start_time >= end_time:
+                    clip.close()
+                    return False, "", "Example segment start_time must be less than end_time"
+                
+                if start_time < 0 or end_time > original_duration:
+                    clip.close()
+                    return False, "", f"Example segment ({start_time:.1f}s - {end_time:.1f}s) is outside video duration (0 - {original_duration:.1f}s)"
+                
+                self.logger.info(f"Example segment: {start_time:.1f}s - {end_time:.1f}s")
+                
+                # Analyze video for similar segments based on example segment
+                segments = self._analyze_video_for_segment_similarities(
+                    clip, target_duration, example_data, context_padding, prompt
+                )
+            else:
+                # Fall back to traditional prompt-based analysis
+                self.logger.info("Using prompt-based analysis (no example segment provided)")
+                segments = self._analyze_video_for_highlights(clip, target_duration, prompt)
+            
+            # NEVER FAIL - always create something
+            if not segments:
+                self.logger.warning("No similar segments found, creating emergency highlights")
+                segments = self._create_emergency_highlights(clip, target_duration)
+            
+            # Create highlight reel
+            highlight_clips = []
+            for start, end in segments:
+                highlight_clips.append(clip.subclip(start, end))
+            
+            # Concatenate clips
+            if highlight_clips:
+                final_clip = concatenate_videoclips(highlight_clips)
+                
+                # Generate output filename
+                base_name = os.path.splitext(os.path.basename(video_path))[0]
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_filename = f"{base_name}_example_highlight_{timestamp}.mp4"
+                output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+                
+                # Ensure output directory exists
+                os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+                
+                # Write video
+                final_clip.write_videofile(
+                    output_path,
+                    codec='libx264',
+                    audio_codec='aac',
+                    temp_audiofile='temp-audio.m4a',
+                    remove_temp=True
+                )
+                
+                # Clean up
+                clip.close()
+                final_clip.close()
+                for highlight_clip in highlight_clips:
+                    highlight_clip.close()
+                
+                # Track video processing in analytics
+                if self.analytics_handler:
+                    try:
+                        self.analytics_handler.track_video_processing(
+                            video_path, "example_based_highlight_reel", output_path
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Could not track video processing: {e}")
+                
+                total_duration = sum(end - start for start, end in segments)
+                self.logger.info(f"Example-based highlight reel saved to {output_path}")
+                return True, output_path, f"Example-based highlight reel created ({len(segments)} segments, {total_duration:.1f}s total)"
+            else:
+                clip.close()
+                return False, "", "No suitable segments found for highlight reel"
+                
+        except Exception as e:
+            self.logger.exception(f"Error generating example-based highlight reel: {e}")
+            return False, "", f"Error generating example-based highlight reel: {str(e)}"
+    
+    def generate_long_form_highlight_reel(self, video_path: str, target_duration: int = 180, 
+                                        prompt: str = "", cost_optimize: bool = True) -> Tuple[bool, str, str]:
+        """
+        Generate longer highlight reels (2-5 minutes) from 1-3 hour content with cost optimization.
+        
+        Args:
+            video_path: Path to the source video
+            target_duration: Target duration in seconds (default: 180 = 3 minutes)
+            prompt: Natural language prompt for what to include/exclude
+            cost_optimize: Whether to use cost optimization strategies
+            
+        Returns:
+            Tuple[bool, str, str]: (success, output_path, message)
+        """
+        clip = None
+        final_clip = None
+        highlight_clips = []
+        
+        try:
+            # Input validation
+            if not video_path or not isinstance(video_path, str):
+                return False, "", "Invalid video path provided"
+            
+            if not os.path.exists(video_path):
+                return False, "", f"Video file not found: {video_path}"
+            
+            # Check file size and accessibility
+            try:
+                file_size = os.path.getsize(video_path)
+                if file_size == 0:
+                    return False, "", "Video file is empty"
+                if file_size > 10 * 1024 * 1024 * 1024:  # 10GB limit
+                    return False, "", "Video file is too large (>10GB)"
+            except (OSError, IOError) as e:
+                return False, "", f"Cannot access video file: {e}"
+            
+            # Validate target duration
+            if target_duration < 30:
+                return False, "", "Target duration must be at least 30 seconds"
+            if target_duration > 600:  # 10 minutes max
+                return False, "", "Target duration cannot exceed 10 minutes"
+            
+            self.logger.info(f"Starting long-form highlight generation for {video_path}")
+            
+            # Load video with timeout protection
+            try:
+                clip = VideoFileClip(video_path)
+                if clip is None:
+                    return False, "", "Failed to load video file - may be corrupted"
+            except Exception as e:
+                return False, "", f"Failed to load video: {str(e)}"
+            
+            # Validate video properties
+            try:
+                original_duration = clip.duration
+                if original_duration is None or original_duration <= 0:
+                    return False, "", "Video has invalid duration"
+                
+                # Check video dimensions
+                if hasattr(clip, 'size') and clip.size:
+                    width, height = clip.size
+                    if width <= 0 or height <= 0:
+                        return False, "", "Video has invalid dimensions"
+                    if width < 100 or height < 100:
+                        return False, "", "Video resolution too low (minimum 100x100)"
+                else:
+                    return False, "", "Cannot determine video dimensions"
+                    
+            except Exception as e:
+                return False, "", f"Error reading video properties: {e}"
+            
+            # Check if input is suitable for long-form processing
+            if original_duration < 60 * 30:  # Less than 30 minutes
+                self.logger.info("Video is too short for long-form processing, using standard method")
+                clip.close()
+                return self.generate_highlight_reel(video_path, target_duration, prompt)
+            
+            if original_duration > 60 * 60 * 4:  # More than 4 hours
+                clip.close()
+                return False, "", "Video is too long (>4 hours). Please use shorter content."
+            
+            self.logger.info(f"Generating long-form highlight reel from {original_duration/60:.1f} minute video")
+            
+            # Estimate cost and validate
+            estimated_ai_calls = min(20, int(original_duration / 600)) if cost_optimize else int(original_duration / 60)
+            estimated_cost = estimated_ai_calls * 0.01
+            
+            if estimated_cost > 2.0:  # Safety limit
+                self.logger.warning(f"High estimated cost: ${estimated_cost:.2f}")
+            
+            self.logger.info(f"Estimated AI analysis cost: ~${estimated_cost:.2f} ({estimated_ai_calls} API calls)")
+            
+            # Analyze video for highlights with comprehensive error handling
+            try:
+                segments = self._analyze_video_for_highlights(clip, target_duration, prompt)
+            except Exception as e:
+                self.logger.error(f"Error during video analysis: {e}")
+                clip.close()
+                return False, "", f"Failed to analyze video: {str(e)}"
+            
+            if not segments:
+                clip.close()
+                return False, "", "No suitable segments found for long-form highlight reel"
+            
+            # Validate segments
+            valid_segments = []
+            for start, end in segments:
+                if start < 0 or end > original_duration or start >= end:
+                    self.logger.warning(f"Invalid segment {start}-{end}, skipping")
+                    continue
+                if end - start < 1:  # Minimum 1 second segments
+                    self.logger.warning(f"Segment too short {start}-{end}, skipping")
+                    continue
+                valid_segments.append((start, end))
+            
+            if not valid_segments:
+                clip.close()
+                return False, "", "No valid segments found after validation"
+            
+            segments = valid_segments
+            self.logger.info(f"Using {len(segments)} valid segments")
+            
+            # Create highlight reel with enhanced error handling
+            highlight_clips = []
+            transition_duration = 0.5
+            
+            for i, (start, end) in enumerate(segments):
+                try:
+                    segment_clip = clip.subclip(start, end)
+                    
+                    # Validate segment clip
+                    if segment_clip.duration <= 0:
+                        self.logger.warning(f"Segment {i} has invalid duration, skipping")
+                        continue
+                    
+                    # Add fade transitions for smoother long-form content
+                    if i > 0 and transition_duration < segment_clip.duration / 2:
+                        segment_clip = segment_clip.fadein(transition_duration)
+                    if i < len(segments) - 1 and transition_duration < segment_clip.duration / 2:
+                        segment_clip = segment_clip.fadeout(transition_duration)
+                    
+                    highlight_clips.append(segment_clip)
+                    
+                except Exception as e:
+                    self.logger.warning(f"Error processing segment {i} ({start}-{end}): {e}")
+                    continue
+            
+            if not highlight_clips:
+                clip.close()
+                return False, "", "No valid highlight clips could be created"
+            
+            # Concatenate clips with error handling
+            try:
+                final_clip = concatenate_videoclips(highlight_clips)
+                if final_clip is None or final_clip.duration <= 0:
+                    raise ValueError("Concatenated clip is invalid")
+            except Exception as e:
+                self.logger.error(f"Error concatenating clips: {e}")
+                # Clean up
+                clip.close()
+                for highlight_clip in highlight_clips:
+                    try:
+                        highlight_clip.close()
+                    except:
+                        pass
+                return False, "", f"Failed to combine video segments: {str(e)}"
+            
+            # Add titles/chapters for longer content (with error handling)
+            if len(segments) > 3 and target_duration > 120:
+                try:
+                    final_clip = self._add_chapter_markers(final_clip, segments, prompt)
+                except Exception as e:
+                    self.logger.warning(f"Failed to add chapter markers: {e}")
+                    # Continue without chapter markers
+            
+            # Generate output filename with collision avoidance
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            base_name = "".join(c for c in base_name if c.isalnum() or c in (' ', '-', '_')).strip()
+            if not base_name:
+                base_name = "highlight"
+            
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"{base_name}_longform_highlight_{timestamp}.mp4"
+            output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+            
+            # Handle filename collisions
+            counter = 1
+            while os.path.exists(output_path):
+                output_filename = f"{base_name}_longform_highlight_{timestamp}_{counter}.mp4"
+                output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+                counter += 1
+                if counter > 100:  # Safety limit
+                    return False, "", "Too many filename collisions"
+            
+            # Ensure output directory exists
+            try:
+                os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+            except Exception as e:
+                return False, "", f"Cannot create output directory: {e}"
+            
+            # Write video with better error handling
+            try:
+                final_clip.write_videofile(
+                    output_path,
+                    codec='libx264',
+                    audio_codec='aac',
+                    temp_audiofile='temp-audio.m4a',
+                    remove_temp=True,
+                    verbose=False,  # Reduce verbosity
+                    logger=None  # Disable internal logging that might cause issues
+                )
+            except Exception as video_write_error:
+                self.logger.warning(f"Video writing failed with audio, trying without audio: {video_write_error}")
+                try:
+                    # Try writing without audio if audio processing fails
+                    final_clip_no_audio = final_clip.without_audio()
+                    final_clip_no_audio.write_videofile(
+                        output_path,
+                        codec='libx264',
+                        verbose=False,
+                        logger=None
+                    )
+                    final_clip_no_audio.close()
+                    self.logger.info("Video saved without audio due to audio processing issues")
+                except Exception as final_error:
+                    # Clean up and return error
+                    self._cleanup_clips(clip, final_clip, highlight_clips)
+                    return False, "", f"Failed to write video: {str(final_error)}"
+            
+            # Clean up memory
+            clip.close()
+            final_clip.close()
+            for highlight_clip in highlight_clips:
+                try:
+                    highlight_clip.close()
+                except:
+                    pass
+            
+            # Track video processing in analytics
+            if self.analytics_handler:
+                try:
+                    self.analytics_handler.track_video_processing(
+                        video_path, "long_form_highlight_reel", output_path
+                    )
+                except Exception as e:
+                    self.logger.warning(f"Could not track video processing: {e}")
+            
+            duration_minutes = target_duration / 60
+            actual_duration = sum(end - start for start, end in segments)
+            self.logger.info(f"Long-form highlight reel saved to {output_path}")
+            self.logger.info(f"Created {duration_minutes:.1f} minute highlight from {len(segments)} segments")
+            
+            return True, output_path, f"Long-form highlight reel created ({duration_minutes:.1f} minutes, {len(segments)} segments, {actual_duration:.1f}s total)"
+            
+        except Exception as e:
+            self.logger.exception(f"Unexpected error in long-form highlight generation: {e}")
+            
+            # Emergency cleanup
+            try:
+                if clip:
+                    clip.close()
+                if final_clip:
+                    final_clip.close()
+                for highlight_clip in highlight_clips:
+                    try:
+                        highlight_clip.close()
+                    except:
+                        pass
+            except:
+                pass
+            
+            return False, "", f"Unexpected error: {str(e)}"
+    
+    def create_story_clips(self, video_path: str, max_clip_duration: int = 60) -> Tuple[bool, List[str], str]:
+        """
+        Create story-formatted clips from a long video.
+        
+        Args:
+            video_path: Path to the source video
+            max_clip_duration: Maximum duration per clip in seconds
+            
+        Returns:
+            Tuple[bool, List[str], str]: (success, list_of_output_paths, message)
+        """
+        try:
+            if not os.path.exists(video_path):
+                return False, [], f"Video file not found: {video_path}"
+            
+            self.logger.info(f"Creating story clips from {video_path}")
+            
+            # Load video
+            clip = VideoFileClip(video_path)
+            original_duration = clip.duration
+            
+            # Calculate number of clips needed
+            num_clips = math.ceil(original_duration / max_clip_duration)
+            
+            output_paths = []
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Ensure output directory exists
+            os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+            
+            for i in range(num_clips):
+                start_time = i * max_clip_duration
+                end_time = min((i + 1) * max_clip_duration, original_duration)
+                
+                # Extract clip
+                story_clip = clip.subclip(start_time, end_time)
+                
+                # Format for vertical story (9:16 aspect ratio)
+                story_clip = self._format_for_story(story_clip)
+                
+                # Generate output filename
+                output_filename = f"{base_name}_story_{i+1}_{timestamp}.mp4"
+                output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+                
+                # Write video
+                story_clip.write_videofile(
+                    output_path,
+                    codec='libx264',
+                    audio_codec='aac',
+                    temp_audiofile=f'temp-audio-{i}.m4a',
+                    remove_temp=True
+                )
+                
+                output_paths.append(output_path)
+                story_clip.close()
+            
+            # Clean up
+            clip.close()
+            
+            # Track video processing in analytics
+            if self.analytics_handler:
+                try:
+                    for output_path in output_paths:
+                        self.analytics_handler.track_video_processing(
+                            video_path, "story_clips", output_path
+                        )
+                except Exception as e:
+                    self.logger.warning(f"Could not track video processing: {e}")
+            
+            self.logger.info(f"Created {len(output_paths)} story clips")
+            return True, output_paths, f"Created {len(output_paths)} story clips"
+            
+        except Exception as e:
+            self.logger.exception(f"Error creating story clips: {e}")
+            return False, [], f"Error creating story clips: {str(e)}"
+    
+    def generate_video_thumbnails(self, video_path: str, num_thumbnails: int = 6) -> Tuple[bool, List[str], str]:
+        """
+        Generate thumbnail images from a video for selection.
+        
+        Args:
+            video_path: Path to the video file
+            num_thumbnails: Number of thumbnails to generate
+            
+        Returns:
+            Tuple[bool, List[str], str]: (success, list_of_thumbnail_paths, message)
+        """
+        try:
+            if not os.path.exists(video_path):
+                return False, [], f"Video file not found: {video_path}"
+            
+            self.logger.info(f"Generating thumbnails for {video_path}")
+            
+            # Load video
+            clip = VideoFileClip(video_path)
+            duration = clip.duration
+            
+            thumbnail_paths = []
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            
+            # Ensure output directory exists
+            os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+            
+            # Generate thumbnails at evenly spaced intervals
+            for i in range(num_thumbnails):
+                # Calculate time position (avoid very beginning and end)
+                time_position = (duration * (i + 1)) / (num_thumbnails + 1)
+                
+                # Extract frame
+                frame = clip.get_frame(time_position)
+                
+                # Convert to PIL Image
+                pil_image = Image.fromarray(frame)
+                
+                # Generate thumbnail filename
+                thumbnail_filename = f"{base_name}_thumb_{i+1}_{timestamp}.jpg"
+                thumbnail_path = os.path.join(const.OUTPUT_DIR, thumbnail_filename)
+                
+                # Save thumbnail
+                pil_image.save(thumbnail_path, 'JPEG', quality=90)
+                thumbnail_paths.append(thumbnail_path)
+            
+            # Clean up
+            clip.close()
+            
+            self.logger.info(f"Generated {len(thumbnail_paths)} thumbnails")
+            return True, thumbnail_paths, f"Generated {len(thumbnail_paths)} thumbnails"
+            
+        except Exception as e:
+            self.logger.exception(f"Error generating thumbnails: {e}")
+            return False, [], f"Error generating thumbnails: {str(e)}"
+    
+    def generate_thumbnail(self, video_path: str, timestamp: float = 1.0) -> Tuple[bool, str, str]:
+        """
+        Generate a single thumbnail from a video at a specific timestamp.
+        
+        Args:
+            video_path: Path to the video file
+            timestamp: Time position in seconds to extract thumbnail
+            
+        Returns:
+            Tuple[bool, str, str]: (success, thumbnail_path, message)
+        """
+        try:
+            if not os.path.exists(video_path):
+                return False, "", f"Video file not found: {video_path}"
+            
+            self.logger.info(f"Generating thumbnail for {video_path} at {timestamp}s")
+            
+            # Load video
+            clip = VideoFileClip(video_path)
+            duration = clip.duration
+            
+            # Ensure timestamp is within video duration
+            timestamp = min(timestamp, duration - 0.1)
+            timestamp = max(0.1, timestamp)
+            
+            # Extract frame
+            frame = clip.get_frame(timestamp)
+            
+            # Convert to PIL Image
+            pil_image = Image.fromarray(frame)
+            
+            # Generate thumbnail filename
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            timestamp_str = datetime.now().strftime("%Y%m%d_%H%M%S")
+            thumbnail_filename = f"{base_name}_thumb_{timestamp_str}.jpg"
+            thumbnail_path = os.path.join(const.OUTPUT_DIR, thumbnail_filename)
+            
+            # Ensure output directory exists
+            os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+            
+            # Save thumbnail
+            pil_image.save(thumbnail_path, 'JPEG', quality=90)
+            
+            # Clean up
+            clip.close()
+            
+            self.logger.info(f"Thumbnail saved to {thumbnail_path}")
+            return True, thumbnail_path, "Thumbnail generated successfully"
+            
+        except Exception as e:
+            self.logger.exception(f"Error generating thumbnail: {e}")
+            return False, "", f"Error generating thumbnail: {str(e)}"
+
+    def add_audio_overlay(self, video_path: str, audio_path: str, 
+                         volume: float = 1.0, start_time: float = 0.0) -> Tuple[bool, str, str]:
+        """
+        Add audio overlay to a video.
+        
+        Args:
+            video_path: Path to the video file
+            audio_path: Path to the audio file
+            volume: Audio volume (0.0 to 1.0)
+            start_time: When to start the audio overlay
+            
+        Returns:
+            Tuple[bool, str, str]: (success, output_path, message)
+        """
+        try:
+            if not os.path.exists(video_path):
+                return False, "", f"Video file not found: {video_path}"
+            if not os.path.exists(audio_path):
+                return False, "", f"Audio file not found: {audio_path}"
+            
+            self.logger.info(f"Adding audio overlay to {video_path}")
+            
+            # Load video and audio
+            video_clip = VideoFileClip(video_path)
+            from moviepy.editor import AudioFileClip
+            audio_clip = AudioFileClip(audio_path)
+            
+            # Adjust audio volume
+            if volume != 1.0:
+                audio_clip = audio_clip.volumex(volume)
+            
+            # Set audio start time
+            if start_time > 0:
+                audio_clip = audio_clip.set_start(start_time)
+            
+            # Combine video with new audio
+            final_clip = video_clip.set_audio(audio_clip)
+            
+            # Generate output filename
+            base_name = os.path.splitext(os.path.basename(video_path))[0]
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            output_filename = f"{base_name}_with_audio_{timestamp}.mp4"
+            output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+            
+            # Ensure output directory exists
+            os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+            
+            # Write video
+            final_clip.write_videofile(
+                output_path,
+                codec='libx264',
+                audio_codec='aac',
+                temp_audiofile='temp-audio.m4a',
+                remove_temp=True
+            )
+            
+            # Clean up
+            video_clip.close()
+            audio_clip.close()
+            final_clip.close()
+            
+            self.logger.info(f"Video with audio overlay saved to {output_path}")
+            return True, output_path, "Audio overlay added successfully"
+            
+        except Exception as e:
+            self.logger.exception(f"Error adding audio overlay: {e}")
+            return False, "", f"Error adding audio overlay: {str(e)}"
+    
+    def get_video_info(self, video_path: str) -> Dict[str, Any]:
+        """
+        Get detailed information about a video file.
+        
+        Args:
+            video_path: Path to the video file
+            
+        Returns:
+            Dict containing video information, empty dict if file doesn't exist
+        """
+        try:
+            if not os.path.exists(video_path):
+                self.logger.warning(f"Video file not found: {video_path}")
+                return {}
+            
+            # Use OpenCV for basic info
+            cap = cv2.VideoCapture(video_path)
+            if not cap.isOpened():
+                self.logger.error(f"Could not open video file: {video_path}")
+                return {}
+            
+            width = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+            height = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+            fps = cap.get(cv2.CAP_PROP_FPS)
+            frame_count = int(cap.get(cv2.CAP_PROP_FRAME_COUNT))
+            duration = frame_count / fps if fps > 0 else 0
+            
+            cap.release()
+            
+            # Get file size
+            file_size = os.path.getsize(video_path)
+            
+            return {
+                "width": width,
+                "height": height,
+                "fps": fps,
+                "frame_count": frame_count,
+                "duration": duration,
+                "file_size": file_size,
+                "aspect_ratio": width / height if height > 0 else 0,
+                "is_vertical": height > width,
+                "filename": os.path.basename(video_path)
+            }
+            
+        except Exception as e:
+            self.logger.exception(f"Error getting video info: {e}")
+            return {}
+    
+    def _analyze_video_for_highlights(self, clip, target_duration: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Analyze video to find the best segments for highlights with enhanced action detection.
+        """
+        duration = clip.duration
+        
+        # Check if this is an action-based prompt regardless of video length
+        action_keywords = ['throwing', 'catching', 'running', 'jumping', 'dancing', 'playing', 'kicking', 'hitting', 'shooting',
+                          'pokeball', 'pokemon', 'throw', 'catch', 'ball', 'game', 'gaming', 'mobile', 'AR', 'attempt']
+        is_action_prompt = any(keyword in prompt.lower() for keyword in action_keywords)
+        
+        # Use action detection for action prompts or shorter videos
+        if is_action_prompt or duration <= 180:  # 3 minutes threshold
+            self.logger.info(f"Using enhanced action detection (action_prompt: {is_action_prompt}, duration: {duration:.1f}s)")
+            return self._analyze_short_video_highlights(clip, target_duration, prompt)
+        else:
+            self.logger.info(f"Using standard long video analysis for {duration:.1f}s video")
+            return self._analyze_long_video_highlights(clip, target_duration, prompt)
+    
+    def _analyze_short_video_highlights(self, clip, target_duration: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Enhanced analysis for short videos with action-focused detection.
+        """
+        duration = clip.duration
+        
+        # Determine if this is an action-based prompt (expanded for Pokemon/gaming)
+        action_keywords = ['throwing', 'catching', 'running', 'jumping', 'dancing', 'playing', 'kicking', 'hitting', 'shooting', 
+                          'pokeball', 'pokemon', 'throw', 'catch', 'ball', 'game', 'gaming', 'mobile', 'AR', 'attempt']
+        is_action_prompt = any(keyword in prompt.lower() for keyword in action_keywords)
+        
+        if is_action_prompt:
+            # Use shorter, more precise segments for action detection
+            segment_length = 2.0  # 2-second segments for actions
+            min_segment_gap = 0.5  # Allow closer segments for actions
+        else:
+            segment_length = 8.0  # Longer segments for non-action content
+            min_segment_gap = 2.0
+        
+        # Generate shorter segments
+        segments = []
+        current_time = 0
+        while current_time + segment_length <= duration:
+            segments.append((current_time, current_time + segment_length))
+            current_time += segment_length * 0.7  # 30% overlap for better coverage
+        
+        # Add final segment if there's remaining content
+        if current_time < duration and duration - current_time > 1.0:
+            segments.append((current_time, duration))
+        
+        self.logger.info(f"Generated {len(segments)} segments for analysis (action prompt: {is_action_prompt})")
+        
+        if is_action_prompt:
+            # Use enhanced action detection pipeline
+            return self._analyze_action_segments(clip, segments, target_duration, prompt)
+        else:
+            # Use standard analysis
+            scored_segments = self._score_segments_with_ai(clip, segments, prompt)
+            return self._select_best_segments(scored_segments, target_duration)
+    
+    def _analyze_long_video_highlights(self, clip, target_duration: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Analysis for long videos (>3 minutes) with cost optimization.
+        """
+        duration = clip.duration
+        
+        # For long videos, use larger segments to reduce AI API calls
+        segment_length = 15.0  # 15-second segments for long videos
+        segments = []
+        current_time = 0
+        
+        while current_time + segment_length <= duration:
+            segments.append((current_time, current_time + segment_length))
+            current_time += segment_length * 0.8  # 20% overlap
+        
+        # Add final segment if there's remaining content
+        if current_time < duration and duration - current_time > 3.0:
+            segments.append((current_time, duration))
+        
+        self.logger.info(f"Generated {len(segments)} long video segments for analysis")
+        
+        # Use standard scoring for long videos (cost-optimized)
+        scored_segments = self._score_segments_with_ai(clip, segments, prompt, max_segments=10)
+        return self._select_best_segments(scored_segments, target_duration)
+    
+    def _analyze_action_segments(self, clip, segments: List[Tuple[float, float]], target_duration: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Enhanced pipeline for sequence-aware action analysis with context inclusion.
+        """
+        # Step 1: Pre-filter segments using computer vision (free motion detection)
+        self.logger.info("Pre-filtering segments with motion detection...")
+        motion_filtered_segments = self._prefilter_segments_by_motion(clip, segments)
+        
+        # Step 2: Multi-frame analysis to identify action sequences
+        self.logger.info(f"Analyzing {len(motion_filtered_segments)} motion-filtered segments for action sequences...")
+        scored_segments = self._score_action_segments_with_ai(clip, motion_filtered_segments, prompt)
+        
+        # Step 3: Detect action sequences and expand with context
+        self.logger.info("Detecting action sequences and expanding with context...")
+        sequence_segments = self._detect_and_expand_action_sequences(clip, scored_segments, target_duration)
+        
+        # Step 4: Ensure temporal distribution across video if we have multiple sequences
+        self.logger.info("Ensuring temporal distribution across video timeline...")
+        distributed_segments = self._ensure_temporal_distribution(sequence_segments, clip.duration)
+        
+        # Step 5: Context-aware selection
+        final_segments = self._select_sequence_segments(distributed_segments, target_duration)
+        
+        # Emergency fallback: if no segments selected, force some highlights
+        if not final_segments:
+            self.logger.warning("No segments selected, creating emergency highlights")
+            final_segments = self._create_emergency_highlights(clip, target_duration)
+        
+        return final_segments
+    
+    def _prefilter_segments_by_motion(self, clip, segments: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+        """
+        Pre-filter segments using computer vision motion detection (no AI cost).
+        """
+        motion_segments = []
+        
+        for start, end in segments:
+            try:
+                # Extract 3 frames from the segment
+                frame_times = [start + 0.2, (start + end) / 2, end - 0.2]
+                frames = []
+                
+                for t in frame_times:
+                    if 0 <= t < clip.duration:
+                        frame = clip.get_frame(t)
+                        if frame is not None:
+                            frames.append(frame)
+                
+                if len(frames) >= 2:
+                    # Calculate motion between frames using optical flow
+                    motion_score = self._calculate_frame_motion(frames)
+                    
+                    # More permissive threshold for motion filtering
+                    if motion_score > 0.15:  # Keep more segments with any reasonable motion
+                        motion_segments.append((start, end, motion_score))
+                        self.logger.debug(f"Segment {start:.1f}-{end:.1f} motion score: {motion_score:.3f}")
+                
+            except Exception as e:
+                self.logger.warning(f"Motion analysis failed for segment {start}-{end}: {e}")
+                # Include segment if motion analysis fails (safe fallback)
+                motion_segments.append((start, end, 0.5))
+        
+        # Sort by motion score and keep top candidates
+        motion_segments.sort(key=lambda x: x[2], reverse=True)
+        
+        # Keep more segments but still control costs - be more permissive
+        max_segments = min(15, max(8, len(motion_segments) // 2))  # Keep more segments to increase success rate
+        selected_segments = [(start, end) for start, end, _ in motion_segments[:max_segments]]
+        
+        self.logger.info(f"Motion filtering: {len(segments)} to {len(selected_segments)} segments")
+        return selected_segments
+    
+    def _calculate_frame_motion(self, frames: List[np.ndarray]) -> float:
+        """
+        Calculate motion between frames using frame differencing.
+        """
+        if len(frames) < 2:
+            return 0.0
+        
+        try:
+            # Convert frames to grayscale for motion calculation
+            gray_frames = []
+            for frame in frames:
+                if len(frame.shape) == 3:
+                    # Convert RGB to grayscale
+                    gray = np.dot(frame[...,:3], [0.299, 0.587, 0.114])
+                else:
+                    gray = frame
+                gray_frames.append(gray.astype(np.float32))
+            
+            # Calculate motion as average frame difference
+            motion_scores = []
+            for i in range(len(gray_frames) - 1):
+                diff = np.abs(gray_frames[i+1] - gray_frames[i])
+                motion_score = np.mean(diff) / 255.0  # Normalize to 0-1
+                motion_scores.append(motion_score)
+            
+            # Return average motion score
+            return np.mean(motion_scores) if motion_scores else 0.0
+            
+        except Exception as e:
+            self.logger.debug(f"Error calculating frame motion: {e}")
+            return 0.0
+    
+    def _calculate_simple_motion(self, frames: List) -> float:
+        """
+        Fallback motion calculation using simple frame difference.
+        """
+        if len(frames) < 2:
+            return 0.0
+            
+        try:
+            # Simple frame difference calculation
+            total_diff = 0
+            for i in range(len(frames) - 1):
+                # Convert frames to grayscale if needed
+                frame1 = frames[i]
+                frame2 = frames[i + 1]
+                
+                if len(frame1.shape) == 3:
+                    frame1 = np.mean(frame1, axis=2)
+                if len(frame2.shape) == 3:
+                    frame2 = np.mean(frame2, axis=2)
+                
+                # Calculate difference
+                diff = np.mean(np.abs(frame1.astype(float) - frame2.astype(float)))
+                total_diff += diff
+            
+            return total_diff / (len(frames) - 1) / 255.0  # Normalize
+            
+        except Exception as e:
+            self.logger.debug(f"Error in simple motion calculation: {e}")
+            return 0.0
+            else:
+                # Fall back to traditional prompt-based analysis
+                self.logger.info("Using prompt-based analysis (no example segment provided)")
+                segments = self._analyze_video_for_highlights(clip, target_duration, prompt)
+            
+            # NEVER FAIL - always create something
+            if not segments:
+                self.logger.warning("No similar segments found, creating emergency highlights")
+                segments = self._create_emergency_highlights(clip, target_duration)
+            
+            # Create highlight reel
+            highlight_clips = []
+            for start, end in segments:
+                highlight_clips.append(clip.subclip(start, end))
+            
+            # Concatenate clips
+            if highlight_clips:
+                final_clip = concatenate_videoclips(highlight_clips)
+                
+                # Generate output filename
+                base_name = os.path.splitext(os.path.basename(video_path))[0]
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_filename = f"{base_name}_example_highlight_{timestamp}.mp4"
+                output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+                
+                # Ensure output directory exists
+                os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+                
+                # Write video
+                final_clip.write_videofile(
+                    output_path,
+                    codec='libx264',
+                    audio_codec='aac',
+                    temp_audiofile='temp-audio.m4a',
+                    remove_temp=True
+                )
+                
+                # Clean up
+                clip.close()
+                final_clip.close()
+                for highlight_clip in highlight_clips:
+                    highlight_clip.close()
+                
+                # Track video processing in analytics
+                if self.analytics_handler:
+                    try:
+                        self.analytics_handler.track_video_processing(
+                            video_path, "example_based_highlight_reel", output_path
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Could not track video processing: {e}")
+                
+                total_duration = sum(end - start for start, end in segments)
+                self.logger.info(f"Example-based highlight reel saved to {output_path}")
+                return True, output_path, f"Example-based highlight reel created ({len(segments)} segments, {total_duration:.1f}s total)"
+            else:
+                clip.close()
+                return False, "", "No suitable segments found for highlight reel"
+                
+        except Exception as e:
+            self.logger.exception(f"Error generating example-based highlight reel: {e}")
+            return False, "", f"Error generating example-based highlight reel: {str(e)}"
     
     def generate_long_form_highlight_reel(self, video_path: str, target_duration: int = 180, 
                                         prompt: str = "", cost_optimize: bool = True) -> Tuple[bool, str, str]:
@@ -2019,4 +3006,1757 @@ class VideoHandler:
         self.logger.info(f"Emergency highlights created: {len(final_segments)} segments, total: {total_final:.1f}s")
         
         return final_segments
+
+    def _analyze_video_for_segment_similarities(self, clip, target_duration: int, 
+                                              example_data: Dict[str, Any], 
+                                              context_padding: float, 
+                                              prompt: str) -> List[Tuple[float, float]]:
+        """
+        Analyze video to find segments similar to the provided example segment.
+        This is the core method for segment-based highlight detection.
+        """
+        self.logger.info("Starting segment-based similarity analysis")
+        
+        # Step 1: Extract and analyze the example segment
+        example_analysis = self._analyze_example_segment(clip, example_data, prompt)
+        if not example_analysis:
+            self.logger.error("Failed to analyze example segment")
+            return []
+        
+        # Step 2: Calculate optimal sampling strategy with price optimization
+        video_duration = clip.duration
+        example_duration = example_analysis['duration']
+        
+        # SUPER CHEAP: Analyze way fewer frames and be much less picky
+        if video_duration <= 300:  # 5 minutes or less
+            sample_interval = 5.0  # Much cheaper
+            max_samples = 20  # Cap at 20 frames max
+        elif video_duration <= 1800:  # 30 minutes or less
+            sample_interval = 10.0  # Very cheap
+            max_samples = 30  # Cap at 30 frames max
+        else:  # Longer videos
+            sample_interval = 20.0  # Super cheap
+            max_samples = 40  # Cap at 40 frames max
+        
+        # Adjust based on example segment length (longer examples need more careful analysis)
+        if example_duration > 10:  # Long example segment
+            sample_interval *= 0.8  # Slightly more frequent sampling
+            max_samples = min(max_samples, int(video_duration / sample_interval))
+        
+        estimated_cost = max_samples * 0.01  # Rough estimate - much cheaper now!
+        self.logger.info(f"COST-OPTIMIZED: every {sample_interval:.1f}s, max {max_samples} samples")
+        self.logger.info(f"Estimated analysis cost: ~${estimated_cost:.2f} (MUCH CHEAPER!)")
+        
+        # Step 3: Find similar frames with budget controls (MUCH cheaper and less strict)
+        similar_frames = self._find_similar_frames_optimized(clip, example_analysis, sample_interval, max_samples, prompt)
+        
+        if not similar_frames:
+            self.logger.warning("No similar frames found, using fallback strategy")
+            # FALLBACK: Use best guess segments from video to always deliver a result
+            return self._create_fallback_highlight_reel(clip, target_duration, example_analysis, context_padding)
+        
+        self.logger.info(f"Found {len(similar_frames)} potentially similar frames")
+        
+        # Step 4: Group similar frames into segments
+        segments = self._group_similar_frames_into_segments(similar_frames, video_duration)
+        
+        # Step 5: Extend segments with context padding
+        extended_segments = self._extend_segments_with_context(segments, context_padding, video_duration)
+        
+        # Step 6: Select best segments to fit target duration
+        final_segments = self._select_best_similarity_segments(extended_segments, target_duration)
+        
+        total_duration = sum(end - start for start, end in final_segments)
+        self.logger.info(f"Selected {len(final_segments)} segments with total duration {total_duration:.1f}s")
+        
+        return final_segments
+    
+    def _create_fallback_highlight_reel(self, clip, target_duration: int, example_analysis: Dict[str, Any], context_padding: float) -> List[Tuple[float, float]]:
+        """
+        ALWAYS create a highlight reel even if no similar segments found.
+        Use best guess based on video structure and the example segment timing.
+        """
+        self.logger.info("Creating fallback highlight reel - ALWAYS deliver a result!")
+        
+        video_duration = clip.duration
+        example_start = example_analysis.get('start_time', 0)
+        example_end = example_analysis.get('end_time', 5)
+        example_duration = example_end - example_start
+        
+        # Strategy: Take segments from similar positions in the video timeline
+        segments = []
+        
+        # Calculate how many segments we need
+        segment_count = max(3, min(8, target_duration // max(3, example_duration)))
+        segment_duration = min(target_duration / segment_count, example_duration * 1.5)
+        
+        # Distribute segments across the video timeline
+        for i in range(int(segment_count)):
+            # Place segments at similar relative positions to the example
+            relative_position = example_start / video_duration if video_duration > 0 else 0.5
+            
+            # Add some variation to avoid taking the exact same moment
+            position_variation = (i - segment_count/2) * 0.1  # Spread around the relative position
+            target_position = max(0, min(1, relative_position + position_variation))
+            
+            start_time = target_position * (video_duration - segment_duration)
+            end_time = start_time + segment_duration
+            
+            # Ensure we don't go beyond video bounds
+            if end_time > video_duration:
+                end_time = video_duration
+                start_time = max(0, end_time - segment_duration)
+            
+            segments.append((start_time, end_time))
+            self.logger.info(f"Fallback segment {i+1}: {start_time:.1f}s - {end_time:.1f}s")
+        
+        # Remove overlaps and ensure we hit target duration
+        segments = self._clean_and_optimize_segments(segments, target_duration)
+        
+        total_duration = sum(end - start for start, end in segments)
+        self.logger.info(f"Fallback highlight reel created: {len(segments)} segments, {total_duration:.1f}s total")
+        
+        return segments
+    
+    def _clean_and_optimize_segments(self, segments: List[Tuple[float, float]], target_duration: int) -> List[Tuple[float, float]]:
+        """Clean up segments and ensure they hit the target duration."""
+        if not segments:
+            return []
+        
+        # Sort by start time
+        segments = sorted(segments, key=lambda x: x[0])
+        
+        # Remove overlaps
+        cleaned_segments = []
+        for start, end in segments:
+            if not cleaned_segments:
+                cleaned_segments.append((start, end))
+            else:
+                last_start, last_end = cleaned_segments[-1]
+                if start >= last_end:  # No overlap
+                    cleaned_segments.append((start, end))
+                else:  # Overlap - merge or skip
+                    if end > last_end:  # Extend the last segment
+                        cleaned_segments[-1] = (last_start, end)
+        
+        # Adjust to hit target duration
+        current_duration = sum(end - start for start, end in cleaned_segments)
+        
+        if current_duration < target_duration and len(cleaned_segments) > 0:
+            # Extend segments proportionally
+            scale_factor = target_duration / current_duration
+            scaled_segments = []
+            for start, end in cleaned_segments:
+                duration = end - start
+                new_duration = duration * scale_factor
+                scaled_segments.append((start, start + new_duration))
+            cleaned_segments = scaled_segments
+        
+        elif current_duration > target_duration:
+            # Trim segments to fit target
+            running_total = 0
+            trimmed_segments = []
+            for start, end in cleaned_segments:
+                duration = end - start
+                if running_total + duration <= target_duration:
+                    trimmed_segments.append((start, end))
+                    running_total += duration
+                else:
+                    # Partial segment to complete target
+                    remaining = target_duration - running_total
+                    if remaining > 1:  # Only if at least 1 second left
+                        trimmed_segments.append((start, start + remaining))
+                    break
+            cleaned_segments = trimmed_segments
+        
+        return cleaned_segments
+
+    def _analyze_example_segment(self, clip, example_data: Dict[str, Any], prompt: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract and analyze the example segment from the video.
+        """
+        try:
+            start_time = example_data['start_time']
+            end_time = example_data['end_time']
+            description = example_data.get('description', '')
+            
+            self.logger.info(f"Analyzing example segment: {start_time:.1f}s - {end_time:.1f}s")
+            
+            # Extract the example segment
+            example_segment = clip.subclip(start_time, end_time)
+            segment_duration = end_time - start_time
+            
+            # Sample multiple frames from the segment for analysis
+            sample_count = max(3, min(8, int(segment_duration * 2)))  # 2 frames per second, min 3, max 8
+            frame_times = []
+            
+            if sample_count == 1:
+                frame_times = [start_time + segment_duration / 2]
+            else:
+                step = segment_duration / (sample_count - 1)
+                frame_times = [start_time + i * step for i in range(sample_count)]
+            
+            # Analyze each frame in the segment
+            frame_analyses = []
+            for i, frame_time in enumerate(frame_times):
+                try:
+                    frame = clip.get_frame(frame_time)
+                    if frame is None:
+                        continue
+                    
+                    # Save frame to temporary file
+                    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                        from PIL import Image
+                        img = Image.fromarray(frame)
+                        img.save(temp_file.name, 'JPEG')
+                        temp_path = temp_file.name
+                    
+                    try:
+                        # Analyze this frame intensely
+                        frame_analysis = self._analyze_segment_frame_intensely(temp_path, frame_time, description, prompt, i, sample_count)
+                        if frame_analysis:
+                            frame_analyses.append(frame_analysis)
+                    finally:
+                        try:
+                            os.unlink(temp_path)
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    self.logger.debug(f"Error analyzing frame at {frame_time:.1f}s: {e}")
+                    continue
+            
+            if not frame_analyses:
+                self.logger.warning("No frames could be analyzed from example segment")
+                return None
+            
+            # Combine analyses into segment summary
+            segment_analysis = {
+                'start_time': start_time,
+                'end_time': end_time,
+                'duration': segment_duration,
+                'description': description,
+                'frame_count': len(frame_analyses),
+                'frame_analyses': frame_analyses,
+                'combined_features': self._combine_frame_analyses(frame_analyses),
+                'segment_type': 'user_selected_example'
+            }
+            
+            example_segment.close()
+            self.logger.info(f"Successfully analyzed example segment with {len(frame_analyses)} frames")
+            return segment_analysis
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing example segment: {e}")
+            return None
+
+    def _analyze_example_image_intensely(self, image_data: bytes) -> Optional[Dict[str, Any]]:
+        """
+        Analyze the example image intensely to understand what to look for.
+        """
+        try:
+            # Save image to temporary file for analysis
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                temp_file.write(image_data)
+                temp_path = temp_file.name
+            
+            try:
+                # Use the existing AI analysis method but with enhanced prompt
+                enhanced_prompt = """
+                Analyze this reference image EXTREMELY thoroughly. This image represents what the user wants to find in their video.
+                
+                Focus on:
+                1. VISUAL ELEMENTS: Colors, shapes, objects, textures, lighting, composition
+                2. ACTIONS: Any movements, gestures, activities, poses
+                3. CONTEXT: Setting, environment, background elements
+                4. PEOPLE: Number of people, their positioning, clothing, expressions
+                5. OBJECTS: Specific items, tools, devices, toys, etc.
+                6. STYLE: Visual style, quality, camera angle, perspective
+                7. MOOD: Emotional tone, atmosphere, energy level
+                
+                Be extremely detailed and specific in your analysis. This analysis will be used to find similar moments in a video.
+                
+                Return JSON with keys: main_elements, visual_style, actions_detected, context_clues, distinctive_features, search_keywords
+                """
+                
+                analysis = self._call_enhanced_ai_analysis(temp_path, enhanced_prompt)
+                
+                if analysis:
+                    # Enhance the analysis with additional processing
+                    analysis['similarity_keywords'] = self._extract_similarity_keywords(analysis)
+                    return analysis
+                else:
+                    self.logger.warning("AI analysis of example image failed")
+                    return None
+                    
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            self.logger.error(f"Error analyzing example image: {e}")
+            return None
+
+    def _extract_similarity_keywords(self, analysis: Dict[str, Any]) -> List[str]:
+        """
+        Extract keywords from the analysis that will be useful for similarity matching.
+        """
+        keywords = []
+        
+        # Extract from different analysis fields
+        for field in ['main_elements', 'actions_detected', 'context_clues', 'distinctive_features']:
+            if field in analysis and analysis[field]:
+                text = str(analysis[field]).lower()
+                # Simple keyword extraction - could be enhanced with NLP
+                words = text.split()
+                keywords.extend([word.strip('.,!?') for word in words if len(word) > 3])
+        
+        # Remove duplicates and return
+        return list(set(keywords))
+
+    def _find_similar_frames_optimized(self, clip, example_analysis: Dict[str, Any], 
+                                      sample_interval: float, max_samples: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Find frames in the video that are similar to the example segment with budget optimization.
+        Returns list of (timestamp, similarity_score) tuples.
+        """
+        similar_frames = []
+        video_duration = clip.duration
+        
+        # Sample frames across the video with budget limits
+        current_time = 0
+        frame_count = 0
+        samples_processed = 0
+        
+        while current_time < video_duration and samples_processed < max_samples:
+            try:
+                # Extract frame at current time
+                frame = clip.get_frame(current_time)
+                if frame is None:
+                    current_time += sample_interval
+                    continue
+                
+                # Save frame to temporary file for analysis
+                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                    from PIL import Image
+                    img = Image.fromarray(frame)
+                    img.save(temp_file.name, 'JPEG')
+                    temp_path = temp_file.name
+                
+                try:
+                    # Analyze frame for similarity to example
+                    similarity_score = self._calculate_frame_similarity_to_example(
+                        temp_path, example_analysis, prompt
+                    )
+                    
+                    if similarity_score > 0.3:  # Much lower threshold - accept "close enough"
+                        similar_frames.append((current_time, similarity_score))
+                        self.logger.debug(f"Similar frame found at {current_time:.1f}s (score: {similarity_score:.2f})")
+                    
+                    frame_count += 1
+                    samples_processed += 1
+                    
+                    if frame_count % 20 == 0:
+                        progress = (samples_processed / max_samples) * 100
+                        self.logger.info(f"Progress: {progress:.1f}% - Analyzed {frame_count} frames, found {len(similar_frames)} similar frames")
+                        
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                
+            except Exception as e:
+                self.logger.debug(f"Error analyzing frame at {current_time:.1f}s: {e}")
+            
+            current_time += sample_interval
+        
+        budget_status = "within budget" if samples_processed < max_samples else "budget limit reached"
+        self.logger.info(f"Completed frame analysis ({budget_status}): {frame_count} frames analyzed, {len(similar_frames)} similar frames found")
+        return similar_frames
+
+    def _calculate_frame_similarity_to_example(self, frame_path: str, 
+                                             example_analysis: Dict[str, Any], 
+                                             prompt: str) -> float:
+        """
+        Calculate how similar a frame is to the example segment.
+        """
+        try:
+            # Create a similarity-focused prompt based on segment analysis
+            combined_features = example_analysis.get('combined_features', {})
+            segment_summary = combined_features.get('segment_summary', 'analyzed segment')
+            key_search_terms = combined_features.get('key_search_terms', [])
+            
+            # Build description from segment analysis
+            if key_search_terms:
+                example_description = f"{segment_summary}. Key elements: {', '.join(key_search_terms[:8])}"
+            else:
+                example_description = segment_summary
+            
+            similarity_prompt = f"""
+            Compare this frame to the reference example. The reference example contains: {example_description}
+            
+            Rate the similarity on a scale of 0-10 where:
+            - 10: Nearly identical or very similar scene/action/composition
+            - 8-9: Strong similarity in key elements (same action, similar objects, similar setting)
+            - 6-7: Moderate similarity (some matching elements but different context)
+            - 4-5: Some similarity (few matching elements)
+            - 0-3: Little to no similarity
+            
+            Focus on: {prompt if prompt else "visual similarity, actions, objects, and context"}
+            
+            Return JSON with: {{"similarity_score": number, "matching_elements": "description", "differences": "description"}}
+            """
+            
+            # Use AI to analyze similarity
+            analysis = self._call_enhanced_ai_analysis(frame_path, similarity_prompt)
+            
+            if analysis and 'similarity_score' in analysis:
+                score = float(analysis['similarity_score']) / 10.0  # Convert to 0-1 scale
+                return min(max(score, 0.0), 1.0)  # Clamp to 0-1 range
+            else:
+                return 0.0
+                
+        except Exception as e:
+            self.logger.debug(f"Error calculating frame similarity: {e}")
+            return 0.0
+
+    def _group_similar_frames_into_segments(self, similar_frames: List[Tuple[float, float]], 
+                                          video_duration: float) -> List[Tuple[float, float, float]]:
+        """
+        Group nearby similar frames into continuous segments.
+        Returns list of (start_time, end_time, avg_score) tuples.
+        """
+        if not similar_frames:
+            return []
+        
+        # Sort by timestamp
+        similar_frames.sort(key=lambda x: x[0])
+        
+        segments = []
+        current_start = similar_frames[0][0]
+        current_end = similar_frames[0][0]
+        current_scores = [similar_frames[0][1]]
+        
+        gap_threshold = 3.0  # Seconds - frames within this gap are considered part of the same segment
+        
+        for i in range(1, len(similar_frames)):
+            timestamp, score = similar_frames[i]
+            
+            if timestamp - current_end <= gap_threshold:
+                # Continue current segment
+                current_end = timestamp
+                current_scores.append(score)
+            else:
+                # Start new segment
+                avg_score = sum(current_scores) / len(current_scores)
+                segments.append((current_start, current_end, avg_score))
+                
+                current_start = timestamp
+                current_end = timestamp
+                current_scores = [score]
+        
+        # Add the last segment
+        if current_scores:
+            avg_score = sum(current_scores) / len(current_scores)
+            segments.append((current_start, current_end, avg_score))
+        
+        self.logger.info(f"Grouped {len(similar_frames)} similar frames into {len(segments)} segments")
+        return segments
+
+    def _extend_segments_with_context(self, segments: List[Tuple[float, float, float]], 
+                                    context_padding: float, 
+                                    video_duration: float) -> List[Tuple[float, float, float]]:
+        """
+        Extend segments with context padding before each scene.
+        """
+        extended_segments = []
+        
+        for start, end, score in segments:
+            # Add context padding before the segment
+            extended_start = max(0, start - context_padding)
+            
+            # Ensure we don't extend beyond video duration
+            extended_end = min(video_duration, end)
+            
+            # Ensure minimum segment length
+            if extended_end - extended_start < 1.0:
+                extended_end = min(video_duration, extended_start + 1.0)
+            
+            extended_segments.append((extended_start, extended_end, score))
+        
+        self.logger.info(f"Extended {len(segments)} segments with {context_padding}s context padding")
+        return extended_segments
+
+    def _select_best_similarity_segments(self, segments: List[Tuple[float, float, float]], 
+                                       target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Select the best segments to fit the target duration.
+        """
+        if not segments:
+            return []
+        
+        # Sort segments by score (descending)
+        segments.sort(key=lambda x: x[2], reverse=True)
+        
+        selected_segments = []
+        total_duration = 0
+        
+        for start, end, score in segments:
+            segment_duration = end - start
+            
+            if total_duration + segment_duration <= target_duration:
+                selected_segments.append((start, end))
+                total_duration += segment_duration
+                self.logger.debug(f"Selected segment {start:.1f}-{end:.1f}s (score: {score:.2f})")
+            else:
+                # Check if we can fit a trimmed version of this segment
+                remaining_duration = target_duration - total_duration
+                if remaining_duration > 2.0:  # Only if we have at least 2 seconds left
+                    # Take the beginning of this segment
+                    selected_segments.append((start, start + remaining_duration))
+                    total_duration = target_duration
+                    self.logger.debug(f"Selected trimmed segment {start:.1f}-{start + remaining_duration:.1f}s")
+                break
+        
+        # Sort final segments by timeline order
+        selected_segments.sort(key=lambda x: x[0])
+        
+        self.logger.info(f"Selected {len(selected_segments)} segments totaling {total_duration:.1f}s")
+        return selected_segments
+
+    def _analyze_segment_frame_intensely(self, frame_path: str, frame_time: float, 
+                                       description: str, prompt: str, 
+                                       frame_index: int, total_frames: int) -> Optional[Dict[str, Any]]:
+        """
+        Analyze a single frame from the example segment intensely.
+        """
+        try:
+            # Create enhanced prompt for segment frame analysis
+            enhanced_prompt = f"""
+            Analyze this frame from a user-selected example segment (frame {frame_index + 1} of {total_frames}).
+            
+            CONTEXT:
+            - This frame is from timestamp {frame_time:.1f}s in the video
+            - User description: "{description if description else 'No description provided'}"
+            - Additional context: "{prompt if prompt else 'General highlight analysis'}"
+            
+            ANALYSIS FOCUS - This frame represents what the user wants to find more of:
+            1. VISUAL CHARACTERISTICS: Lighting, colors, composition, camera angle, image quality
+            2. SUBJECTS: People, objects, characters - their positioning, appearance, clothing, expressions
+            3. ACTIONS: Any movements, gestures, activities, interactions happening
+            4. ENVIRONMENT: Setting, background, indoor/outdoor, time of day
+            5. STYLE: Gaming interface, real-world scene, artistic style, video quality
+            6. EMOTIONAL TONE: Mood, energy level, atmosphere
+            7. TECHNICAL ELEMENTS: Screen elements, UI, effects, overlays
+            
+            IMPORTANT: Be extremely detailed and specific. This analysis will be used to find similar moments throughout the video.
+            Focus on what makes this moment unique and interesting to the user.
+            
+            Return JSON with keys: visual_elements, subjects, actions, environment, style, mood, technical_aspects, uniqueness_factors, search_keywords
+            """
+            
+            analysis = self._call_enhanced_ai_analysis(frame_path, enhanced_prompt)
+            
+            if analysis:
+                # Add frame-specific metadata
+                analysis['frame_time'] = frame_time
+                analysis['frame_index'] = frame_index
+                analysis['analysis_timestamp'] = datetime.now().isoformat()
+                return analysis
+            else:
+                self.logger.warning(f"AI analysis failed for frame at {frame_time:.1f}s")
+                return None
+                
+        except Exception as e:
+            self.logger.debug(f"Error analyzing segment frame at {frame_time:.1f}s: {e}")
+            return None
+
+    def _combine_frame_analyses(self, frame_analyses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Combine multiple frame analyses into a unified segment understanding.
+        """
+        try:
+            if not frame_analyses:
+                return {}
+            
+            combined = {
+                'dominant_visual_elements': [],
+                'consistent_subjects': [],
+                'primary_actions': [],
+                'environment_type': '',
+                'overall_style': '',
+                'mood_indicators': [],
+                'technical_patterns': [],
+                'key_search_terms': [],
+                'segment_summary': '',
+                'confidence_score': 0.0
+            }
+            
+            # Collect all elements from each frame
+            all_elements = {}
+            for analysis in frame_analyses:
+                for key in ['visual_elements', 'subjects', 'actions', 'environment', 'style', 'mood', 'technical_aspects']:
+                    if key in analysis and analysis[key]:
+                        text = str(analysis[key]).lower()
+                        words = text.split()
+                        for word in words:
+                            clean_word = word.strip('.,!?()[]{}')
+                            if len(clean_word) > 3:
+                                all_elements[clean_word] = all_elements.get(clean_word, 0) + 1
+            
+            # Find most frequent elements (appear in multiple frames)
+            frame_count = len(frame_analyses)
+            frequent_threshold = max(1, frame_count // 2)  # Must appear in at least half the frames
+            
+            frequent_elements = {k: v for k, v in all_elements.items() if v >= frequent_threshold}
+            combined['key_search_terms'] = list(frequent_elements.keys())
+            
+            # Create segment summary
+            if frequent_elements:
+                top_elements = sorted(frequent_elements.keys(), key=lambda x: frequent_elements[x], reverse=True)[:10]
+                combined['segment_summary'] = f"Segment featuring: {', '.join(top_elements[:5])}"
+                combined['confidence_score'] = min(1.0, len(frequent_elements) / 10.0)
+            else:
+                combined['segment_summary'] = "Analyzed segment with unique characteristics"
+                combined['confidence_score'] = 0.5
+            
+            self.logger.debug(f"Combined analysis: {len(frequent_elements)} frequent elements, confidence: {combined['confidence_score']:.2f}")
+            return combined
+            
+        except Exception as e:
+            self.logger.warning(f"Error combining frame analyses: {e}")
+            return {'segment_summary': 'Analysis combination failed', 'confidence_score': 0.3}
+    
+    def generate_extended_highlight_reel_beta(self, video_path: str, target_duration: int = 900, 
+                                            prompt: str = "", max_cost: float = 1.0) -> Tuple[bool, str, str]:
+        """
+        BETA: Generate highlight reels from extended videos (hours long) while keeping costs under $1.
+        Uses multi-stage analysis: cheap pre-filtering + smart AI analysis on promising segments only.
+        
+        Args:
+            video_path: Path to the source video
+            target_duration: Target duration in seconds (default: 15 minutes = 900s)
+            prompt: Natural language prompt for content guidance
+            max_cost: Maximum cost allowed for analysis (default: $1.00)
+            
+        Returns:
+            Tuple[bool, str, str]: (success, output_path, message)
+        """
+        try:
+            if not os.path.exists(video_path):
+                return False, "", f"Video file not found: {video_path}"
+            
+            self.logger.info(f"[BETA] Extended highlight reel generation from {video_path}")
+            self.logger.info(f"[BETA] Target duration: {target_duration}s ({target_duration/60:.1f} minutes)")
+            self.logger.info(f"[BETA] Max cost budget: ${max_cost:.2f}")
+            
+            # Load video
+            clip = VideoFileClip(video_path)
+            original_duration = clip.duration
+            
+            if original_duration <= target_duration:
+                self.logger.info("Video is already shorter than target duration")
+                return True, video_path, "Video is already the right length"
+            
+            self.logger.info(f"[BETA] Processing {original_duration/3600:.1f} hour video")
+            
+            # Multi-stage analysis for cost efficiency
+            segments = self._extended_video_analysis_beta(clip, target_duration, prompt, max_cost)
+            
+            # Always ensure we have segments
+            if not segments:
+                self.logger.warning("[BETA] No segments found, using emergency highlights")
+                segments = self._create_emergency_highlights(clip, target_duration)
+            
+            # Create highlight reel
+            highlight_clips = []
+            for start, end in segments:
+                highlight_clips.append(clip.subclip(start, end))
+            
+            # Concatenate clips
+            if highlight_clips:
+                final_clip = concatenate_videoclips(highlight_clips)
+                
+                # Generate output filename
+                base_name = os.path.splitext(os.path.basename(video_path))[0]
+                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+                output_filename = f"{base_name}_extended_highlight_beta_{timestamp}.mp4"
+                output_path = os.path.join(const.OUTPUT_DIR, output_filename)
+                
+                # Ensure output directory exists
+                os.makedirs(const.OUTPUT_DIR, exist_ok=True)
+                
+                # Write video
+                final_clip.write_videofile(
+                    output_path,
+                    codec='libx264',
+                    audio_codec='aac',
+                    temp_audiofile='temp-audio.m4a',
+                    remove_temp=True
+                )
+                
+                # Clean up
+                clip.close()
+                final_clip.close()
+                for highlight_clip in highlight_clips:
+                    highlight_clip.close()
+                
+                # Track video processing in analytics
+                if self.analytics_handler:
+                    try:
+                        self.analytics_handler.track_video_processing(
+                            video_path, "extended_highlight_reel_beta", output_path
+                        )
+                    except Exception as e:
+                        self.logger.warning(f"Could not track video processing: {e}")
+                
+                total_duration = sum(end - start for start, end in segments)
+                self.logger.info(f"[BETA] Extended highlight reel saved to {output_path}")
+                return True, output_path, f"Extended highlight reel created ({len(segments)} segments, {total_duration:.1f}s total) - BETA"
+            else:
+                clip.close()
+                return False, "", "Failed to create extended highlight reel"
+                
+        except Exception as e:
+            self.logger.exception(f"Error generating extended highlight reel: {e}")
+            return False, "", f"Error generating extended highlight reel: {str(e)}"
+    
+    def _extended_video_analysis_beta(self, clip, target_duration: int, prompt: str, max_cost: float) -> List[Tuple[float, float]]:
+        """
+        Multi-stage analysis for extended videos to keep costs under budget.
+        
+        Stage 1: Cheap motion/audio detection to find promising segments
+        Stage 2: Smart sampling with cost controls
+        Stage 3: AI analysis on filtered segments only
+        """
+        video_duration = clip.duration
+        self.logger.info(f"[BETA] Starting multi-stage analysis for {video_duration/3600:.1f}h video")
+        
+        # Stage 1: Cheap pre-filtering (no AI cost)
+        self.logger.info("[BETA] Stage 1: Motion and audio pre-filtering...")
+        promising_segments = self._find_promising_segments_cheap(clip, video_duration, target_duration)
+        
+        # Stage 2: Smart sampling strategy based on budget
+        self.logger.info(f"[BETA] Stage 2: Smart sampling from {len(promising_segments)} promising segments...")
+        sampled_segments = self._smart_sample_for_budget(promising_segments, max_cost, video_duration)
+        
+        # Stage 3: AI analysis on filtered segments only
+        self.logger.info(f"[BETA] Stage 3: AI analysis on {len(sampled_segments)} selected segments...")
+        final_segments = self._analyze_sampled_segments_beta(clip, sampled_segments, target_duration, prompt)
+        
+        self.logger.info(f"[BETA] Multi-stage analysis complete: {len(final_segments)} final segments")
+        return final_segments
+    
+    def _find_promising_segments_cheap(self, clip, video_duration: float, target_duration: int) -> List[Tuple[float, float, float]]:
+        """
+        Stage 1: Find promising segments using cheap methods (no AI cost).
+        Returns segments with estimated quality scores.
+        """
+        segments = []
+        
+        # Strategy 1: Motion-based detection (very cheap)
+        motion_segments = self._detect_high_motion_segments(clip, video_duration)
+        
+        # Strategy 2: Audio energy detection (very cheap)
+        audio_segments = self._detect_high_audio_energy_segments(clip, video_duration)
+        
+        # Strategy 3: Scene change detection (very cheap)
+        scene_segments = self._detect_scene_changes(clip, video_duration)
+        
+        # Combine and score all segments
+        all_candidates = motion_segments + audio_segments + scene_segments
+        
+        # Remove duplicates and merge overlapping segments
+        merged_segments = self._merge_overlapping_segments(all_candidates)
+        
+        # Score based on multiple factors
+        scored_segments = []
+        for start, end, base_score in merged_segments:
+            # Boost score based on position (beginning/end often have good content)
+            position_boost = self._calculate_position_boost(start, end, video_duration)
+            
+            # Duration bonus (prefer segments of reasonable length)
+            duration = end - start
+            duration_bonus = 1.0 if 3 <= duration <= 15 else 0.5
+            
+            final_score = base_score * position_boost * duration_bonus
+            scored_segments.append((start, end, final_score))
+        
+        # Sort by score and return top candidates
+        scored_segments.sort(key=lambda x: x[2], reverse=True)
+        
+        # Return top segments that could fill ~3x target duration (for redundancy)
+        target_candidates = target_duration * 3
+        selected_segments = []
+        total_duration = 0
+        
+        for start, end, score in scored_segments:
+            duration = end - start
+            if total_duration + duration <= target_candidates:
+                selected_segments.append((start, end, score))
+                total_duration += duration
+        
+        self.logger.info(f"[BETA] Stage 1 found {len(selected_segments)} promising segments ({total_duration:.1f}s total)")
+        return selected_segments
+    
+    def _detect_high_motion_segments(self, clip, video_duration: float) -> List[Tuple[float, float, float]]:
+        """Detect segments with high motion using computer vision (no AI cost)."""
+        segments = []
+        sample_interval = max(30, video_duration / 100)  # Sample every 30s or 1% of video
+        window_size = 10  # 10-second windows
+        
+        current_time = 0
+        while current_time < video_duration - window_size:
+            try:
+                # Sample 3 frames from this window
+                frame_times = [
+                    current_time + 1,
+                    current_time + window_size/2,
+                    current_time + window_size - 1
+                ]
+                
+                frames = []
+                for t in frame_times:
+                    if t < video_duration:
+                        frame = clip.get_frame(t)
+                        if frame is not None:
+                            frames.append(frame)
+                
+                if len(frames) >= 2:
+                    motion_score = self._calculate_frame_motion(frames)
+                    if motion_score > 0.2:  # Threshold for "high motion"
+                        segments.append((current_time, current_time + window_size, motion_score))
+                
+            except Exception as e:
+                self.logger.debug(f"Motion detection error at {current_time}s: {e}")
+            
+            current_time += sample_interval
+        
+        return segments
+    
+    def _detect_high_audio_energy_segments(self, clip, video_duration: float) -> List[Tuple[float, float, float]]:
+        """Detect segments with high audio energy (no AI cost)."""
+        segments = []
+        
+        try:
+            if not hasattr(clip, 'audio') or clip.audio is None:
+                return segments
+            
+            # Sample audio energy at regular intervals
+            sample_interval = max(15, video_duration / 200)  # Every 15s or 0.5% of video
+            window_size = 5  # 5-second windows
+            
+            current_time = 0
+            while current_time < video_duration - window_size:
+                try:
+                    # Get audio segment
+                    audio_segment = clip.audio.subclip(current_time, min(current_time + window_size, video_duration))
+                    
+                    # Calculate RMS energy (rough approximation)
+                    audio_array = audio_segment.to_soundarray()
+                    if audio_array.size > 0:
+                        rms = np.sqrt(np.mean(audio_array**2))
+                        
+                        if rms > 0.05:  # Threshold for "high energy"
+                            segments.append((current_time, current_time + window_size, float(rms)))
+                    
+                    audio_segment.close()
+                    
+                except Exception as e:
+                    self.logger.debug(f"Audio analysis error at {current_time}s: {e}")
+                
+                current_time += sample_interval
+                
+        except Exception as e:
+            self.logger.debug(f"Audio detection failed: {e}")
+        
+        return segments
+    
+    def _detect_scene_changes(self, clip, video_duration: float) -> List[Tuple[float, float, float]]:
+        """Detect scene changes using simple frame difference (no AI cost)."""
+        segments = []
+        sample_interval = max(60, video_duration / 50)  # Every minute or 2% of video
+        
+        prev_frame = None
+        current_time = 0
+        
+        while current_time < video_duration:
+            try:
+                frame = clip.get_frame(current_time)
+                if frame is not None and prev_frame is not None:
+                    # Calculate frame difference
+                    diff = np.mean(np.abs(frame.astype(float) - prev_frame.astype(float)))
+                    
+                    if diff > 50:  # Threshold for scene change
+                        # Add segment around scene change
+                        start_time = max(0, current_time - 5)
+                        end_time = min(video_duration, current_time + 10)
+                        segments.append((start_time, end_time, diff / 100))
+                
+                prev_frame = frame
+                
+            except Exception as e:
+                self.logger.debug(f"Scene detection error at {current_time}s: {e}")
+            
+            current_time += sample_interval
+        
+        return segments
+    
+    def _smart_sample_for_budget(self, segments: List[Tuple[float, float, float]], max_cost: float, video_duration: float) -> List[Tuple[float, float, float]]:
+        """Stage 2: Smart sampling to stay within budget."""
+        # Calculate how many AI analyses we can afford
+        cost_per_analysis = 0.01  # Rough estimate
+        max_analyses = int(max_cost / cost_per_analysis)
+        
+        self.logger.info(f"[BETA] Budget allows ~{max_analyses} AI analyses (${max_cost:.2f} budget)")
+        
+        if len(segments) <= max_analyses:
+            return segments
+        
+        # Use intelligent sampling to pick the best segments
+        # Strategy: Take highest scoring segments but ensure temporal distribution
+        
+        # Sort by score
+        sorted_segments = sorted(segments, key=lambda x: x[2], reverse=True)
+        
+        # Ensure temporal distribution across the video
+        time_buckets = {}
+        bucket_size = video_duration / 10  # Divide video into 10 time buckets
+        
+        selected_segments = []
+        
+        # First pass: Take top segments from each time bucket
+        for start, end, score in sorted_segments:
+            bucket = int(start / bucket_size)
+            
+            if bucket not in time_buckets:
+                time_buckets[bucket] = []
+            
+            time_buckets[bucket].append((start, end, score))
+        
+        # Take best segment from each bucket first
+        for bucket_segments in time_buckets.values():
+            if selected_segments and len(selected_segments) >= max_analyses:
+                break
+            if bucket_segments:
+                selected_segments.append(bucket_segments[0])  # Highest scored in bucket
+        
+        # Second pass: Fill remaining slots with highest scores
+        remaining_slots = max_analyses - len(selected_segments)
+        if remaining_slots > 0:
+            # Get segments not already selected
+            selected_starts = {s[0] for s in selected_segments}
+            remaining_segments = [s for s in sorted_segments if s[0] not in selected_starts]
+            
+            # Add highest scoring remaining segments
+            selected_segments.extend(remaining_segments[:remaining_slots])
+        
+        self.logger.info(f"[BETA] Sampled {len(selected_segments)} segments for AI analysis")
+        return selected_segments
+    
+    def _analyze_sampled_segments_beta(self, clip, segments: List[Tuple[float, float, float]], target_duration: int, prompt: str) -> List[Tuple[float, float]]:
+        """Stage 3: AI analysis on pre-filtered segments only."""
+        if not segments:
+            return []
+        
+        # Use the existing AI analysis method but on pre-filtered segments
+        segment_pairs = [(start, end) for start, end, score in segments]
+        
+        # Score with AI (this is where the cost is incurred)
+        scored_segments = self._score_segments_with_ai(clip, segment_pairs, prompt, max_segments=len(segments))
+        
+        # Use existing selection logic
+        final_segments = self._select_best_segments(scored_segments, target_duration)
+        
+        return final_segments
+
+    def _merge_overlapping_segments(self, segments: List[Tuple[float, float, float]]) -> List[Tuple[float, float, float]]:
+        """
+        Merge overlapping segments to reduce redundancy.
+        """
+        if not segments:
+            return []
+        
+        # Sort segments by start time
+        segments.sort(key=lambda x: x[0])
+        
+        merged_segments = []
+        current_start, current_end, current_score = segments[0]
+        
+        for start, end, score in segments[1:]:
+            if start <= current_end:
+                # Overlapping segment - extend the current segment
+                current_end = max(current_end, end)
+                current_score = max(current_score, score)
+            else:
+                # Non-overlapping segment - add the current segment to the list and start a new one
+                merged_segments.append((current_start, current_end, current_score))
+                current_start, current_end, current_score = start, end, score
+        
+        # Add the last segment
+        merged_segments.append((current_start, current_end, current_score))
+        
+        return merged_segments
+    
+    def _calculate_position_boost(self, start: float, end: float, video_duration: float) -> float:
+        """
+        Calculate position boost based on segment position in the video.
+        """
+        if start <= 0:
+            return 1.0  # Beginning of video is most valuable
+        elif end >= video_duration:
+            return 0.5  # End of video is less valuable
+        else:
+            return 1.0  # Middle of video is neutral
+
+    def _analyze_segment_motion_enhanced(self, clip, start: float, end: float) -> float:
+        """
+        Enhanced motion analysis for a specific segment.
+        """
+        try:
+            # Sample multiple frames across the segment
+            segment_duration = end - start
+            if segment_duration < 0.5:
+                frame_times = [start + segment_duration/2]
+            elif segment_duration < 2.0:
+                frame_times = [start + 0.2, end - 0.2]
+            else:
+                # Sample 3-4 frames across the segment
+                step = segment_duration / 4
+                frame_times = [start + step, start + 2*step, start + 3*step]
+            
+            # Extract frames
+            frames = []
+            for t in frame_times:
+                if 0 <= t < clip.duration:
+                    frame = clip.get_frame(t)
+                    if frame is not None:
+                        frames.append(frame)
+            
+            if len(frames) < 2:
+                return 0.3
+            
+            # Calculate motion across all frame pairs
+            motion_scores = []
+            for i in range(len(frames) - 1):
+                motion = self._calculate_frame_motion([frames[i], frames[i+1]])
+                motion_scores.append(motion)
+            
+            # Return average motion score
+            avg_motion = sum(motion_scores) / len(motion_scores) if motion_scores else 0.3
+            return min(avg_motion, 1.0)
+            
+        except Exception as e:
+            self.logger.debug(f"Enhanced segment motion analysis failed: {e}")
+            return 0.3
+
+    def _create_emergency_highlights(self, clip, target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Emergency fallback to create highlights when all other methods fail.
+        Always produces some segments, even if they're not perfect.
+        """
+        self.logger.info("Creating emergency highlights - ensuring user always gets output")
+        
+        duration = clip.duration
+        segments = []
+        
+        # Strategy 1: Distribute segments evenly across video timeline
+        if duration > target_duration:
+            # Create 3-5 segments distributed across the video
+            num_segments = min(5, max(3, target_duration // 8))  # 3-5 segments of ~8s each
+            segment_duration = min(8.0, target_duration / num_segments)
+            
+            # Distribute across timeline
+            time_step = duration / (num_segments + 1)  # +1 to avoid endpoints
+            
+            for i in range(num_segments):
+                start_time = time_step * (i + 1) - segment_duration / 2
+                start_time = max(0, start_time)
+                end_time = min(duration, start_time + segment_duration)
+                
+                # Adjust if we go beyond video end
+                if end_time > duration:
+                    end_time = duration
+                    start_time = max(0, end_time - segment_duration)
+                
+                segments.append((start_time, end_time))
+                self.logger.info(f"Emergency segment {i+1}: {start_time:.1f}-{end_time:.1f}s")
+        else:
+            # Video is shorter than target, just use the whole thing
+            segments.append((0, duration))
+        
+        # Strategy 2: If we still have time to fill, add more segments
+        total_used = sum(end - start for start, end in segments)
+        if total_used < target_duration * 0.8 and len(segments) < 6:
+            # Add some shorter segments in between
+            remaining_time = target_duration - total_used
+            extra_segments_needed = min(3, int(remaining_time // 4))
+            
+            for i in range(extra_segments_needed):
+                # Find gaps between existing segments
+                if len(segments) > 1:
+                    gap_start = segments[i][1] + 1  # 1s after previous segment ends
+                    gap_end = gap_start + min(4.0, remaining_time / extra_segments_needed)
+                    
+                    if gap_end < duration - 1:
+                        segments.append((gap_start, gap_end))
+                        self.logger.info(f"Emergency filler segment: {gap_start:.1f}-{gap_end:.1f}s")
+        
+        # Sort by timeline and trim to target duration
+        segments.sort(key=lambda x: x[0])
+        
+        # Trim segments if we exceed target duration
+        total_duration = 0
+        final_segments = []
+        for start, end in segments:
+            segment_duration = end - start
+            if total_duration + segment_duration <= target_duration:
+                final_segments.append((start, end))
+                total_duration += segment_duration
+            else:
+                # Add partial segment to reach target
+                remaining = target_duration - total_duration
+                if remaining > 1.0:  # Only add if at least 1 second
+                    final_segments.append((start, start + remaining))
+                break
+        
+        if not final_segments:
+            # Absolute final fallback: just take the first 30 seconds
+            final_segments = [(0, min(target_duration, duration))]
+            self.logger.warning("Absolute fallback: using first portion of video")
+        
+        total_final = sum(end - start for start, end in final_segments)
+        self.logger.info(f"Emergency highlights created: {len(final_segments)} segments, total: {total_final:.1f}s")
+        
+        return final_segments
+
+    def _analyze_video_for_segment_similarities(self, clip, target_duration: int, 
+                                              example_data: Dict[str, Any], 
+                                              context_padding: float, 
+                                              prompt: str) -> List[Tuple[float, float]]:
+        """
+        Analyze video to find segments similar to the provided example segment.
+        This is the core method for segment-based highlight detection.
+        """
+        self.logger.info("Starting segment-based similarity analysis")
+        
+        # Step 1: Extract and analyze the example segment
+        example_analysis = self._analyze_example_segment(clip, example_data, prompt)
+        if not example_analysis:
+            self.logger.error("Failed to analyze example segment")
+            return []
+        
+        # Step 2: Calculate optimal sampling strategy with price optimization
+        video_duration = clip.duration
+        example_duration = example_analysis['duration']
+        
+        # SUPER CHEAP: Analyze way fewer frames and be much less picky
+        if video_duration <= 300:  # 5 minutes or less
+            sample_interval = 5.0  # Much cheaper
+            max_samples = 20  # Cap at 20 frames max
+        elif video_duration <= 1800:  # 30 minutes or less
+            sample_interval = 10.0  # Very cheap
+            max_samples = 30  # Cap at 30 frames max
+        else:  # Longer videos
+            sample_interval = 20.0  # Super cheap
+            max_samples = 40  # Cap at 40 frames max
+        
+        # Adjust based on example segment length (longer examples need more careful analysis)
+        if example_duration > 10:  # Long example segment
+            sample_interval *= 0.8  # Slightly more frequent sampling
+            max_samples = min(max_samples, int(video_duration / sample_interval))
+        
+        estimated_cost = max_samples * 0.01  # Rough estimate - much cheaper now!
+        self.logger.info(f"COST-OPTIMIZED: every {sample_interval:.1f}s, max {max_samples} samples")
+        self.logger.info(f"Estimated analysis cost: ~${estimated_cost:.2f} (MUCH CHEAPER!)")
+        
+        # Step 3: Find similar frames with budget controls (MUCH cheaper and less strict)
+        similar_frames = self._find_similar_frames_optimized(clip, example_analysis, sample_interval, max_samples, prompt)
+        
+        if not similar_frames:
+            self.logger.warning("No similar frames found, using fallback strategy")
+            # FALLBACK: Use best guess segments from video to always deliver a result
+            return self._create_fallback_highlight_reel(clip, target_duration, example_analysis, context_padding)
+        
+        self.logger.info(f"Found {len(similar_frames)} potentially similar frames")
+        
+        # Step 4: Group similar frames into segments
+        segments = self._group_similar_frames_into_segments(similar_frames, video_duration)
+        
+        # Step 5: Extend segments with context padding
+        extended_segments = self._extend_segments_with_context(segments, context_padding, video_duration)
+        
+        # Step 6: Select best segments to fit target duration
+        final_segments = self._select_best_similarity_segments(extended_segments, target_duration)
+        
+        total_duration = sum(end - start for start, end in final_segments)
+        self.logger.info(f"Selected {len(final_segments)} segments with total duration {total_duration:.1f}s")
+        
+        return final_segments
+    
+    def _create_fallback_highlight_reel(self, clip, target_duration: int, example_analysis: Dict[str, Any], context_padding: float) -> List[Tuple[float, float]]:
+        """
+        ALWAYS create a highlight reel even if no similar segments found.
+        Use best guess based on video structure and the example segment timing.
+        """
+        self.logger.info("Creating fallback highlight reel - ALWAYS deliver a result!")
+        
+        video_duration = clip.duration
+        example_start = example_analysis.get('start_time', 0)
+        example_end = example_analysis.get('end_time', 5)
+        example_duration = example_end - example_start
+        
+        # Strategy: Take segments from similar positions in the video timeline
+        segments = []
+        
+        # Calculate how many segments we need
+        segment_count = max(3, min(8, target_duration // max(3, example_duration)))
+        segment_duration = min(target_duration / segment_count, example_duration * 1.5)
+        
+        # Distribute segments across the video timeline
+        for i in range(int(segment_count)):
+            # Place segments at similar relative positions to the example
+            relative_position = example_start / video_duration if video_duration > 0 else 0.5
+            
+            # Add some variation to avoid taking the exact same moment
+            position_variation = (i - segment_count/2) * 0.1  # Spread around the relative position
+            target_position = max(0, min(1, relative_position + position_variation))
+            
+            start_time = target_position * (video_duration - segment_duration)
+            end_time = start_time + segment_duration
+            
+            # Ensure we don't go beyond video bounds
+            if end_time > video_duration:
+                end_time = video_duration
+                start_time = max(0, end_time - segment_duration)
+            
+            segments.append((start_time, end_time))
+            self.logger.info(f"Fallback segment {i+1}: {start_time:.1f}s - {end_time:.1f}s")
+        
+        # Remove overlaps and ensure we hit target duration
+        segments = self._clean_and_optimize_segments(segments, target_duration)
+        
+        total_duration = sum(end - start for start, end in segments)
+        self.logger.info(f"Fallback highlight reel created: {len(segments)} segments, {total_duration:.1f}s total")
+        
+        return segments
+    
+    def _clean_and_optimize_segments(self, segments: List[Tuple[float, float]], target_duration: int) -> List[Tuple[float, float]]:
+        """Clean up segments and ensure they hit the target duration."""
+        if not segments:
+            return []
+        
+        # Sort by start time
+        segments = sorted(segments, key=lambda x: x[0])
+        
+        # Remove overlaps
+        cleaned_segments = []
+        for start, end in segments:
+            if not cleaned_segments:
+                cleaned_segments.append((start, end))
+            else:
+                last_start, last_end = cleaned_segments[-1]
+                if start >= last_end:  # No overlap
+                    cleaned_segments.append((start, end))
+                else:  # Overlap - merge or skip
+                    if end > last_end:  # Extend the last segment
+                        cleaned_segments[-1] = (last_start, end)
+        
+        # Adjust to hit target duration
+        current_duration = sum(end - start for start, end in cleaned_segments)
+        
+        if current_duration < target_duration and len(cleaned_segments) > 0:
+            # Extend segments proportionally
+            scale_factor = target_duration / current_duration
+            scaled_segments = []
+            for start, end in cleaned_segments:
+                duration = end - start
+                new_duration = duration * scale_factor
+                scaled_segments.append((start, start + new_duration))
+            cleaned_segments = scaled_segments
+        
+        elif current_duration > target_duration:
+            # Trim segments to fit target
+            running_total = 0
+            trimmed_segments = []
+            for start, end in cleaned_segments:
+                duration = end - start
+                if running_total + duration <= target_duration:
+                    trimmed_segments.append((start, end))
+                    running_total += duration
+                else:
+                    # Partial segment to complete target
+                    remaining = target_duration - running_total
+                    if remaining > 1:  # Only if at least 1 second left
+                        trimmed_segments.append((start, start + remaining))
+                    break
+            cleaned_segments = trimmed_segments
+        
+        return cleaned_segments
+
+    def _analyze_example_segment(self, clip, example_data: Dict[str, Any], prompt: str) -> Optional[Dict[str, Any]]:
+        """
+        Extract and analyze the example segment from the video.
+        """
+        try:
+            start_time = example_data['start_time']
+            end_time = example_data['end_time']
+            description = example_data.get('description', '')
+            
+            self.logger.info(f"Analyzing example segment: {start_time:.1f}s - {end_time:.1f}s")
+            
+            # Extract the example segment
+            example_segment = clip.subclip(start_time, end_time)
+            segment_duration = end_time - start_time
+            
+            # Sample multiple frames from the segment for analysis
+            sample_count = max(3, min(8, int(segment_duration * 2)))  # 2 frames per second, min 3, max 8
+            frame_times = []
+            
+            if sample_count == 1:
+                frame_times = [start_time + segment_duration / 2]
+            else:
+                step = segment_duration / (sample_count - 1)
+                frame_times = [start_time + i * step for i in range(sample_count)]
+            
+            # Analyze each frame in the segment
+            frame_analyses = []
+            for i, frame_time in enumerate(frame_times):
+                try:
+                    frame = clip.get_frame(frame_time)
+                    if frame is None:
+                        continue
+                    
+                    # Save frame to temporary file
+                    with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                        from PIL import Image
+                        img = Image.fromarray(frame)
+                        img.save(temp_file.name, 'JPEG')
+                        temp_path = temp_file.name
+                    
+                    try:
+                        # Analyze this frame intensely
+                        frame_analysis = self._analyze_segment_frame_intensely(temp_path, frame_time, description, prompt, i, sample_count)
+                        if frame_analysis:
+                            frame_analyses.append(frame_analysis)
+                    finally:
+                        try:
+                            os.unlink(temp_path)
+                        except:
+                            pass
+                            
+                except Exception as e:
+                    self.logger.debug(f"Error analyzing frame at {frame_time:.1f}s: {e}")
+                    continue
+            
+            if not frame_analyses:
+                self.logger.warning("No frames could be analyzed from example segment")
+                return None
+            
+            # Combine analyses into segment summary
+            segment_analysis = {
+                'start_time': start_time,
+                'end_time': end_time,
+                'duration': segment_duration,
+                'description': description,
+                'frame_count': len(frame_analyses),
+                'frame_analyses': frame_analyses,
+                'combined_features': self._combine_frame_analyses(frame_analyses),
+                'segment_type': 'user_selected_example'
+            }
+            
+            example_segment.close()
+            self.logger.info(f"Successfully analyzed example segment with {len(frame_analyses)} frames")
+            return segment_analysis
+            
+        except Exception as e:
+            self.logger.error(f"Error analyzing example segment: {e}")
+            return None
+
+    def _analyze_example_image_intensely(self, image_data: bytes) -> Optional[Dict[str, Any]]:
+        """
+        Analyze the example image intensely to understand what to look for.
+        """
+        try:
+            # Save image to temporary file for analysis
+            with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                temp_file.write(image_data)
+                temp_path = temp_file.name
+            
+            try:
+                # Use the existing AI analysis method but with enhanced prompt
+                enhanced_prompt = """
+                Analyze this reference image EXTREMELY thoroughly. This image represents what the user wants to find in their video.
+                
+                Focus on:
+                1. VISUAL ELEMENTS: Colors, shapes, objects, textures, lighting, composition
+                2. ACTIONS: Any movements, gestures, activities, poses
+                3. CONTEXT: Setting, environment, background elements
+                4. PEOPLE: Number of people, their positioning, clothing, expressions
+                5. OBJECTS: Specific items, tools, devices, toys, etc.
+                6. STYLE: Visual style, quality, camera angle, perspective
+                7. MOOD: Emotional tone, atmosphere, energy level
+                
+                Be extremely detailed and specific in your analysis. This analysis will be used to find similar moments in a video.
+                
+                Return JSON with keys: main_elements, visual_style, actions_detected, context_clues, distinctive_features, search_keywords
+                """
+                
+                analysis = self._call_enhanced_ai_analysis(temp_path, enhanced_prompt)
+                
+                if analysis:
+                    # Enhance the analysis with additional processing
+                    analysis['similarity_keywords'] = self._extract_similarity_keywords(analysis)
+                    return analysis
+                else:
+                    self.logger.warning("AI analysis of example image failed")
+                    return None
+                    
+            finally:
+                # Clean up temporary file
+                try:
+                    os.unlink(temp_path)
+                except:
+                    pass
+                    
+        except Exception as e:
+            self.logger.error(f"Error analyzing example image: {e}")
+            return None
+
+    def _extract_similarity_keywords(self, analysis: Dict[str, Any]) -> List[str]:
+        """
+        Extract keywords from the analysis that will be useful for similarity matching.
+        """
+        keywords = []
+        
+        # Extract from different analysis fields
+        for field in ['main_elements', 'actions_detected', 'context_clues', 'distinctive_features']:
+            if field in analysis and analysis[field]:
+                text = str(analysis[field]).lower()
+                # Simple keyword extraction - could be enhanced with NLP
+                words = text.split()
+                keywords.extend([word.strip('.,!?') for word in words if len(word) > 3])
+        
+        # Remove duplicates and return
+        return list(set(keywords))
+
+    def _find_similar_frames_optimized(self, clip, example_analysis: Dict[str, Any], 
+                                      sample_interval: float, max_samples: int, prompt: str) -> List[Tuple[float, float]]:
+        """
+        Find frames in the video that are similar to the example segment with budget optimization.
+        Returns list of (timestamp, similarity_score) tuples.
+        """
+        similar_frames = []
+        video_duration = clip.duration
+        
+        # Sample frames across the video with budget limits
+        current_time = 0
+        frame_count = 0
+        samples_processed = 0
+        
+        while current_time < video_duration and samples_processed < max_samples:
+            try:
+                # Extract frame at current time
+                frame = clip.get_frame(current_time)
+                if frame is None:
+                    current_time += sample_interval
+                    continue
+                
+                # Save frame to temporary file for analysis
+                with tempfile.NamedTemporaryFile(suffix='.jpg', delete=False) as temp_file:
+                    from PIL import Image
+                    img = Image.fromarray(frame)
+                    img.save(temp_file.name, 'JPEG')
+                    temp_path = temp_file.name
+                
+                try:
+                    # Analyze frame for similarity to example
+                    similarity_score = self._calculate_frame_similarity_to_example(
+                        temp_path, example_analysis, prompt
+                    )
+                    
+                    if similarity_score > 0.3:  # Much lower threshold - accept "close enough"
+                        similar_frames.append((current_time, similarity_score))
+                        self.logger.debug(f"Similar frame found at {current_time:.1f}s (score: {similarity_score:.2f})")
+                    
+                    frame_count += 1
+                    samples_processed += 1
+                    
+                    if frame_count % 20 == 0:
+                        progress = (samples_processed / max_samples) * 100
+                        self.logger.info(f"Progress: {progress:.1f}% - Analyzed {frame_count} frames, found {len(similar_frames)} similar frames")
+                        
+                finally:
+                    # Clean up temporary file
+                    try:
+                        os.unlink(temp_path)
+                    except:
+                        pass
+                
+            except Exception as e:
+                self.logger.debug(f"Error analyzing frame at {current_time:.1f}s: {e}")
+            
+            current_time += sample_interval
+        
+        budget_status = "within budget" if samples_processed < max_samples else "budget limit reached"
+        self.logger.info(f"Completed frame analysis ({budget_status}): {frame_count} frames analyzed, {len(similar_frames)} similar frames found")
+        return similar_frames
+
+    def _calculate_frame_similarity_to_example(self, frame_path: str, 
+                                             example_analysis: Dict[str, Any], 
+                                             prompt: str) -> float:
+        """
+        Calculate how similar a frame is to the example segment.
+        """
+        try:
+            # Create a similarity-focused prompt based on segment analysis
+            combined_features = example_analysis.get('combined_features', {})
+            segment_summary = combined_features.get('segment_summary', 'analyzed segment')
+            key_search_terms = combined_features.get('key_search_terms', [])
+            
+            # Build description from segment analysis
+            if key_search_terms:
+                example_description = f"{segment_summary}. Key elements: {', '.join(key_search_terms[:8])}"
+            else:
+                example_description = segment_summary
+            
+            similarity_prompt = f"""
+            Compare this frame to the reference example. The reference example contains: {example_description}
+            
+            Rate the similarity on a scale of 0-10 where:
+            - 10: Nearly identical or very similar scene/action/composition
+            - 8-9: Strong similarity in key elements (same action, similar objects, similar setting)
+            - 6-7: Moderate similarity (some matching elements but different context)
+            - 4-5: Some similarity (few matching elements)
+            - 0-3: Little to no similarity
+            
+            Focus on: {prompt if prompt else "visual similarity, actions, objects, and context"}
+            
+            Return JSON with: {{"similarity_score": number, "matching_elements": "description", "differences": "description"}}
+            """
+            
+            # Use AI to analyze similarity
+            analysis = self._call_enhanced_ai_analysis(frame_path, similarity_prompt)
+            
+            if analysis and 'similarity_score' in analysis:
+                score = float(analysis['similarity_score']) / 10.0  # Convert to 0-1 scale
+                return min(max(score, 0.0), 1.0)  # Clamp to 0-1 range
+            else:
+                return 0.0
+                
+        except Exception as e:
+            self.logger.debug(f"Error calculating frame similarity: {e}")
+            return 0.0
+
+    def _group_similar_frames_into_segments(self, similar_frames: List[Tuple[float, float]], 
+                                          video_duration: float) -> List[Tuple[float, float, float]]:
+        """
+        Group nearby similar frames into continuous segments.
+        Returns list of (start_time, end_time, avg_score) tuples.
+        """
+        if not similar_frames:
+            return []
+        
+        # Sort by timestamp
+        similar_frames.sort(key=lambda x: x[0])
+        
+        segments = []
+        current_start = similar_frames[0][0]
+        current_end = similar_frames[0][0]
+        current_scores = [similar_frames[0][1]]
+        
+        gap_threshold = 3.0  # Seconds - frames within this gap are considered part of the same segment
+        
+        for i in range(1, len(similar_frames)):
+            timestamp, score = similar_frames[i]
+            
+            if timestamp - current_end <= gap_threshold:
+                # Continue current segment
+                current_end = timestamp
+                current_scores.append(score)
+            else:
+                # Start new segment
+                avg_score = sum(current_scores) / len(current_scores)
+                segments.append((current_start, current_end, avg_score))
+                
+                current_start = timestamp
+                current_end = timestamp
+                current_scores = [score]
+        
+        # Add the last segment
+        if current_scores:
+            avg_score = sum(current_scores) / len(current_scores)
+            segments.append((current_start, current_end, avg_score))
+        
+        self.logger.info(f"Grouped {len(similar_frames)} similar frames into {len(segments)} segments")
+        return segments
+
+    def _extend_segments_with_context(self, segments: List[Tuple[float, float, float]], 
+                                    context_padding: float, 
+                                    video_duration: float) -> List[Tuple[float, float, float]]:
+        """
+        Extend segments with context padding before each scene.
+        """
+        extended_segments = []
+        
+        for start, end, score in segments:
+            # Add context padding before the segment
+            extended_start = max(0, start - context_padding)
+            
+            # Ensure we don't extend beyond video duration
+            extended_end = min(video_duration, end)
+            
+            # Ensure minimum segment length
+            if extended_end - extended_start < 1.0:
+                extended_end = min(video_duration, extended_start + 1.0)
+            
+            extended_segments.append((extended_start, extended_end, score))
+        
+        self.logger.info(f"Extended {len(segments)} segments with {context_padding}s context padding")
+        return extended_segments
+
+    def _select_best_similarity_segments(self, segments: List[Tuple[float, float, float]], 
+                                       target_duration: int) -> List[Tuple[float, float]]:
+        """
+        Select the best segments to fit the target duration.
+        """
+        if not segments:
+            return []
+        
+        # Sort segments by score (descending)
+        segments.sort(key=lambda x: x[2], reverse=True)
+        
+        selected_segments = []
+        total_duration = 0
+        
+        for start, end, score in segments:
+            segment_duration = end - start
+            
+            if total_duration + segment_duration <= target_duration:
+                selected_segments.append((start, end))
+                total_duration += segment_duration
+                self.logger.debug(f"Selected segment {start:.1f}-{end:.1f}s (score: {score:.2f})")
+            else:
+                # Check if we can fit a trimmed version of this segment
+                remaining_duration = target_duration - total_duration
+                if remaining_duration > 2.0:  # Only if we have at least 2 seconds left
+                    # Take the beginning of this segment
+                    selected_segments.append((start, start + remaining_duration))
+                    total_duration = target_duration
+                    self.logger.debug(f"Selected trimmed segment {start:.1f}-{start + remaining_duration:.1f}s")
+                break
+        
+        # Sort final segments by timeline order
+        selected_segments.sort(key=lambda x: x[0])
+        
+        self.logger.info(f"Selected {len(selected_segments)} segments totaling {total_duration:.1f}s")
+        return selected_segments
+
+    def _analyze_segment_frame_intensely(self, frame_path: str, frame_time: float, 
+                                       description: str, prompt: str, 
+                                       frame_index: int, total_frames: int) -> Optional[Dict[str, Any]]:
+        """
+        Analyze a single frame from the example segment intensely.
+        """
+        try:
+            # Create enhanced prompt for segment frame analysis
+            enhanced_prompt = f"""
+            Analyze this frame from a user-selected example segment (frame {frame_index + 1} of {total_frames}).
+            
+            CONTEXT:
+            - This frame is from timestamp {frame_time:.1f}s in the video
+            - User description: "{description if description else 'No description provided'}"
+            - Additional context: "{prompt if prompt else 'General highlight analysis'}"
+            
+            ANALYSIS FOCUS - This frame represents what the user wants to find more of:
+            1. VISUAL CHARACTERISTICS: Lighting, colors, composition, camera angle, image quality
+            2. SUBJECTS: People, objects, characters - their positioning, appearance, clothing, expressions
+            3. ACTIONS: Any movements, gestures, activities, interactions happening
+            4. ENVIRONMENT: Setting, background, indoor/outdoor, time of day
+            5. STYLE: Gaming interface, real-world scene, artistic style, video quality
+            6. EMOTIONAL TONE: Mood, energy level, atmosphere
+            7. TECHNICAL ELEMENTS: Screen elements, UI, effects, overlays
+            
+            IMPORTANT: Be extremely detailed and specific. This analysis will be used to find similar moments throughout the video.
+            Focus on what makes this moment unique and interesting to the user.
+            
+            Return JSON with keys: visual_elements, subjects, actions, environment, style, mood, technical_aspects, uniqueness_factors, search_keywords
+            """
+            
+            analysis = self._call_enhanced_ai_analysis(frame_path, enhanced_prompt)
+            
+            if analysis:
+                # Add frame-specific metadata
+                analysis['frame_time'] = frame_time
+                analysis['frame_index'] = frame_index
+                analysis['analysis_timestamp'] = datetime.now().isoformat()
+                return analysis
+            else:
+                self.logger.warning(f"AI analysis failed for frame at {frame_time:.1f}s")
+                return None
+                
+        except Exception as e:
+            self.logger.debug(f"Error analyzing segment frame at {frame_time:.1f}s: {e}")
+            return None
+
+    def _combine_frame_analyses(self, frame_analyses: List[Dict[str, Any]]) -> Dict[str, Any]:
+        """
+        Combine multiple frame analyses into a unified segment understanding.
+        """
+        try:
+            if not frame_analyses:
+                return {}
+            
+            combined = {
+                'dominant_visual_elements': [],
+                'consistent_subjects': [],
+                'primary_actions': [],
+                'environment_type': '',
+                'overall_style': '',
+                'mood_indicators': [],
+                'technical_patterns': [],
+                'key_search_terms': [],
+                'segment_summary': '',
+                'confidence_score': 0.0
+            }
+            
+            # Collect all elements from each frame
+            all_elements = {}
+            for analysis in frame_analyses:
+                for key in ['visual_elements', 'subjects', 'actions', 'environment', 'style', 'mood', 'technical_aspects']:
+                    if key in analysis and analysis[key]:
+                        text = str(analysis[key]).lower()
+                        words = text.split()
+                        for word in words:
+                            clean_word = word.strip('.,!?()[]{}')
+                            if len(clean_word) > 3:
+                                all_elements[clean_word] = all_elements.get(clean_word, 0) + 1
+            
+            # Find most frequent elements (appear in multiple frames)
+            frame_count = len(frame_analyses)
+            frequent_threshold = max(1, frame_count // 2)  # Must appear in at least half the frames
+            
+            frequent_elements = {k: v for k, v in all_elements.items() if v >= frequent_threshold}
+            combined['key_search_terms'] = list(frequent_elements.keys())
+            
+            # Create segment summary
+            if frequent_elements:
+                top_elements = sorted(frequent_elements.keys(), key=lambda x: frequent_elements[x], reverse=True)[:10]
+                combined['segment_summary'] = f"Segment featuring: {', '.join(top_elements[:5])}"
+                combined['confidence_score'] = min(1.0, len(frequent_elements) / 10.0)
+            else:
+                combined['segment_summary'] = "Analyzed segment with unique characteristics"
+                combined['confidence_score'] = 0.5
+            
+            self.logger.debug(f"Combined analysis: {len(frequent_elements)} frequent elements, confidence: {combined['confidence_score']:.2f}")
+            return combined
+            
+        except Exception as e:
+            self.logger.warning(f"Error combining frame analyses: {e}")
+            return {'segment_summary': 'Analysis combination failed', 'confidence_score': 0.3}
  

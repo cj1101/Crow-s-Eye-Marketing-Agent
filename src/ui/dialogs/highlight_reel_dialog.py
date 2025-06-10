@@ -5,14 +5,16 @@ Allows users to create highlight reels from long videos with natural language pr
 
 import os
 import logging
-from typing import Optional
+from typing import Dict, Any, Optional
 
-from PySide6.QtCore import Qt, QThread, Signal
+from PySide6.QtCore import Qt, QThread, Signal, QTimer
 from PySide6.QtWidgets import (
-    QDialog, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
-    QLineEdit, QSpinBox, QTextEdit, QProgressBar, QFileDialog,
-    QGroupBox, QFormLayout, QMessageBox, QWidget
+    QVBoxLayout, QHBoxLayout, QLabel, QPushButton, 
+    QSpinBox, QTextEdit, QProgressBar, QFileDialog,
+    QGroupBox, QFormLayout, QMessageBox, QWidget, QSlider, QCheckBox,
+    QDoubleSpinBox, QFrame
 )
+# Video preview imports removed - using simple timestamp inputs instead
 
 from ..base_dialog import BaseDialog
 from ...features.media_processing.video_handler import VideoHandler
@@ -21,6 +23,7 @@ from ...utils.subscription_utils import (
     requires_feature_qt, requires_usage_qt, show_upgrade_dialog
 )
 from ...features.subscription.access_control import Feature
+# from ...handlers.analytics_handler import AnalyticsHandler
 
 
 class HighlightReelWorker(QThread):
@@ -29,20 +32,38 @@ class HighlightReelWorker(QThread):
     progress = Signal(str)
     finished = Signal(bool, str, str)  # success, output_path, message
     
-    def __init__(self, video_path: str, target_duration: int, prompt: str):
+    def __init__(self, video_path: str, target_duration: int, prompt: str, example_data: Optional[Dict[str, Any]] = None, use_extended_mode: bool = False):
         super().__init__()
         self.video_path = video_path
         self.target_duration = target_duration
         self.prompt = prompt
+        self.example_data = example_data
+        self.use_extended_mode = use_extended_mode
         self.video_handler = VideoHandler()
     
     def run(self):
         """Run the highlight reel generation."""
         try:
-            self.progress.emit("Analyzing video...")
-            success, output_path, message = self.video_handler.generate_highlight_reel(
-                self.video_path, self.target_duration, self.prompt
-            )
+            if self.use_extended_mode:
+                # Use BETA extended video mode for hours-long videos
+                self.progress.emit("🚀 BETA Extended Mode: Analyzing long video with cost optimization...")
+                success, output_path, message = self.video_handler.generate_extended_highlight_reel_beta(
+                    self.video_path, self.target_duration, self.prompt, max_cost=1.0
+                )
+            elif self.example_data and self.example_data.get('has_segment', False):
+                # Use example-based generation
+                self.progress.emit("Analyzing video for similar segments...")
+                success, output_path, message = self.video_handler.generate_example_based_highlight_reel(
+                    self.video_path, self.example_data, self.target_duration, 
+                    context_padding=self.example_data.get('context_padding', 2.0),
+                    prompt=self.prompt
+                )
+            else:
+                # Use traditional prompt-based generation
+                self.progress.emit("Analyzing video...")
+                success, output_path, message = self.video_handler.generate_highlight_reel(
+                    self.video_path, self.target_duration, self.prompt
+                )
             self.finished.emit(success, output_path, message)
         except Exception as e:
             self.finished.emit(False, "", f"Error: {str(e)}")
@@ -54,9 +75,11 @@ class HighlightReelDialog(BaseDialog):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.setWindowTitle("Highlight Reel Generator")
-        self.setFixedSize(600, 500)
+        self.setFixedSize(900, 700)  # Increased size for video preview
         self.video_path = ""
         self.worker = None
+        self.example_start_time = 0.0
+        self.example_end_time = 0.0
         self._setup_ui()
     
     def _setup_ui(self):
@@ -70,9 +93,8 @@ class HighlightReelDialog(BaseDialog):
         
         # Description
         desc_label = QLabel(
-            "Generate a highlight reel from a long video. Use natural language prompts to specify "
-            "what content to include or exclude (e.g., 'only show missed basketball shots', "
-            "'cut everything except crowd cheering moments')."
+            "Generate a highlight reel from a long video. You can either use text instructions only, "
+            "or select an example segment from your video to find similar moments."
         )
         desc_label.setWordWrap(True)
         desc_label.setStyleSheet("color: #CCCCCC; margin-bottom: 15px;")
@@ -109,25 +131,105 @@ class HighlightReelDialog(BaseDialog):
         video_layout.addLayout(file_layout)
         layout.addWidget(video_group)
         
+        # Example Segment Selection Group
+        example_group = QGroupBox("Example Segment Selection (Optional)")
+        example_group.setStyleSheet("QGroupBox { font-weight: bold; color: #FFFFFF; }")
+        example_layout = QVBoxLayout(example_group)
+        
+        # Enable example segment checkbox
+        self.use_example_cb = QCheckBox("Use example segment to find similar moments")
+        self.use_example_cb.setStyleSheet("color: #FFFFFF; font-weight: bold;")
+        self.use_example_cb.toggled.connect(self._toggle_example_controls)
+        example_layout.addWidget(self.use_example_cb)
+        
+        # Simple timestamp input (initially hidden)
+        self.example_controls_widget = QWidget()
+        example_controls_layout = QVBoxLayout(self.example_controls_widget)
+        
+        # Instructions
+        instructions_label = QLabel(
+            "Enter the start and end times (in seconds) of a segment that represents what you want to find more of.\n"
+            "You can find these timestamps by playing your video in any media player."
+        )
+        instructions_label.setWordWrap(True)
+        instructions_label.setStyleSheet("color: #CCCCCC; font-size: 12px; margin-bottom: 10px;")
+        example_controls_layout.addWidget(instructions_label)
+        
+        # Example segment selection
+        segment_layout = QFormLayout()
+        
+        # Start time
+        self.start_time_spinbox = QDoubleSpinBox()
+        self.start_time_spinbox.setRange(0.0, 9999.0)
+        self.start_time_spinbox.setDecimals(1)
+        self.start_time_spinbox.setSuffix(" seconds")
+        self.start_time_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px;")
+        self.start_time_spinbox.valueChanged.connect(self._update_example_segment)
+        segment_layout.addRow("Start Time:", self.start_time_spinbox)
+        
+        # End time
+        self.end_time_spinbox = QDoubleSpinBox()
+        self.end_time_spinbox.setRange(0.0, 9999.0)
+        self.end_time_spinbox.setDecimals(1)
+        self.end_time_spinbox.setSuffix(" seconds")
+        self.end_time_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px;")
+        self.end_time_spinbox.valueChanged.connect(self._update_example_segment)
+        segment_layout.addRow("End Time:", self.end_time_spinbox)
+        
+        example_controls_layout.addLayout(segment_layout)
+        
+        # Context padding
+        self.context_padding_spinbox = QDoubleSpinBox()
+        self.context_padding_spinbox.setRange(0.0, 10.0)
+        self.context_padding_spinbox.setValue(2.0)
+        self.context_padding_spinbox.setDecimals(1)
+        self.context_padding_spinbox.setSuffix(" seconds")
+        self.context_padding_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px;")
+        segment_layout.addRow("Context Padding:", self.context_padding_spinbox)
+        
+        # Help text with examples
+        help_label = QLabel(
+            "Example: If you want to find all basketball shots, find a shot in your video (e.g., from 45.2 to 48.7 seconds) "
+            "and enter those times. The AI will find all similar shooting motions throughout the video."
+        )
+        help_label.setWordWrap(True)
+        help_label.setStyleSheet("color: #888888; font-size: 11px; font-style: italic; margin-top: 10px;")
+        example_controls_layout.addWidget(help_label)
+        
+        # Initially hide example controls
+        self.example_controls_widget.setVisible(False)
+        example_layout.addWidget(self.example_controls_widget)
+        
+        layout.addWidget(example_group)
+        
         # Settings group
         settings_group = QGroupBox("Highlight Reel Settings")
         settings_group.setStyleSheet("QGroupBox { font-weight: bold; color: #FFFFFF; }")
         settings_layout = QFormLayout(settings_group)
         
+        # Beta feature toggle
+        self.extended_mode_cb = QCheckBox("🚀 BETA: Extended Video Mode (for hours-long videos, <$1 cost)")
+        self.extended_mode_cb.setStyleSheet("color: #10b981; font-weight: bold;")
+        self.extended_mode_cb.setToolTip("BETA feature for processing very long videos (hours) while keeping AI analysis costs under $1")
+        settings_layout.addRow(self.extended_mode_cb)
+        
         # Target duration
         self.duration_spinbox = QSpinBox()
-        self.duration_spinbox.setRange(5, 300)  # 5 seconds to 5 minutes
+        self.duration_spinbox.setRange(5, 1800)  # 5 seconds to 30 minutes
         self.duration_spinbox.setValue(30)
         self.duration_spinbox.setSuffix(" seconds")
         self.duration_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px; font-size: 14px;")
         
+        # Update range when extended mode is toggled
+        self.extended_mode_cb.toggled.connect(self._update_duration_range)
+        
         # Add helpful text showing the range
-        duration_help = QLabel("(5 seconds to 5 minutes)")
-        duration_help.setStyleSheet("color: #888888; font-size: 11px; font-style: italic;")
+        self.duration_help = QLabel("(5 seconds to 30 minutes)")
+        self.duration_help.setStyleSheet("color: #888888; font-size: 11px; font-style: italic;")
         
         duration_layout = QVBoxLayout()
         duration_layout.addWidget(self.duration_spinbox)
-        duration_layout.addWidget(duration_help)
+        duration_layout.addWidget(self.duration_help)
         duration_layout.setContentsMargins(0, 0, 0, 0)
         duration_layout.setSpacing(2)
         
@@ -250,6 +352,7 @@ class HighlightReelDialog(BaseDialog):
             self.generate_button.setEnabled(True)
             
             # Get video info and display
+            from ...features.media_processing.video_handler import VideoHandler
             video_handler = VideoHandler()
             info = video_handler.get_video_info(file_path)
             if "error" not in info:
@@ -260,6 +363,11 @@ class HighlightReelDialog(BaseDialog):
                     f"Duration: {duration_min}:{duration_sec:02d}, "
                     f"Size: {info['file_size'] / (1024*1024):.1f} MB"
                 )
+                
+                # Set reasonable default values for the example segment
+                self.start_time_spinbox.setMaximum(info["duration"])
+                self.end_time_spinbox.setMaximum(info["duration"])
+                self.end_time_spinbox.setValue(min(5.0, info["duration"]))  # Default 5-second segment
     
     def _generate_highlight_reel(self):
         """Generate the highlight reel."""
@@ -273,6 +381,21 @@ class HighlightReelDialog(BaseDialog):
             QMessageBox.warning(self, "Warning", "Please select a video file first.")
             return
         
+        # Validate example segment if enabled
+        example_data = None
+        if self.use_example_cb.isChecked():
+            if self.example_start_time >= self.example_end_time:
+                QMessageBox.warning(self, "Warning", "Example segment start time must be less than end time.")
+                return
+            
+            example_data = {
+                'has_segment': True,
+                'start_time': self.example_start_time,
+                'end_time': self.example_end_time,
+                'context_padding': self.context_padding_spinbox.value(),
+                'description': self.prompt_text.toPlainText().strip()
+            }
+        
         # Disable UI during processing
         self.generate_button.setEnabled(False)
         self.browse_button.setEnabled(False)
@@ -282,9 +405,10 @@ class HighlightReelDialog(BaseDialog):
         # Get settings
         target_duration = self.duration_spinbox.value()
         prompt = self.prompt_text.toPlainText().strip()
+        use_extended_mode = self.extended_mode_cb.isChecked()
         
         # Start worker thread
-        self.worker = HighlightReelWorker(self.video_path, target_duration, prompt)
+        self.worker = HighlightReelWorker(self.video_path, target_duration, prompt, example_data, use_extended_mode)
         self.worker.progress.connect(self._update_progress)
         self.worker.finished.connect(self._on_generation_finished)
         self.worker.start()
@@ -337,4 +461,33 @@ class HighlightReelDialog(BaseDialog):
             else:
                 event.ignore()
         else:
-            event.accept() 
+            event.accept()
+    
+    def _toggle_example_controls(self, checked: bool):
+        """Toggle visibility of example segment controls."""
+        self.example_controls_widget.setVisible(checked)
+    
+    def _update_example_segment(self):
+        """Update example segment values."""
+        self.example_start_time = self.start_time_spinbox.value()
+        self.example_end_time = self.end_time_spinbox.value()
+        
+        # Validate segment
+        if self.example_start_time >= self.example_end_time:
+            self.status_label.setText("Warning: Start time must be less than end time")
+            self.status_label.setStyleSheet("color: #ef4444; font-style: italic;")
+        else:
+            duration = self.example_end_time - self.example_start_time
+            self.status_label.setText(f"Example segment: {duration:.1f} seconds")
+            self.status_label.setStyleSheet("color: #10b981; font-style: italic;")
+    
+    def _update_duration_range(self, checked: bool):
+        """Update duration range based on extended mode."""
+        if checked:
+            self.duration_spinbox.setRange(5, 1800)  # 5 seconds to 30 minutes
+        else:
+            self.duration_spinbox.setRange(5, 300)  # 5 seconds to 5 minutes
+        self.duration_spinbox.setValue(30)  # Reset to default value
+        self.duration_help.setText("(5 seconds to 30 minutes)")
+        self.duration_help.setStyleSheet("color: #888888; font-size: 11px; font-style: italic;")
+        self.duration_spinbox.setStyleSheet("color: #FFFFFF; background-color: #2a2a2a; border: 1px solid #444; padding: 5px; font-size: 14px;") 

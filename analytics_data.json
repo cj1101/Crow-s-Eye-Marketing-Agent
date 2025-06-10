@@ -107,13 +107,26 @@
         "usage_count": 0,
         "success_rate": 100
       }
+    },
+    "1b353645-722f-4715-b916-925bdacd9517": {
+      "id": "1b353645-722f-4715-b916-925bdacd9517",
+      "original_video": "C:/Users/charl/Downloads/French Final Suarez - Made with Clipchamp.mp4",
+      "process_type": "example_based_highlight_reel",
+      "output_path": "C:\\Users\\charl\\CodingProjets\\breadsmith_marketing\\social_media_tool_v5_noMeta_final\\data\\output\\French Final Suarez - Made with Clipchamp_example_highlight_20250610_105138.mp4",
+      "created_at": "2025-06-10T10:51:53.592857",
+      "metrics": {
+        "processing_time": 0,
+        "output_size": 0,
+        "usage_count": 0,
+        "success_rate": 100
+      }
     }
   },
   "summary_stats": {
     "total_posts": 0,
     "total_galleries": 0,
-    "total_videos": 8,
+    "total_videos": 9,
     "total_interactions": 0
   },
-  "last_updated": "2025-06-09T15:24:43.727699"
+  "last_updated": "2025-06-10T10:51:53.592875"
 }

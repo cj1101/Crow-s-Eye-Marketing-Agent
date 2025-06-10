@@ -38,7 +38,10 @@ class HighlightService:
         style: str = "dynamic",
         include_text: bool = True,
         include_music: bool = False,
-        prompt: str = ""
+        prompt: str = "",
+        example_data: Optional[Dict[str, Any]] = None,
+        context_padding: float = 2.0,
+        content_instructions: Optional[str] = None
     ) -> HighlightResult:
         """
         Generate a highlight reel from a video media item.
@@ -51,6 +54,9 @@ class HighlightService:
             include_text: Whether to include text overlays
             include_music: Whether to include background music
             prompt: Optional prompt for AI guidance
+            example_data: Optional example segment data for similarity-based detection
+            context_padding: Seconds of context to add before each highlight scene
+            content_instructions: Additional content guidance and instructions
             
         Returns:
             HighlightResult with success status and output information
@@ -119,15 +125,31 @@ class HighlightService:
             if not prompt:
                 prompt = self._build_prompt_from_params(highlight_type, style, include_text, include_music)
             
-            # Generate highlight reel
+            # Add content instructions to prompt if provided
+            if content_instructions:
+                prompt = f"{prompt}\n\nAdditional instructions: {content_instructions}"
+            
+            # Generate highlight reel with example-based detection
             self.logger.info(f"Generating highlight reel with duration {target_duration}s")
-            success, output_path, message = await asyncio.get_event_loop().run_in_executor(
-                None,
-                video_handler.generate_highlight_reel,
-                temp_input_path,
-                target_duration,
-                prompt
-            )
+            if example_data:
+                self.logger.info("Using example-based similarity detection")
+                success, output_path, message = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    video_handler.generate_example_based_highlight_reel,
+                    temp_input_path,
+                    example_data,
+                    target_duration,
+                    context_padding,
+                    prompt
+                )
+            else:
+                success, output_path, message = await asyncio.get_event_loop().run_in_executor(
+                    None,
+                    video_handler.generate_highlight_reel,
+                    temp_input_path,
+                    target_duration,
+                    prompt
+                )
             
             if not success:
                 return HighlightResult(
@@ -308,6 +330,158 @@ class HighlightService:
             base_prompt += ". Focus on moments that would work well with background music"
         
         return base_prompt
+
+    async def generate_extended_highlight_reel_beta(
+        self,
+        media_item,
+        target_duration: int = 900,  # 15 minutes default
+        prompt: str = "",
+        max_cost: float = 1.0,
+        content_instructions: Optional[str] = None
+    ) -> HighlightResult:
+        """
+        BETA: Generate highlight reels from extended videos (hours long) while keeping costs under $1.
+        Uses multi-stage analysis: cheap pre-filtering + smart AI analysis on promising segments only.
+        
+        Args:
+            media_item: Database media item containing video information
+            target_duration: Target duration in seconds (default: 15 minutes = 900s)
+            prompt: Natural language prompt for content guidance
+            max_cost: Maximum cost allowed for analysis (default: $1.00)
+            content_instructions: Additional content guidance and instructions
+            
+        Returns:
+            HighlightResult with success status and output information
+        """
+        temp_input_path = None
+        temp_output_path = None
+        
+        try:
+            # Download video from storage to temporary location
+            self.logger.info(f"[BETA] Downloading extended video for highlight generation: {media_item.filename}")
+            temp_input_path = await self._download_media_to_temp(media_item)
+            
+            if not temp_input_path or not os.path.exists(temp_input_path):
+                return HighlightResult(
+                    success=False,
+                    error_message="Failed to download video from storage"
+                )
+            
+            # Import VideoHandler
+            try:
+                import sys
+                import importlib.util
+                
+                # Look for VideoHandler in the parent directory structure
+                video_handler_path = None
+                current_dir = os.path.dirname(os.path.abspath(__file__))
+                
+                # Try different possible paths
+                possible_paths = [
+                    os.path.join(current_dir, "../../../src/features/media_processing/video_handler.py"),
+                    os.path.join(current_dir, "../../src/features/media_processing/video_handler.py"),
+                    os.path.join(current_dir, "../src/features/media_processing/video_handler.py"),
+                ]
+                
+                for path in possible_paths:
+                    abs_path = os.path.abspath(path)
+                    if os.path.exists(abs_path):
+                        video_handler_path = abs_path
+                        break
+                
+                if not video_handler_path:
+                    return HighlightResult(
+                        success=False,
+                        error_message="VideoHandler not found in expected locations"
+                    )
+                
+                # Load VideoHandler module
+                spec = importlib.util.spec_from_file_location("video_handler", video_handler_path)
+                video_handler_module = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(video_handler_module)
+                
+                VideoHandler = video_handler_module.VideoHandler
+                
+            except Exception as e:
+                self.logger.error(f"Failed to import VideoHandler: {e}")
+                return HighlightResult(
+                    success=False,
+                    error_message=f"Failed to load video processing module: {str(e)}"
+                )
+            
+            # Initialize VideoHandler
+            video_handler = VideoHandler()
+            
+            # Add content instructions to prompt if provided
+            if content_instructions:
+                prompt = f"{prompt}\n\nAdditional instructions: {content_instructions}"
+            
+            # Generate extended highlight reel using BETA method
+            self.logger.info(f"[BETA] Generating extended highlight reel with duration {target_duration}s, max cost ${max_cost:.2f}")
+            success, output_path, message = await asyncio.get_event_loop().run_in_executor(
+                None,
+                video_handler.generate_extended_highlight_reel_beta,
+                temp_input_path,
+                target_duration,
+                prompt,
+                max_cost
+            )
+            
+            if not success:
+                return HighlightResult(
+                    success=False,
+                    error_message=message or "Extended highlight generation failed"
+                )
+            
+            # Upload result back to storage
+            output_url = await self._upload_result_to_storage(output_path, media_item)
+            
+            # Generate thumbnail
+            thumbnail_url = await self._generate_and_upload_thumbnail(output_path, media_item)
+            
+            # Get video info for metadata
+            video_info = video_handler.get_video_info(output_path)
+            
+            # Clean up temporary files
+            if temp_input_path and os.path.exists(temp_input_path):
+                os.unlink(temp_input_path)
+            if output_path and os.path.exists(output_path):
+                os.unlink(output_path)
+            
+            return HighlightResult(
+                success=True,
+                output_url=output_url,
+                thumbnail_url=thumbnail_url,
+                duration=video_info.get('duration', target_duration),
+                style_used="extended_beta",
+                metadata={
+                    'original_filename': media_item.filename,
+                    'highlight_type': 'extended_beta',
+                    'target_duration': target_duration,
+                    'actual_duration': video_info.get('duration', target_duration),
+                    'generation_time': datetime.now().isoformat(),
+                    'prompt_used': prompt,
+                    'max_cost_budget': max_cost,
+                    'processing_mode': 'BETA_extended_video',
+                    'cost_optimized': True
+                },
+                message=f"{message} - BETA Extended Mode" if message else f"Successfully generated extended highlight (BETA) - cost optimized for long videos"
+            )
+            
+        except Exception as e:
+            self.logger.exception(f"Error generating extended highlight reel: {e}")
+            
+            # Clean up temporary files on error
+            if temp_input_path and os.path.exists(temp_input_path):
+                try:
+                    os.unlink(temp_input_path)
+                except:
+                    pass
+            
+            return HighlightResult(
+                success=False,
+                error_message=f"Extended highlight generation failed: {str(e)}"
+            )
 
 
 # Create service instance
