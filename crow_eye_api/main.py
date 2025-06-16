@@ -96,4 +96,7 @@ async def simple_test():
     """
     Very basic test endpoint.
     """
-    return {"message": "API is working", "status": "ok"} 
+    return {"message": "API is working", "status": "ok"}
+
+# Export for Google App Engine (ASGI)
+application = app 

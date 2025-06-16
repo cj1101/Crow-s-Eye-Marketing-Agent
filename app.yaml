@@ -1,24 +1,24 @@
 runtime: python39
-entrypoint: gunicorn -k uvicorn.workers.UvicornWorker simple_main:app
+entrypoint: gunicorn -k uvicorn.workers.UvicornWorker crow_eye_api.main:app
 
 service: crow-eye-api
 
 env_variables:
   # API Configuration
   API_V1_STR: "/api/v1"
-  PROJECT_NAME: "Crow's Eye API"
+  PROJECT_NAME: "Crow's Eye API - Minimal"
   
   # Database Configuration (Cloud SQL or external)
-  DATABASE_URL: "sqlite+aiosqlite:///./data/crow_eye.db"
+  DATABASE_URL: "sqlite+aiosqlite:///./data/crow_eye_minimal.db"
   
   # JWT Configuration
-  JWT_SECRET_KEY: "your-production-secret-key-change-this"
+  JWT_SECRET_KEY: "crow-eye-production-secret-key-change-this"
   ALGORITHM: "HS256"
   ACCESS_TOKEN_EXPIRE_MINUTES: "10080"  # 7 days
   
   # Google Cloud Configuration
-  GOOGLE_CLOUD_PROJECT: "your-project-id"
-  GOOGLE_CLOUD_STORAGE_BUCKET: "your-bucket-name"
+  GOOGLE_CLOUD_PROJECT: "crows-eye-website"
+  GOOGLE_CLOUD_STORAGE_BUCKET: "crows-eye-storage"
   
   # API Keys (set these in Google Cloud Console)
   GOOGLE_API_KEY: "your-google-api-key"
@@ -55,5 +55,5 @@ resources:
 
 handlers:
 - url: /.*
-  script: simple_main.application
+  script: crow_eye_api.main.application
   secure: always 
