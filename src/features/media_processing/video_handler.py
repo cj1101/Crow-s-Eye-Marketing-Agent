@@ -1054,69 +1054,7 @@ class VideoHandler:
         except Exception as e:
             self.logger.debug(f"Error in simple motion calculation: {e}")
             return 0.0
-            else:
-                # Fall back to traditional prompt-based analysis
-                self.logger.info("Using prompt-based analysis (no example segment provided)")
-                segments = self._analyze_video_for_highlights(clip, target_duration, prompt)
-            
-            # NEVER FAIL - always create something
-            if not segments:
-                self.logger.warning("No similar segments found, creating emergency highlights")
-                segments = self._create_emergency_highlights(clip, target_duration)
-            
-            # Create highlight reel
-            highlight_clips = []
-            for start, end in segments:
-                highlight_clips.append(clip.subclip(start, end))
-            
-            # Concatenate clips
-            if highlight_clips:
-                final_clip = concatenate_videoclips(highlight_clips)
-                
-                # Generate output filename
-                base_name = os.path.splitext(os.path.basename(video_path))[0]
-                timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-                output_filename = f"{base_name}_example_highlight_{timestamp}.mp4"
-                output_path = os.path.join(const.OUTPUT_DIR, output_filename)
-                
-                # Ensure output directory exists
-                os.makedirs(const.OUTPUT_DIR, exist_ok=True)
-                
-                # Write video
-                final_clip.write_videofile(
-                    output_path,
-                    codec='libx264',
-                    audio_codec='aac',
-                    temp_audiofile='temp-audio.m4a',
-                    remove_temp=True
-                )
-                
-                # Clean up
-                clip.close()
-                final_clip.close()
-                for highlight_clip in highlight_clips:
-                    highlight_clip.close()
-                
-                # Track video processing in analytics
-                if self.analytics_handler:
-                    try:
-                        self.analytics_handler.track_video_processing(
-                            video_path, "example_based_highlight_reel", output_path
-                        )
-                    except Exception as e:
-                        self.logger.warning(f"Could not track video processing: {e}")
-                
-                total_duration = sum(end - start for start, end in segments)
-                self.logger.info(f"Example-based highlight reel saved to {output_path}")
-                return True, output_path, f"Example-based highlight reel created ({len(segments)} segments, {total_duration:.1f}s total)"
-            else:
-                clip.close()
-                return False, "", "No suitable segments found for highlight reel"
-                
-        except Exception as e:
-            self.logger.exception(f"Error generating example-based highlight reel: {e}")
-            return False, "", f"Error generating example-based highlight reel: {str(e)}"
-    
+
     def generate_long_form_highlight_reel(self, video_path: str, target_duration: int = 180, 
                                         prompt: str = "", cost_optimize: bool = True) -> Tuple[bool, str, str]:
         """

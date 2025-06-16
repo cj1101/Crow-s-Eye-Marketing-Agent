@@ -144,6 +144,25 @@ class LibraryTabs(QWidget):
         upload_videos_btn.clicked.connect(self._upload_videos)
         header_layout.addWidget(upload_videos_btn)
         
+        # Google Photos upload button
+        upload_google_photos_btn = QPushButton("📸 Upload from Google Photos")
+        upload_google_photos_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4285F4;
+                color: white;
+                border: none;
+                padding: 10px 20px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3367D6;
+            }
+        """)
+        upload_google_photos_btn.clicked.connect(self._upload_from_google_photos)
+        header_layout.addWidget(upload_google_photos_btn)
+        
         layout.addLayout(header_layout)
         
         # Selection controls (initially hidden)
@@ -1103,6 +1122,78 @@ class LibraryTabs(QWidget):
         
         if file_paths:
             self._process_uploads(file_paths, "videos")
+    
+    def _upload_from_google_photos(self):
+        """Handle upload from Google Photos."""
+        try:
+            from ..dialogs.google_photos_browser_dialog import GooglePhotosBrowserDialog
+            
+            dialog = GooglePhotosBrowserDialog(parent=self)
+            dialog.media_selected.connect(self._handle_google_photos_import)
+            
+            if dialog.exec() == QDialog.DialogCode.Accepted:
+                selected_items = dialog.get_selected_items()
+                if selected_items:
+                    self._import_google_photos_media(selected_items)
+                    
+        except ImportError:
+            # If dialog doesn't exist yet, show placeholder
+            QMessageBox.information(
+                self,
+                "Google Photos",
+                "Google Photos browser will open here.\n\n"
+                "You'll be able to:\n"
+                "• Browse your albums\n"
+                "• Search your photos\n"
+                "• Select multiple items\n"
+                "• Import directly to your library"
+            )
+        except Exception as e:
+            self.logger.error(f"Error opening Google Photos browser: {e}")
+            QMessageBox.critical(self, "Error", f"Could not open Google Photos browser: {str(e)}")
+    
+    def _handle_google_photos_import(self, media_items):
+        """Handle importing selected Google Photos media."""
+        try:
+            import requests
+            
+            # Prepare import request
+            media_item_ids = [item['id'] for item in media_items]
+            
+            import_data = {
+                "media_item_ids": media_item_ids,
+                "apply_ai_tagging": True,
+                "import_to_library": True
+            }
+            
+            response = requests.post(
+                "http://localhost:8000/api/v1/google-photos/import",
+                json=import_data
+            )
+            
+            if response.status_code == 200:
+                result = response.json()
+                imported_count = result.get('imported_count', 0)
+                
+                QMessageBox.information(
+                    self,
+                    "Import Complete",
+                    f"Successfully imported {imported_count} items from Google Photos!"
+                )
+                
+                # Refresh library content
+                self.media_uploaded.emit()
+                
+            else:
+                QMessageBox.warning(
+                    self,
+                    "Import Failed",
+                    "Failed to import from Google Photos. Please check your connection."
+                )
+                
+        except Exception as e:
+            self.logger.error(f"Error importing from Google Photos: {e}")
+            QMessageBox.critical(self, "Import Error", f"Failed to import: {str(e)}")
             
     def _process_uploads(self, file_paths, media_type):
         """Process uploaded files."""

@@ -13,9 +13,8 @@ class Settings(BaseSettings):
         extra='ignore'
     )
 
-    # Database
-    # Example for PostgreSQL: postgresql+asyncpg://user:password@host:port/dbname
-    DATABASE_URL: str = "sqlite+aiosqlite:///./data/crow_eye.db"
+    # Database - Using SQLite for cost efficiency
+    DATABASE_URL: str = "sqlite+aiosqlite:///./data/crow_eye_minimal.db"
 
     # JWT Authentication
     JWT_SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
@@ -24,15 +23,25 @@ class Settings(BaseSettings):
 
     # API details
     API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Crow's Eye API"
+    PROJECT_NAME: str = "Crow's Eye API - Minimal"
     
-    # Google Cloud Configuration
-    GOOGLE_CLOUD_PROJECT: str = "your-project-id"
-    GOOGLE_CLOUD_STORAGE_BUCKET: str = "your-bucket-name"
+    # Cleanup settings
+    CLEANUP_ENABLED: bool = True
+    CONTENT_RETENTION_DAYS: int = 30
+    CLEANUP_HOUR: int = 2  # Run cleanup at 2 AM daily
+    
+    # Google Cloud Configuration (optional for local storage)
+    GOOGLE_CLOUD_PROJECT: str | None = None
+    GOOGLE_CLOUD_STORAGE_BUCKET: str | None = None
     
     # Google AI Services
     GOOGLE_API_KEY: str | None = None
     GEMINI_API_KEY: str | None = None
+
+    # Google Photos OAuth2 Configuration
+    GOOGLE_PHOTOS_CLIENT_ID: str | None = None
+    GOOGLE_PHOTOS_CLIENT_SECRET: str | None = None
+    GOOGLE_PHOTOS_REDIRECT_URI: str = "http://localhost:3000/auth/google-photos/callback"
 
     # OpenAI Configuration
     OPENAI_API_KEY: str | None = None

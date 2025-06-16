@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from crow_eye_api import models, schemas
-from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks, bulk, previews, platform_compliance, enhanced_compliance
+from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks, bulk, previews, platform_compliance, enhanced_compliance, google_photos
 from crow_eye_api.api.api_v1.dependencies import get_current_active_user
 
 api_router = APIRouter()
@@ -23,6 +23,7 @@ api_router.include_router(bulk.router, prefix="/bulk", tags=["Bulk Operations"])
 api_router.include_router(previews.router, prefix="/previews", tags=["Platform Previews"])
 api_router.include_router(platform_compliance.router, tags=["Platform Compliance"])
 api_router.include_router(enhanced_compliance.router, prefix="/compliance", tags=["Enhanced Platform Compliance"])
+api_router.include_router(google_photos.router, prefix="/google-photos", tags=["Google Photos"])
 
 # Test Endpoint for Authenticated Users
 @api_router.get("/users/me", response_model=schemas.User)

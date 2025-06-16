@@ -101,6 +101,7 @@ class UnifiedConnectionDialog(BaseDialog):
         self.platform_status = {
             'meta': {'connected': False, 'error': None},
             'google_business': {'connected': False, 'error': None},
+            'google_photos': {'connected': False, 'error': None},
             'bluesky': {'connected': False, 'error': None},
             'tiktok': {'connected': False, 'error': None},
             'pinterest': {'connected': False, 'error': None},
@@ -147,6 +148,7 @@ class UnifiedConnectionDialog(BaseDialog):
         # Create tabs for each platform
         self._create_meta_tab()
         self._create_google_business_tab()
+        self._create_google_photos_tab()
         self._create_bluesky_tab()
         self._create_tiktok_tab()
         self._create_pinterest_tab()
@@ -359,6 +361,111 @@ class UnifiedConnectionDialog(BaseDialog):
         
         layout.addStretch()
         self.tab_widget.addTab(tab, self.tr("Google Business"))
+        
+    def _create_google_photos_tab(self):
+        """Create the Google Photos connection tab."""
+        tab = QWidget()
+        layout = QVBoxLayout(tab)
+        layout.setSpacing(20)
+        
+        # Platform info
+        info_group = QGroupBox(self.tr("Google Photos"))
+        info_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 16px;
+                font-weight: bold;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 10px;
+                padding: 0 5px 0 5px;
+            }
+        """)
+        info_layout = QVBoxLayout(info_group)
+        
+        info_text = QLabel(self.tr(
+            "Connect your Google Photos account to import your photos and videos directly into your library. "
+            "Browse albums, search media, and apply AI tagging automatically."
+        ))
+        info_text.setWordWrap(True)
+        info_text.setStyleSheet("font-size: 14px; color: #333; padding: 10px;")
+        info_layout.addWidget(info_text)
+        
+        # Connection controls
+        controls_layout = QHBoxLayout()
+        
+        self.google_photos_connect_btn = QPushButton(self.tr("Connect Google Photos"))
+        self.google_photos_connect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #4285F4;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #3367D6;
+            }
+            QPushButton:disabled {
+                background-color: #cccccc;
+                color: #666666;
+            }
+        """)
+        self.google_photos_connect_btn.clicked.connect(self._connect_google_photos)
+        controls_layout.addWidget(self.google_photos_connect_btn)
+        
+        self.google_photos_disconnect_btn = QPushButton(self.tr("Disconnect"))
+        self.google_photos_disconnect_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #dc3545;
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #c82333;
+            }
+        """)
+        self.google_photos_disconnect_btn.clicked.connect(self._disconnect_google_photos)
+        self.google_photos_disconnect_btn.setVisible(False)
+        controls_layout.addWidget(self.google_photos_disconnect_btn)
+        
+        controls_layout.addStretch()
+        info_layout.addLayout(controls_layout)
+        
+        layout.addWidget(info_group)
+        
+        # Status display
+        self.google_photos_status_group = QGroupBox(self.tr("Connection Status"))
+        self.google_photos_status_group.setStyleSheet("""
+            QGroupBox {
+                font-size: 14px;
+                font-weight: bold;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                margin-top: 10px;
+                padding-top: 10px;
+            }
+        """)
+        status_layout = QVBoxLayout(self.google_photos_status_group)
+        
+        self.google_photos_status_label = QLabel(self.tr("Not connected"))
+        self.google_photos_status_label.setStyleSheet("font-size: 12px; color: #666; padding: 10px;")
+        status_layout.addWidget(self.google_photos_status_label)
+        
+        layout.addWidget(self.google_photos_status_group)
+        
+        layout.addStretch()
+        self.tab_widget.addTab(tab, self.tr("Google Photos"))
         
     def _create_bluesky_tab(self):
         """Create the BlueSky connection tab."""
@@ -858,6 +965,9 @@ class UnifiedConnectionDialog(BaseDialog):
         except Exception as e:
             self._update_meta_status(False, f"Error: {str(e)}")
         
+        # Check Google Photos
+        self._check_google_photos_connection()
+        
         self._update_overall_status()
         
     def _connect_meta(self):
@@ -911,6 +1021,107 @@ class UnifiedConnectionDialog(BaseDialog):
                 self.tr("Disconnect Error"),
                 self.tr("Error disconnecting from Meta: {error}").format(error=str(e))
             )
+    
+    def _connect_google_photos(self):
+        """Connect to Google Photos."""
+        try:
+            import requests
+            import webbrowser
+            
+            # Get authorization URL from API
+            response = requests.get("http://localhost:8000/api/v1/google-photos/auth/url")
+            if response.status_code == 200:
+                auth_data = response.json()
+                auth_url = auth_data['auth_url']
+                
+                # Open browser for authorization
+                webbrowser.open(auth_url)
+                
+                QMessageBox.information(
+                    self,
+                    self.tr("Google Photos Authentication"),
+                    self.tr("Please complete the authentication in your browser. "
+                           "Return to this dialog when finished and click 'Check Connection' to verify.")
+                )
+                
+                # Add a check connection button or timer to verify connection
+                self._check_google_photos_connection()
+                
+            else:
+                QMessageBox.warning(
+                    self,
+                    self.tr("Authentication Error"),
+                    self.tr("Failed to start Google Photos authentication process.")
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                self.tr("Connection Error"),
+                self.tr("Error connecting to Google Photos: {error}").format(error=str(e))
+            )
+    
+    def _disconnect_google_photos(self):
+        """Disconnect from Google Photos."""
+        try:
+            import requests
+            
+            # Call API to disconnect
+            response = requests.delete("http://localhost:8000/api/v1/google-photos/connection")
+            if response.status_code == 200:
+                self.platform_status['google_photos']['connected'] = False
+                self._update_google_photos_status(False, "Disconnected")
+                self._update_overall_status()
+                
+                QMessageBox.information(
+                    self,
+                    self.tr("Disconnected"),
+                    self.tr("Successfully disconnected from Google Photos.")
+                )
+            else:
+                QMessageBox.warning(
+                    self,
+                    self.tr("Disconnect Error"),
+                    self.tr("Failed to disconnect from Google Photos.")
+                )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                self.tr("Disconnect Error"),
+                self.tr("Error disconnecting from Google Photos: {error}").format(error=str(e))
+            )
+    
+    def _check_google_photos_connection(self):
+        """Check Google Photos connection status."""
+        try:
+            import requests
+            
+            response = requests.get("http://localhost:8000/api/v1/google-photos/connection")
+            if response.status_code == 200:
+                connection_data = response.json()
+                if connection_data:
+                    self.platform_status['google_photos']['connected'] = True
+                    email = connection_data.get('google_email', 'Unknown')
+                    self._update_google_photos_status(True, f"Connected to {email}")
+                    self._update_overall_status()
+                else:
+                    self._update_google_photos_status(False, "Not connected")
+            else:
+                self._update_google_photos_status(False, "Connection check failed")
+        except Exception as e:
+            self._update_google_photos_status(False, f"Error: {str(e)}")
+    
+    def _update_google_photos_status(self, connected: bool, message: str):
+        """Update Google Photos connection status."""
+        if connected:
+            self.google_photos_status_label.setText(f"✅ {message}")
+            self.google_photos_status_label.setStyleSheet("color: #27ae60; font-weight: bold; font-size: 12px; padding: 10px;")
+            self.google_photos_connect_btn.setVisible(False)
+            self.google_photos_disconnect_btn.setVisible(True)
+        else:
+            self.google_photos_status_label.setText(f"❌ {message}")
+            self.google_photos_status_label.setStyleSheet("color: #e74c3c; font-weight: bold; font-size: 12px; padding: 10px;")
+            self.google_photos_connect_btn.setVisible(True)
+            self.google_photos_disconnect_btn.setVisible(False)
     
     def _test_all_connections(self):
         """Test all platform connections."""

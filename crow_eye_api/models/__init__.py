@@ -1,5 +1,5 @@
 from .user import User
-from .media import MediaItem, Gallery
+from .media import MediaItem, Gallery, GooglePhotosConnection
 from .post import Post
 from .schedule import Schedule
 from .template import Template

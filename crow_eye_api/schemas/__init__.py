@@ -53,6 +53,14 @@ from .ai_services import (
     PerformanceAnalyticsRequest, PerformanceAnalyticsResponse,
     ThumbnailGenerateRequest, ThumbnailGenerateResponse
 )
+from .google_photos import (
+    GooglePhotosAuthURL, GooglePhotosTokenExchange, GooglePhotosConnection,
+    GooglePhotosMediaMetadata, GooglePhotosMediaItem, GooglePhotosAlbum,
+    GooglePhotosAlbumsResponse, GooglePhotosMediaItemsResponse,
+    GooglePhotosSearchRequest, GooglePhotosSearchResponse,
+    GooglePhotosImportRequest, GooglePhotosImportResponse,
+    GooglePhotosImportStatus, NaturalLanguageQuery, MediaItemImportDetails
+)
 
 # Platform Compliance Schemas
 class PlatformValidationRequest(BaseModel):
@@ -159,5 +167,12 @@ __all__ = [
     "PerformanceAnalyticsRequest", "PerformanceAnalyticsResponse",
     "ThumbnailGenerateRequest", "ThumbnailGenerateResponse",
     "PlatformValidationRequest", "PlatformValidationResponse",
-    "BulkPlatformValidationRequest", "BulkPlatformValidationResponse"
+    "BulkPlatformValidationRequest", "BulkPlatformValidationResponse",
+    # Google Photos schemas
+    "GooglePhotosAuthURL", "GooglePhotosTokenExchange", "GooglePhotosConnection",
+    "GooglePhotosMediaMetadata", "GooglePhotosMediaItem", "GooglePhotosAlbum",
+    "GooglePhotosAlbumsResponse", "GooglePhotosMediaItemsResponse",
+    "GooglePhotosSearchRequest", "GooglePhotosSearchResponse",
+    "GooglePhotosImportRequest", "GooglePhotosImportResponse",
+    "GooglePhotosImportStatus", "NaturalLanguageQuery", "MediaItemImportDetails"
 ] 

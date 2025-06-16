@@ -178,6 +178,61 @@ class EnhancedPlatformComplianceService:
                 }
             },
             
+            "google_photos": {
+                "display_name": "Google Photos",
+                "api_version": "v1",
+                "status": "active",
+                "content": {
+                    "max_caption_length": 2000,
+                    "max_hashtags": 0,
+                    "supports_links": False,
+                    "supports_mentions": False,
+                    "supports_scheduling": False,
+                    "max_media_per_post": 1
+                },
+                "media": {
+                    "image": {
+                        "max_file_size_mb": 200,
+                        "supported_formats": ["jpg", "jpeg", "png", "gif", "bmp", "webp", "tiff"],
+                        "max_resolution": "unlimited"
+                    },
+                    "video": {
+                        "max_file_size_mb": 10000,
+                        "supported_formats": ["mp4", "mov", "avi", "wmv", "mpg", "3gp"],
+                        "max_duration_seconds": "unlimited"
+                    }
+                },
+                "rate_limits": RateLimitConfig(
+                    requests_per_minute=1000,
+                    requests_per_hour=10000,
+                    requests_per_day=100000,
+                    burst_limit=50,
+                    cooldown_seconds=1
+                ),
+                "auth_requirements": AuthRequirements(
+                    auth_type="oauth2",
+                    required_scopes=["https://www.googleapis.com/auth/photoslibrary.readonly"],
+                    token_refresh_required=True,
+                    business_account_required=False,
+                    verification_required=False,
+                    webhook_required=False
+                ),
+                "content_policy": ContentPolicy(
+                    prohibited_content=[],
+                    required_disclosures=[],
+                    age_restrictions=False,
+                    geographic_restrictions=[],
+                    content_moderation_required=False
+                ),
+                "compliance_requirements": {
+                    "gdpr_compliant": True,
+                    "ccpa_compliant": True,
+                    "data_retention_days": 0,  # User-controlled
+                    "user_consent_required": True,
+                    "audit_logging_required": False
+                }
+            },
+            
             "tiktok": {
                 "display_name": "TikTok",
                 "api_version": "v1.3",

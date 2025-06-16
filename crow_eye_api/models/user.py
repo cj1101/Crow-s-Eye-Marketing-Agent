@@ -19,4 +19,5 @@ class User(Base):
     posts = relationship("Post", back_populates="user", cascade="all, delete-orphan")
     schedules = relationship("Schedule", back_populates="user", cascade="all, delete-orphan")
     templates = relationship("Template", back_populates="user", cascade="all, delete-orphan")
-    analytics_summaries = relationship("AnalyticsSummary", back_populates="user", cascade="all, delete-orphan") 
+    analytics_summaries = relationship("AnalyticsSummary", back_populates="user", cascade="all, delete-orphan")
+    google_photos_connection = relationship("GooglePhotosConnection", back_populates="user", uselist=False, cascade="all, delete-orphan") 

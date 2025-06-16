@@ -1,0 +1,47 @@
+# Minimal Cost-Effective Cloud Build Configuration
+# This eliminates the expensive Cloud SQL dependency
+
+steps:
+# 1. Build the container image with minimal setup
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['build', '-t', 'us-central1-docker.pkg.dev/crows-eye-website/crows-eye-api-repo/crows-eye-api-minimal:latest', '-f', 'Dockerfile.minimal', '.']
+
+# 2. Push the container image to Artifact Registry
+- name: 'gcr.io/cloud-builders/docker'
+  args: ['push', 'us-central1-docker.pkg.dev/crows-eye-website/crows-eye-api-repo/crows-eye-api-minimal:latest']
+
+# 3. Deploy container image to Cloud Run (pay-per-use, no idle costs)
+- name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+  entrypoint: gcloud
+  args:
+    - 'run'
+    - 'deploy'
+    - 'crows-eye-api-minimal'
+    - '--image=us-central1-docker.pkg.dev/crows-eye-website/crows-eye-api-repo/crows-eye-api-minimal:latest'
+    - '--region=us-central1'
+    - '--platform=managed'
+    - '--allow-unauthenticated'
+    # REMOVED: --add-cloudsql-instances (saves $20-30/day!)
+    # Using SQLite instead of Cloud SQL
+    - '--set-env-vars=DATABASE_URL=sqlite+aiosqlite:///./data/crow_eye_minimal.db'
+    - '--set-env-vars=PROJECT_NAME=Crow\'s Eye API - Minimal'
+    - '--set-env-vars=CLEANUP_ENABLED=true'
+    - '--set-env-vars=CONTENT_RETENTION_DAYS=30'
+    - '--set-env-vars=^##^JWT_SECRET_KEY=<ab4e0fa9bce9d2ebec46061c1b9d7924ace20c6d5cd47a0c64593fdb12d0c6f4>##GOOGLE_API_KEY=<AIzaSyCSRMv6JL0DWJqTUdeOo_LWfeRzRV8RnNg>##GEMINI_API_KEY=<AIzaSyARQhyKXzTvCzUEOL7hBOo691w5BDUarfU>'
+    # Cost optimization settings
+    - '--memory=512Mi'  # Reduced from default 1Gi
+    - '--cpu=1'         # Minimum CPU
+    - '--concurrency=10' # Limit concurrent requests
+    - '--max-instances=2' # Prevent runaway scaling
+    - '--min-instances=0' # Scale to zero when not in use (SAVES MONEY!)
+    - '--timeout=300'   # 5 minute timeout
+    - '--verbosity=info'
+
+# Set the pushed image as the final artifact
+images:
+- 'us-central1-docker.pkg.dev/crows-eye-website/crows-eye-api-repo/crows-eye-api-minimal:latest'
+
+# Cost optimization options
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: 'E2_HIGHCPU_8'  # Cost-effective machine type 
