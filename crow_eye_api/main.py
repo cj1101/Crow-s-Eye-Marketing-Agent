@@ -89,4 +89,11 @@ async def health_check():
     """
     Simple health check that doesn't depend on database.
     """
-    return {"status": "healthy", "service": settings.PROJECT_NAME} 
+    return {"status": "healthy", "service": settings.PROJECT_NAME}
+
+@app.get("/test", tags=["Test"])
+async def simple_test():
+    """
+    Very basic test endpoint.
+    """
+    return {"message": "API is working", "status": "ok"} 

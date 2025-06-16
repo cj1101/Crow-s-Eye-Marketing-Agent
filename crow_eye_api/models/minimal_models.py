@@ -1,8 +1,6 @@
 from sqlalchemy import Column, Integer, String, DateTime, Text, Boolean, JSON, func
-from sqlalchemy.ext.declarative import declarative_base
 from datetime import datetime, timedelta
-
-Base = declarative_base()
+from ..database import Base
 
 class User(Base):
     """Minimal user model - just for authentication"""

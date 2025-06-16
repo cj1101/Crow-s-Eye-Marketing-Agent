@@ -2,6 +2,9 @@ from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sess
 from sqlalchemy.ext.declarative import declarative_base
 from .core.config import settings
 
+# Create Base here to avoid circular imports
+Base = declarative_base()
+
 # Create async engine for SQLite
 engine = create_async_engine(
     settings.DATABASE_URL,
@@ -28,12 +31,10 @@ async def get_db():
 
 async def create_tables():
     """Create all tables in the database"""
-    from .models.minimal_models import Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
 
 async def drop_tables():
     """Drop all tables in the database"""
-    from .models.minimal_models import Base
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all) 
