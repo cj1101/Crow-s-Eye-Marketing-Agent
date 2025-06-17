@@ -1,5 +1,5 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import DeclarativeBase
+from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.pool import QueuePool, NullPool
 from sqlalchemy.exc import SQLAlchemyError, DisconnectionError
 import asyncio
@@ -12,8 +12,7 @@ import os
 from .core.config import settings
 
 # Create Base here to avoid circular imports
-class Base(DeclarativeBase):
-    pass
+Base = declarative_base()
 
 logger = logging.getLogger("crow_eye_api.database")
 
@@ -33,17 +32,17 @@ def get_pool_config():
             "pool_size": 5,
             "max_overflow": 10,
             "pool_pre_ping": True,
-            "pool_recycle": 3600,  # Recycle connections every hour
+            "pool_recycle": 300,    # Recycle connections every 5 minutes
         }
 
-# Create async engine with resilient configuration
+# Create async engine for PostgreSQL
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Set to True for SQL debugging
     **get_pool_config()
 )
 
-# Create async session maker with proper configuration
+# Create async session maker
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=AsyncSession,
@@ -104,71 +103,24 @@ async def get_db_with_retry() -> AsyncGenerator[AsyncSession, None]:
     finally:
         await session.close()
 
-async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """
-    Dependency to get database session with comprehensive error handling.
-    """
-    max_retries = 3
-    retry_delay = 0.5
-    
-    for attempt in range(max_retries):
-        session = None
+async def get_db():
+    """Dependency to get database session"""
+    async with AsyncSessionLocal() as session:
         try:
-            session = AsyncSessionLocal()
-            
-            # Test the connection
-            from sqlalchemy import text
-            await session.execute(text("SELECT 1"))
-            
             yield session
-            await session.commit()
-            break
-            
-        except (SQLAlchemyError, DisconnectionError) as e:
-            if session:
-                try:
-                    await session.rollback()
-                except:
-                    pass  # Rollback might fail if connection is broken
-                
-            if attempt < max_retries - 1:
-                wait_time = retry_delay * (2 ** attempt)
-                logger.warning(
-                    f"Database connection failed (attempt {attempt + 1}/{max_retries}), "
-                    f"retrying in {wait_time}s: {str(e)}"
-                )
-                await asyncio.sleep(wait_time)
-                continue
-            else:
-                logger.error(f"Database connection failed after {max_retries} attempts: {str(e)}")
-                raise
-                
-        except Exception as e:
-            if session:
-                try:
-                    await session.rollback()
-                except:
-                    pass
-            logger.error(f"Unexpected database error: {str(e)}")
-            raise
-            
         finally:
-            if session:
-                try:
-                    await session.close()
-                except:
-                    pass  # Close might fail if connection is broken
+            await session.close()
 
 @with_db_retry(max_retries=3, delay=1.0)
 async def create_tables():
-    """Create all tables in the database with retry logic."""
+    """Create all tables in the database"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
     logger.info("Database tables created successfully")
 
 @with_db_retry(max_retries=3, delay=1.0)
 async def drop_tables():
-    """Drop all tables in the database with retry logic."""
+    """Drop all tables in the database"""
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.drop_all)
     logger.info("Database tables dropped successfully")

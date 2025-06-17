@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     """
     Application settings.
     
-    Uses pydantic-settings to load from environment variables.
+    Uses pydantic-settings to load from .env file.
     """
     model_config = SettingsConfigDict(
         env_file=os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', '.env'),
@@ -17,47 +17,44 @@ class Settings(BaseSettings):
         extra='ignore'
     )
 
-    # Database - Using SQLite for cost efficiency and local development
-    DATABASE_URL: str = Field(
-        default="sqlite+aiosqlite:///./data/crow_eye.db",
-        description="Database URL - uses SQLite by default for local development"
-    )
+    # Database - Using PostgreSQL for production
+    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/crowseye_db"
 
     # JWT Authentication
-    JWT_SECRET_KEY: str = Field(..., min_length=32)
+    JWT_SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
     # API details
     API_V1_STR: str = "/api/v1"
-    PROJECT_NAME: str = "Crow's Eye API - Production"
+    PROJECT_NAME: str = "Crow's Eye API - PostgreSQL"
     
     # Cleanup settings
     CLEANUP_ENABLED: bool = True
     CONTENT_RETENTION_DAYS: int = 30
     CLEANUP_HOUR: int = 2  # Run cleanup at 2 AM daily
     
-    # Google Cloud Configuration (optional for local storage)
-    GOOGLE_CLOUD_PROJECT: Optional[str] = None
-    GOOGLE_CLOUD_STORAGE_BUCKET: Optional[str] = None
+    # Google Cloud Configuration
+    GOOGLE_CLOUD_PROJECT: str | None = None
+    GOOGLE_CLOUD_STORAGE_BUCKET: str | None = None
     
     # Google AI Services
-    GOOGLE_API_KEY: Optional[str] = None
-    GEMINI_API_KEY: Optional[str] = None
+    GOOGLE_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
 
     # Google Photos OAuth2 Configuration
-    GOOGLE_PHOTOS_CLIENT_ID: Optional[str] = None
-    GOOGLE_PHOTOS_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_PHOTOS_CLIENT_ID: str | None = None
+    GOOGLE_PHOTOS_CLIENT_SECRET: str | None = None
     GOOGLE_PHOTOS_REDIRECT_URI: str = "http://localhost:3000/auth/google-photos/callback"
 
     # OpenAI Configuration
-    OPENAI_API_KEY: Optional[str] = None
+    OPENAI_API_KEY: str | None = None
 
     # Social Media APIs
-    META_APP_ID: Optional[str] = None
-    META_APP_SECRET: Optional[str] = None
-    TIKTOK_CLIENT_KEY: Optional[str] = None
-    PINTEREST_APP_ID: Optional[str] = None
+    META_APP_ID: str | None = None
+    META_APP_SECRET: str | None = None
+    TIKTOK_CLIENT_KEY: str | None = None
+    PINTEREST_APP_ID: str | None = None
 
     @validator("JWT_SECRET_KEY")
     def validate_jwt_secret(cls, v):
