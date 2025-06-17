@@ -1,0 +1,60 @@
+{
+  "overall_score": 87.87755102040816,
+  "categories": {
+    "code_security": {
+      "score": 7,
+      "total": 8,
+      "percentage": 87.5
+    },
+    "api_structure": {
+      "score": 5,
+      "total": 6,
+      "percentage": 83.33333333333334
+    },
+    "auth_security": {
+      "score": 7,
+      "total": 7,
+      "percentage": 100.0
+    },
+    "database_layer": {
+      "score": 6,
+      "total": 6,
+      "percentage": 100.0
+    },
+    "performance": {
+      "score": 5,
+      "total": 5,
+      "percentage": 100.0
+    },
+    "deployment_config": {
+      "score": 6,
+      "total": 7,
+      "percentage": 85.71428571428571
+    },
+    "error_handling": {
+      "score": 5,
+      "total": 5,
+      "percentage": 100.0
+    },
+    "monitoring": {
+      "score": 5,
+      "total": 5,
+      "percentage": 100.0
+    }
+  },
+  "critical_issues": [],
+  "warnings": [
+    "Security headers could be enhanced",
+    "API documentation could be improved",
+    "Security file exclusions could be improved"
+  ],
+  "recommendations": [
+    "Implement comprehensive automated testing",
+    "Add continuous security monitoring",
+    "Enhance error handling and logging",
+    "Improve API documentation",
+    "Implement advanced security features"
+  ],
+  "passed_validations": 46,
+  "total_validations": 49
+}

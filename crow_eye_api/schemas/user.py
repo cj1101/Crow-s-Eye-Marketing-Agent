@@ -1,10 +1,11 @@
 from pydantic import BaseModel, EmailStr
+from typing import Optional
 
 # --- Base Schemas ---
 # Properties shared by all user-related schemas
 class UserBase(BaseModel):
     email: EmailStr
-    full_name: str | None = None
+    full_name: Optional[str] = None
 
 # --- Schemas for Creation ---
 # Properties received when creating a new user.
@@ -15,13 +16,15 @@ class UserCreate(UserBase):
 # --- Schemas for Updating ---
 # Properties that can be updated on an existing user.
 class UserUpdate(UserBase):
-    password: str | None = None
+    password: Optional[str] = None
 
 # --- Schemas for API Responses ---
 # Properties that are safe to be returned from the API.
 # It does NOT include the password.
-class User(UserBase):
+class User(BaseModel):
     id: int
+    email: EmailStr
+    full_name: Optional[str] = None
     is_active: bool
 
     class Config:
@@ -39,4 +42,4 @@ class Token(BaseModel):
 
 
 class TokenData(BaseModel):
-    username: str | None = None 
+    username: Optional[str] = None 

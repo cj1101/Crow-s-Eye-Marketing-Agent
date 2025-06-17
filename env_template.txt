@@ -1,0 +1,50 @@
+# Crow's Eye Marketing Agent - Environment Configuration Template
+# Copy this file to .env and fill in your actual values
+
+# JWT Security Configuration (REQUIRED)
+JWT_SECRET_KEY=your-very-long-and-secure-jwt-secret-key-here-must-be-at-least-32-characters-long
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+
+# Database Configuration
+DATABASE_URL=sqlite+aiosqlite:///./data/crow_eye.db
+
+# API Configuration
+API_V1_STR=/api/v1
+PROJECT_NAME=Crow's Eye Marketing Agent
+
+# Google Cloud Configuration (optional - for production deployment)
+GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+GOOGLE_CLOUD_STORAGE_BUCKET=your-storage-bucket-name
+
+# Google AI Services (required for AI features)
+GOOGLE_API_KEY=your-google-api-key-for-imagen-and-veo
+GEMINI_API_KEY=your-gemini-api-key-for-chat-features
+
+# Google Photos OAuth2 Configuration (optional)
+GOOGLE_PHOTOS_CLIENT_ID=your-google-photos-client-id
+GOOGLE_PHOTOS_CLIENT_SECRET=your-google-photos-client-secret
+GOOGLE_PHOTOS_REDIRECT_URI=http://localhost:3000/auth/google-photos/callback
+
+# OpenAI Configuration (optional alternative to Google AI)
+OPENAI_API_KEY=your-openai-api-key
+
+# Social Media APIs (configure as needed)
+META_APP_ID=your-meta-app-id-for-instagram-facebook
+META_APP_SECRET=your-meta-app-secret
+INSTAGRAM_ACCESS_TOKEN=your-instagram-access-token
+TIKTOK_CLIENT_ID=your-tiktok-client-id
+TIKTOK_CLIENT_SECRET=your-tiktok-client-secret
+PINTEREST_APP_ID=your-pinterest-app-id
+PINTEREST_APP_SECRET=your-pinterest-app-secret
+YOUTUBE_API_KEY=your-youtube-data-api-key
+BLUESKY_USERNAME=your-bluesky-username
+BLUESKY_PASSWORD=your-bluesky-password
+
+# Content Management Configuration
+CLEANUP_ENABLED=true
+CONTENT_RETENTION_DAYS=30
+CLEANUP_HOUR=2
+
+# Development Configuration
+DEBUG=false
+ENABLE_DOCS=true 

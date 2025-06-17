@@ -1,3 +1,5 @@
+from typing import Optional
+
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
 
@@ -5,14 +7,14 @@ from crow_eye_api.core.security import get_password_hash, verify_password
 from crow_eye_api.models.user import User
 from crow_eye_api.schemas.user import UserCreate
 
-async def get_user_by_email(db: AsyncSession, email: str) -> User | None:
+async def get_user_by_email(db: AsyncSession, email: str) -> Optional[User]:
     """
     Fetches a user from the database by their email address.
     """
     result = await db.execute(select(User).filter(User.email == email))
     return result.scalars().first()
 
-async def authenticate_user(db: AsyncSession, email: str, password: str) -> User | None:
+async def authenticate_user(db: AsyncSession, email: str, password: str) -> Optional[User]:
     """
     Authenticate a user.
     """

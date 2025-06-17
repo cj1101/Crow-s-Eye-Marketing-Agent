@@ -1,231 +1,310 @@
-# 🌐 Website API Integration & Google Photos Implementation
+# 🌐 Website API Integration & Testing Prompt
 
-## 🎯 **OBJECTIVE**
-Implement full API connectivity and Google Photos integration in the website version, mirroring the desktop application's end-to-end flow.
+## 🎯 OBJECTIVE
+Ensure the Crow's Eye Marketing Platform website has full end-to-end integration with the deployed API and all features are working correctly.
 
-## 🔧 **COMPLIANCE SECTION - ACCOUNT CONNECTIONS**
+## 🔗 API DETAILS
+- **Base URL**: `https://crow-eye-api-dot-crows-eye-website.uc.r.appspot.com`
+- **Documentation**: `https://crow-eye-api-dot-crows-eye-website.uc.r.appspot.com/docs`
+- **Health Check**: `https://crow-eye-api-dot-crows-eye-website.uc.r.appspot.com/health`
 
-### **Required Platform Connections:**
-1. **TikTok** ✅ (Already working - keep as is)
-2. **Instagram** ⚠️ (Verify/fix if broken)
-3. **Google Photos** 🆕 (New integration required)
-4. **Facebook/Meta** ✅ (Should be working)
+## 🔍 COMPREHENSIVE TESTING REQUIREMENTS
 
-### **Implementation Requirements:**
+### 1. **API CONNECTIVITY & HEALTH CHECKS**
+- [ ] Test all basic endpoints are accessible from the website
+- [ ] Implement API health monitoring on the website
+- [ ] Add fallback handling for API downtime
+- [ ] Test CORS configuration for cross-origin requests
 
-#### **Compliance Dashboard Location:**
-- Create/update compliance section in website UI
-- Should match desktop version: accessible from main navigation
-- Display connection status for all platforms with visual indicators
-
-#### **Connection Flow for Each Platform:**
-
-**TikTok (Keep Existing):**
-- OAuth2 connection button
-- Status: Connected/Disconnected with user info
-- Disconnect functionality
-
-**Instagram (Verify & Fix):**
-- OAuth2 flow using Instagram Graph API
-- Business account required
-- Scope: `instagram_basic`, `instagram_content_publish`
-- Show connected account info (@username)
-- Test connection endpoint: `/api/v1/compliance/platform/instagram`
-
-**Google Photos (New Implementation):**
+**Key Endpoints to Test:**
 ```javascript
-// API Endpoints to implement:
-GET /api/v1/google-photos/auth/url        // Get OAuth URL
-POST /api/v1/google-photos/auth/callback  // Handle OAuth callback
-GET /api/v1/google-photos/connection      // Check connection status
-DELETE /api/v1/google-photos/connection   // Disconnect
+// Basic Health Checks
+GET /health
+GET /test  
+GET /api/v1/health
+
+// API Documentation
+GET /docs
+GET /api/v1/openapi.json
 ```
 
-**Required UI Components:**
-```jsx
-// Google Photos Connection Component
-<GooglePhotosConnection>
-  <ConnectionStatus />
-  <ConnectButton onClick={handleGooglePhotosConnect} />
-  <DisconnectButton onClick={handleGooglePhotosDisconnect} />
-</GooglePhotosConnection>
-```
+### 2. **AUTHENTICATION SYSTEM**
+- [ ] Implement complete user registration/login flow
+- [ ] Test JWT token generation and validation
+- [ ] Implement token refresh mechanism
+- [ ] Test protected route access
+- [ ] Add proper authentication error handling
 
-## 📱 **LIBRARY INTEGRATION - GOOGLE PHOTOS**
-
-### **Upload from Google Photos Feature:**
-
-#### **Library Section Requirements:**
-- Add "📸 Upload from Google Photos" button in media library
-- Position: Next to existing upload buttons (Upload Photos, Upload Videos)
-- Styling: Google brand colors (#4285F4)
-
-#### **Google Photos Browser Implementation:**
-```jsx
-// Required Components:
-<GooglePhotosBrowser>
-  <AlbumsTab />          // Browse user's albums
-  <RecentPhotosTab />    // Recent photos/videos
-  <SearchTab />          // Search functionality
-  <SelectionControls />  // Select/deselect all
-  <ImportButton />       // Import selected items
-</GooglePhotosBrowser>
-```
-
-#### **API Integration:**
+**Authentication Endpoints:**
 ```javascript
-// Required API calls:
-GET /api/v1/google-photos/albums          // Load user albums
-GET /api/v1/google-photos/media           // Load recent media
-POST /api/v1/google-photos/search         // Search media
-POST /api/v1/google-photos/import         // Import selected items
+POST /api/v1/auth/register
+POST /api/v1/auth/login
+POST /api/v1/auth/refresh
+GET /api/v1/users/me
 ```
 
-#### **Import Flow:**
-1. User clicks "Upload from Google Photos"
-2. Check connection status - redirect to compliance if not connected
-3. Open Google Photos browser dialog
-4. Load user's albums and recent photos
-5. User selects photos/videos (multiple selection)
-6. Click "Import Selected" → Downloads to local library
-7. Show progress indicator during import
-8. Refresh library to show imported media
-9. Imported media appears in "Unedited Media" section
+### 3. **SOCIAL MEDIA PLATFORM INTEGRATIONS**
+Test each platform connection and posting functionality:
 
-## 🔄 **END-TO-END WORKFLOW PARITY**
+**Instagram Integration:**
+- [ ] OAuth connection flow
+- [ ] Media upload (photos/videos)
+- [ ] Story posting
+- [ ] Hashtag optimization
+- [ ] Account linking/unlinking
 
-### **Desktop Version Flow (Reference):**
-1. **Connect Account:** Compliance → Platform → Connect Button → OAuth Flow
-2. **Browse Media:** Library → Upload from Google Photos → Browser Dialog
-3. **Select & Import:** Choose items → Import → Local storage
-4. **Create Content:** Use imported media in posts across all platforms
+**TikTok Integration:**
+- [ ] OAuth connection flow
+- [ ] Video upload with compliance checks
+- [ ] Caption generation
+- [ ] Trend analysis integration
 
-### **Website Version Requirements:**
-Implement **EXACT SAME FLOW** but with web components:
+**Other Platforms:**
+- [ ] Pinterest integration
+- [ ] Twitter/X integration
+- [ ] LinkedIn integration
+- [ ] Facebook integration (if applicable)
 
+**Platform Endpoints:**
 ```javascript
-// Website Implementation Checklist:
-✅ Compliance section with all platform connections
-✅ Google Photos OAuth2 integration
-✅ Library section with Google Photos upload option
-✅ Google Photos browser with thumbnails/selection
-✅ Import functionality with progress tracking
-✅ Local media storage (or cloud equivalent)
-✅ Integration with existing post creation workflow
+GET /api/v1/platforms
+POST /api/v1/platforms/{platform}/connect
+GET /api/v1/platforms/{platform}/status
+POST /api/v1/platforms/{platform}/post
 ```
 
-## 🛠️ **TECHNICAL SPECIFICATIONS**
+### 4. **GOOGLE PHOTOS INTEGRATION**
+- [ ] OAuth2 authentication with Google Photos
+- [ ] Photo/video import from Google Photos
+- [ ] Automatic tagging and organization
+- [ ] Natural language search functionality
+- [ ] Bulk import capabilities
 
-### **API Endpoints (Already Available):**
-```
-Base URL: https://your-api-domain.com/api/v1
-
-// Google Photos Endpoints:
-GET    /google-photos/auth/url
-POST   /google-photos/auth/callback
-GET    /google-photos/connection
-DELETE /google-photos/connection
-GET    /google-photos/albums
-GET    /google-photos/media
-POST   /google-photos/search
-POST   /google-photos/import
-GET    /google-photos/imported
-
-// Compliance Endpoints:
-GET    /compliance/platforms/summary
-GET    /compliance/platform/{platform_id}
-GET    /compliance/authentication-requirements
-```
-
-### **Authentication Requirements:**
-- Google Photos: OAuth2 with scope `https://www.googleapis.com/auth/photoslibrary.readonly`
-- Instagram: OAuth2 with scopes `instagram_basic`, `instagram_content_publish`
-- TikTok: OAuth2 (existing implementation)
-
-### **Error Handling:**
+**Google Photos Endpoints:**
 ```javascript
-// Required error handling:
-- Network connectivity issues
-- OAuth flow interruptions
-- API rate limiting
-- Invalid/expired tokens
-- Import failures with retry functionality
+GET /api/v1/google-photos/auth
+GET /api/v1/google-photos/albums
+GET /api/v1/google-photos/media
+POST /api/v1/google-photos/import
+GET /api/v1/google-photos/search
 ```
 
-## 🎨 **UI/UX REQUIREMENTS**
+### 5. **MEDIA MANAGEMENT SYSTEM**
+- [ ] File upload (images, videos, audio)
+- [ ] Media processing and optimization
+- [ ] Thumbnail generation
+- [ ] Media gallery management
+- [ ] Metadata extraction
+- [ ] File format validation
 
-### **Design Consistency:**
-- Match existing website design language
-- Use platform-specific colors (Google: #4285F4, Instagram: #E4405F, TikTok: #000000)
-- Responsive design for mobile/tablet/desktop
-- Loading states and progress indicators
-- Success/error messaging
+**Media Endpoints:**
+```javascript
+POST /api/v1/media/upload
+GET /api/v1/media
+GET /api/v1/media/{id}
+DELETE /api/v1/media/{id}
+GET /api/v1/galleries
+POST /api/v1/galleries
+```
+
+### 6. **AI CONTENT GENERATION**
+- [ ] Caption generation for posts
+- [ ] Hashtag suggestions
+- [ ] Image enhancement
+- [ ] Video highlight creation
+- [ ] Content optimization for platforms
+- [ ] AI-powered content suggestions
+
+**AI Endpoints:**
+```javascript
+POST /api/v1/ai/generate-caption
+POST /api/v1/ai/generate-hashtags
+POST /api/v1/ai/enhance-image
+POST /api/v1/ai/create-highlight
+POST /api/v1/ai/optimize-content
+```
+
+### 7. **CONTENT SCHEDULING & POSTING**
+- [ ] Schedule posts for future publication
+- [ ] Bulk scheduling capabilities
+- [ ] Cross-platform posting
+- [ ] Schedule management (edit/delete)
+- [ ] Timezone handling
+- [ ] Post preview functionality
+
+**Scheduling Endpoints:**
+```javascript
+GET /api/v1/schedules
+POST /api/v1/schedules
+PUT /api/v1/schedules/{id}
+DELETE /api/v1/schedules/{id}
+POST /api/v1/posts/publish
+```
+
+### 8. **ANALYTICS & REPORTING**
+- [ ] Post performance analytics
+- [ ] Engagement metrics
+- [ ] Platform-specific insights
+- [ ] Export functionality
+- [ ] Custom date ranges
+- [ ] Comparative analysis
+
+**Analytics Endpoints:**
+```javascript
+GET /api/v1/analytics/overview
+GET /api/v1/analytics/posts
+GET /api/v1/analytics/platforms
+GET /api/v1/analytics/export
+```
+
+### 9. **PLATFORM COMPLIANCE**
+- [ ] Content compliance checking
+- [ ] Platform-specific validation
+- [ ] Automated compliance suggestions
+- [ ] Compliance reporting
+- [ ] Policy updates handling
+
+**Compliance Endpoints:**
+```javascript
+POST /api/v1/compliance/check
+GET /api/v1/compliance/rules
+POST /api/v1/compliance/validate
+```
+
+### 10. **ERROR HANDLING & EDGE CASES**
+- [ ] Network timeout handling
+- [ ] Rate limiting management
+- [ ] API error message display
+- [ ] Offline functionality
+- [ ] Data validation errors
+- [ ] File size/format restrictions
+
+## 🚀 END-TO-END USER WORKFLOWS TO TEST
+
+### **Workflow 1: Complete Content Creation Flow**
+1. User registers/logs in
+2. Connects social media accounts
+3. Imports media from Google Photos
+4. Creates new post with AI assistance
+5. Schedules post for multiple platforms
+6. Views analytics after publication
+
+### **Workflow 2: Bulk Content Management**
+1. User uploads multiple media files
+2. Bulk generates captions and hashtags
+3. Creates content calendar
+4. Schedules posts across platforms
+5. Monitors performance
+
+### **Workflow 3: Google Photos Integration**
+1. User authenticates with Google Photos
+2. Browses and searches photo library
+3. Imports selected media
+4. Automatically tags and organizes
+5. Creates posts from imported content
+
+## 📋 TESTING CHECKLIST
+
+### **Frontend Integration:**
+- [ ] All API calls use proper authentication headers
+- [ ] Loading states during API requests
+- [ ] Error handling with user-friendly messages
+- [ ] Responsive design for all API-driven components
+- [ ] Real-time updates where applicable
+
+### **Performance:**
+- [ ] API response times under 3 seconds
+- [ ] Proper caching implementation
+- [ ] Optimized media loading
+- [ ] Minimal API calls (avoid redundant requests)
+
+### **Security:**
+- [ ] Secure token storage
+- [ ] API key protection
+- [ ] Input validation
+- [ ] HTTPS-only requests
+- [ ] Proper CORS configuration
 
 ### **User Experience:**
-- Seamless OAuth flows (popup or redirect)
-- Clear connection status indicators
-- Intuitive media selection interface
-- Bulk import capabilities
-- Real-time import progress
-- Error recovery mechanisms
+- [ ] Intuitive navigation
+- [ ] Clear feedback for all actions
+- [ ] Proper form validation
+- [ ] Accessible design
+- [ ] Mobile-friendly interface
 
-## ✅ **TESTING REQUIREMENTS**
+## 🔧 IMPLEMENTATION REQUIREMENTS
 
-### **Connection Testing:**
+### **Create API Service Layer:**
 ```javascript
-// Test each platform connection:
-1. Connect → Verify OAuth flow works
-2. Status → Check connection status displays correctly
-3. Disconnect → Verify disconnection and UI update
-4. Reconnect → Test reconnection flow
+// Example API service structure
+class CrowsEyeAPIService {
+  constructor() {
+    this.baseURL = 'https://crow-eye-api-dot-crows-eye-website.uc.r.appspot.com';
+    this.token = localStorage.getItem('auth_token');
+  }
+
+  async healthCheck() { /* ... */ }
+  async login(credentials) { /* ... */ }
+  async uploadMedia(file) { /* ... */ }
+  async generateContent(prompt) { /* ... */ }
+  async schedulePost(postData) { /* ... */ }
+  // ... all other API methods
+}
 ```
 
-### **Google Photos Testing:**
-```javascript
-// End-to-end testing:
-1. Connect Google Photos account
-2. Browse albums and recent photos
-3. Search functionality
-4. Select multiple items
-5. Import to library
-6. Verify media appears in unedited section
-7. Use imported media in post creation
-```
+### **Add Comprehensive Testing Suite:**
+- Unit tests for API service methods
+- Integration tests for complete workflows
+- E2E tests for critical user journeys
+- API response mocking for development
 
-## 📋 **IMPLEMENTATION PRIORITY**
+### **Error Handling Strategy:**
+- Implement retry logic for failed requests
+- User-friendly error messages
+- Fallback UI states
+- Offline mode capabilities
 
-1. **High Priority:**
-   - Fix Instagram connection if broken
-   - Implement Google Photos compliance connection
-   - Add Google Photos upload button to library
+## 📊 SUCCESS METRICS
 
-2. **Medium Priority:**
-   - Google Photos browser dialog
-   - Import functionality
-   - Progress tracking
+The website integration is complete when:
+- ✅ All API endpoints are accessible and functional
+- ✅ Complete user workflows work end-to-end
+- ✅ All social media platforms can be connected and used
+- ✅ Google Photos integration works seamlessly
+- ✅ AI features generate appropriate content
+- ✅ Analytics and reporting provide meaningful insights
+- ✅ Error handling gracefully manages all edge cases
+- ✅ Performance meets acceptable standards (< 3s response times)
 
-3. **Low Priority:**
-   - Advanced search features
-   - Album organization
+## 🚨 PRIORITY IMPLEMENTATION ORDER
+
+1. **HIGH PRIORITY:**
+   - Authentication system
+   - Basic media upload
+   - Social media platform connections
+   - Core posting functionality
+
+2. **MEDIUM PRIORITY:**
+   - Google Photos integration
+   - AI content generation
+   - Scheduling system
+   - Basic analytics
+
+3. **LOW PRIORITY:**
+   - Advanced analytics
    - Bulk operations
+   - Platform compliance features
+   - Advanced AI features
 
-## 🚀 **SUCCESS CRITERIA**
+## 💡 ADDITIONAL RECOMMENDATIONS
 
-**✅ When complete, users should be able to:**
-- Connect all platforms (TikTok, Instagram, Google Photos) via compliance section
-- Browse and import media from Google Photos
-- Use imported media in social media posts
-- Enjoy the same workflow as desktop application
-- Experience seamless, error-free platform integrations
-
-## 📞 **API Documentation Reference**
-
-All API endpoints are documented and ready for integration. The desktop version is fully functional and can serve as a reference implementation for UI/UX patterns and user flows.
-
-**Backend Status:** ✅ Complete and deployed
-**Frontend Status:** ⏳ Needs website implementation
-**Desktop Reference:** ✅ Fully functional
+- Implement API response caching for better performance
+- Add offline capabilities for core features
+- Create admin dashboard for API monitoring
+- Implement webhooks for real-time updates
+- Add comprehensive logging for debugging
+- Create backup/restore functionality for user data
 
 ---
 
-**🎯 Goal: Achieve 100% feature parity between desktop and website versions for Google Photos integration and platform connectivity.** 
+**Note:** This prompt ensures comprehensive testing and integration of all API features on the website. Follow the testing checklist systematically to verify each component works correctly before moving to the next. 
