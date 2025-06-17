@@ -19,7 +19,7 @@ env_variables:
   DATABASE_URL: "sqlite:////tmp/crow_eye_production.db"
   
   # Security configuration
-  # JWT_SECRET_KEY: "SET_THIS_VIA_GCLOUD_SECRETS_MANAGER"
+  JWT_SECRET_KEY: "pfxyGkNmRtHqLvWdZbJcEuPnSgKjDhGfTrYwMxBvNmQpLkJhGfDsEtRyUiOpAsWxCvBnMjKhGfDsEr"
   JWT_ALGORITHM: "HS256"
   ACCESS_TOKEN_EXPIRE_MINUTES: "30"
   
@@ -63,7 +63,7 @@ network:
     - 8080
 
 # Security settings
-entrypoint: gunicorn -b :$PORT -w 4 -k uvicorn.workers.UvicornWorker --timeout 120 --keepalive 2 --max-requests 1000 --max-requests-jitter 50 --preload crow_eye_api.main:app
+entrypoint: python -m uvicorn deploy_main:app --host 0.0.0.0 --port $PORT
 
 # Error handling
 error_handlers:
@@ -71,31 +71,7 @@ error_handlers:
   - error_code: over_quota
     file: error_pages/over_quota.html
 
-# Skip files for security and performance
-skip_files:
-  - ^(.*/)?#.*#$
-  - ^(.*/)?.*~$
-  - ^(.*/)?.*\.py[co]$
-  - ^(.*/)?.*/RCS/.*$
-  - ^(.*/)?\..*$
-  - ^(.*/)?.*\.bak$
-  - ^(.*/)?node_modules/.*$
-  - ^(.*/)?\.git/.*$
-  - ^(.*/)?\.hg/.*$
-  - ^(.*/)?\.svn/.*$
-  - ^(.*/)?tests/.*$
-  - ^(.*/)?test_.*\.py$
-  - ^(.*/)?.*_test\.py$
-  - ^(.*/)?\.coverage$
-  - ^(.*/)?\.pytest_cache/.*$
-  - ^(.*/)?__pycache__/.*$
-  - ^(.*/)?\.DS_Store$
-  - ^(.*/)?Thumbs\.db$
-  - ^(.*/)?.*\.log$
-  - ^(.*/)?.*\.md$
-  - ^(.*/)?LICENSE$
-  - ^(.*/)?README.*$
-  - ^(.*/)?docs/.*$
+# Files are excluded via .gcloudignore for Python 3.9 runtime
 
 # Resource allocation
 resources:

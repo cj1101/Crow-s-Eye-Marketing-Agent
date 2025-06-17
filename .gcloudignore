@@ -15,5 +15,125 @@
 
 # Python pycache:
 __pycache__/
-# Ignored by the build system
-/setup.cfg
+*.py[cod]
+*$py.class
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Testing
+.coverage
+.pytest_cache/
+.tox/
+.nox/
+.coverage
+htmlcov/
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+.pytest_cache/
+
+# Development
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# Documentation
+*.md
+README*
+docs/
+LICENSE
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Desktop GUI files (not needed for API deployment)
+src/ui/
+src/components/
+simple_main.py
+start_desktop_app.bat
+start_desktop_app.ps1
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Data files
+data/
+*.db
+*.sqlite
+*.sqlite3
+
+# Media files (development)
+media/
+uploads/
+temp/
+
+# Node modules
+node_modules/
+
+# Backup files
+*.bak
+*.backup
+*~
+
+# Temporary files
+tmp/
+temp/
+.tmp/
+
+# Editor files
+.vscode/
+.idea/
+*.sublime-*
+
+# Version control
+.git/
+.svn/
+.hg/
+
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
