@@ -23,7 +23,7 @@ GEMINI_API_KEY=your-gemini-api-key-for-chat-features
 # Google Photos OAuth2 Configuration (optional)
 GOOGLE_PHOTOS_CLIENT_ID=your-google-photos-client-id
 GOOGLE_PHOTOS_CLIENT_SECRET=your-google-photos-client-secret
-GOOGLE_PHOTOS_REDIRECT_URI=http://localhost:3000/auth/google-photos/callback
+GOOGLE_PHOTOS_REDIRECT_URI=http://localhost:8080/auth/google-photos/callback
 
 # OpenAI Configuration (optional alternative to Google AI)
 OPENAI_API_KEY=your-openai-api-key

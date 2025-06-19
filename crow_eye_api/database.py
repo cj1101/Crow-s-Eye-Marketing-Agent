@@ -1,7 +1,7 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.pool import QueuePool, NullPool
-from sqlalchemy.exc import SQLAlchemyError, DisconnectionError
+from sqlalchemy.exc import SQLAlchemyError, DisconnectionError, OperationalError
 import asyncio
 import logging
 from contextlib import asynccontextmanager
@@ -26,16 +26,16 @@ def get_pool_config():
             "connect_args": {"check_same_thread": False}
         }
     else:
-        # PostgreSQL/other databases use connection pooling
+        # PostgreSQL/other databases use async-compatible pooling
         return {
-            "poolclass": QueuePool,
-            "pool_size": 5,
-            "max_overflow": 10,
+            "pool_size": 10,
+            "max_overflow": 20,
             "pool_pre_ping": True,
             "pool_recycle": 300,    # Recycle connections every 5 minutes
+            "pool_timeout": 30,     # Wait 30 seconds for connection
         }
 
-# Create async engine for PostgreSQL
+# Create async engine for PostgreSQL with enhanced configuration
 engine = create_async_engine(
     settings.DATABASE_URL,
     echo=False,  # Set to True for SQL debugging
@@ -51,17 +51,27 @@ AsyncSessionLocal = async_sessionmaker(
     autoflush=False,
 )
 
-# Database health check
+# Database health check with retry
 async def check_database_health() -> bool:
     """Check if database is healthy and accessible."""
-    try:
-        from sqlalchemy import text
-        async with engine.begin() as conn:
-            await conn.execute(text("SELECT 1"))
-        return True
-    except Exception as e:
-        logger.error(f"Database health check failed: {e}")
-        return False
+    max_retries = 3
+    for attempt in range(max_retries):
+        try:
+            from sqlalchemy import text
+            async with engine.begin() as conn:
+                await conn.execute(text("SELECT 1"))
+            logger.info("Database health check passed")
+            return True
+        except OperationalError as e:
+            logger.warning(f"Database health check failed (attempt {attempt + 1}/{max_retries}): {e}")
+            if attempt < max_retries - 1:
+                await asyncio.sleep(2 ** attempt)  # Exponential backoff
+        except Exception as e:
+            logger.error(f"Database health check failed: {e}")
+            break
+    
+    logger.error("Database health check failed after all retries")
+    return False
 
 # Retry decorator for database operations
 def with_db_retry(max_retries: int = 3, delay: float = 1.0):
@@ -104,11 +114,23 @@ async def get_db_with_retry() -> AsyncGenerator[AsyncSession, None]:
         await session.close()
 
 async def get_db():
-    """Dependency to get database session"""
-    async with AsyncSessionLocal() as session:
-        try:
-            yield session
-        finally:
+    """Dependency to get database session with enhanced error handling"""
+    session = None
+    try:
+        session = AsyncSessionLocal()
+        yield session
+    except OperationalError as e:
+        logger.error(f"Database operational error: {e}")
+        if session:
+            await session.rollback()
+        raise SQLAlchemyError("Database connection failed")
+    except Exception as e:
+        logger.error(f"Database session error: {e}")
+        if session:
+            await session.rollback()
+        raise
+    finally:
+        if session:
             await session.close()
 
 @with_db_retry(max_retries=3, delay=1.0)
@@ -185,11 +207,11 @@ db_metrics = DatabaseMetrics()
 class MetricsAsyncSession(AsyncSession):
     """AsyncSession with metrics collection."""
     
-    async def execute(self, statement, parameters=None, execution_options=None, bind_arguments=None, _parent_execute_state=None, _add_event=None):
+    async def execute(self, *args, **kwargs):
         db_metrics.record_query()
-        return await super().execute(statement, parameters, execution_options, bind_arguments, _parent_execute_state, _add_event)
+        return await super().execute(*args, **kwargs)
 
-# Update session maker to use metrics
+# Update session maker to use metrics  
 AsyncSessionLocal = async_sessionmaker(
     engine,
     class_=MetricsAsyncSession,

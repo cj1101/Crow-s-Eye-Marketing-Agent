@@ -1,6 +1,6 @@
 from pydantic import BaseModel, Field, ValidationError, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
-from typing import Optional
+from typing import Optional, Union
 import os, sys, logging
 
 logger = logging.getLogger("crow_eye_api.config")
@@ -17,11 +17,14 @@ class Settings(BaseSettings):
         extra='ignore'
     )
 
-    # Database - Using PostgreSQL for production
-    DATABASE_URL: str = "postgresql+asyncpg://postgres:password@localhost:5432/crowseye_db"
+    # Database - Using PostgreSQL for production  
+    DATABASE_URL: str = Field(
+        default="postgresql+asyncpg://postgres:crowseye2024@/crowseye_db?host=/cloudsql/crows-eye-website:us-central1:crowseye-postgres",
+        env="DATABASE_URL"
+    )
 
     # JWT Authentication
-    JWT_SECRET_KEY: str = "a_very_secret_key_that_should_be_changed"
+    JWT_SECRET_KEY: str = "pfxyGkNmRtHqLvWdZbJcEuPnSgKjDhGfTrYwMxBvNmQpLkJhGfDsEtRyUiOpAsWxCvBnMjKhGfDsEr"
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
 
@@ -35,26 +38,26 @@ class Settings(BaseSettings):
     CLEANUP_HOUR: int = 2  # Run cleanup at 2 AM daily
     
     # Google Cloud Configuration
-    GOOGLE_CLOUD_PROJECT: str | None = None
-    GOOGLE_CLOUD_STORAGE_BUCKET: str | None = None
+    GOOGLE_CLOUD_PROJECT: Optional[str] = None
+    GOOGLE_CLOUD_STORAGE_BUCKET: Optional[str] = None
     
     # Google AI Services
-    GOOGLE_API_KEY: str | None = None
-    GEMINI_API_KEY: str | None = None
+    GOOGLE_API_KEY: Optional[str] = None
+    GEMINI_API_KEY: Optional[str] = None
 
     # Google Photos OAuth2 Configuration
-    GOOGLE_PHOTOS_CLIENT_ID: str | None = None
-    GOOGLE_PHOTOS_CLIENT_SECRET: str | None = None
-    GOOGLE_PHOTOS_REDIRECT_URI: str = "http://localhost:3000/auth/google-photos/callback"
+    GOOGLE_PHOTOS_CLIENT_ID: Optional[str] = None
+    GOOGLE_PHOTOS_CLIENT_SECRET: Optional[str] = None
+    GOOGLE_PHOTOS_REDIRECT_URI: str = "http://localhost:8080/auth/google-photos/callback"
 
     # OpenAI Configuration
-    OPENAI_API_KEY: str | None = None
+    OPENAI_API_KEY: Optional[str] = None
 
     # Social Media APIs
-    META_APP_ID: str | None = None
-    META_APP_SECRET: str | None = None
-    TIKTOK_CLIENT_KEY: str | None = None
-    PINTEREST_APP_ID: str | None = None
+    META_APP_ID: Optional[str] = None
+    META_APP_SECRET: Optional[str] = None
+    TIKTOK_CLIENT_KEY: Optional[str] = None
+    PINTEREST_APP_ID: Optional[str] = None
 
     @validator("JWT_SECRET_KEY")
     def validate_jwt_secret(cls, v):
@@ -115,6 +118,9 @@ class Settings(BaseSettings):
     def __init__(self, **values):
         super().__init__(**values)
 
+        # Log database configuration for debugging
+        logger.info(f"Database URL configured: {self.DATABASE_URL[:50]}...")
+        
         # Warn (but don't fail) if GCP vars missing; some local modes don't need them
         if not self.GOOGLE_CLOUD_PROJECT or not self.GOOGLE_CLOUD_STORAGE_BUCKET:
             logger.warning("Google Cloud project / bucket not configured – media uploads disabled.")

@@ -206,7 +206,7 @@ async def delete_media_item(
     return {"message": "Media item deleted successfully"}
 
 
-@router.post("/upload", response_model=schemas.MediaUploadResponse)
+@router.post("/upload")
 async def upload_media(
     file: UploadFile = File(...),
     caption: Optional[str] = None,
@@ -318,10 +318,21 @@ async def upload_media(
             thumbnail_url=thumbnail_url
         )
         
-        return schemas.MediaUploadResponse(
-            media_item=media_response,
-            message="File uploaded successfully"
-        )
+        # Return response in the format expected by frontend
+        return {
+            "success": True,
+            "data": {
+                "id": f"media_{media_item.id}",
+                "name": media_item.original_filename,
+                "content_type": content_type,
+                "url": download_url,
+                "thumbnail_url": thumbnail_url,
+                "file_size": media_item.file_size,
+                "created_at": media_item.upload_date.isoformat() if media_item.upload_date else None,
+                "tags": ["uploaded"],
+                "platforms": []
+            }
+        }
         
     except Exception as e:
         error_msg = str(e)
@@ -372,10 +383,21 @@ async def upload_media(
                     thumbnail_url=None
                 )
                 
-                return schemas.MediaUploadResponse(
-                    media_item=media_response,
-                    message="File uploaded successfully (testing mode - Google Cloud Storage not configured)"
-                )
+                # Return response in the format expected by frontend (testing mode)
+                return {
+                    "success": True,
+                    "data": {
+                        "id": f"media_{media_item.id}",
+                        "name": media_item.original_filename,
+                        "content_type": content_type,
+                        "url": "[Google Cloud Storage not configured - testing mode]",
+                        "thumbnail_url": None,
+                        "file_size": media_item.file_size,
+                        "created_at": media_item.upload_date.isoformat() if media_item.upload_date else None,
+                        "tags": ["uploaded"],
+                        "platforms": []
+                    }
+                }
             except Exception as db_error:
                 logger.error(f"Database error: {db_error}")
                 raise HTTPException(

@@ -134,6 +134,7 @@ class UnifiedConnectionDialog(BaseDialog):
             }
             QTabBar::tab {
                 background-color: #f0f0f0;
+                color: black;
                 padding: 10px 20px;
                 margin-right: 2px;
                 border-top-left-radius: 8px;

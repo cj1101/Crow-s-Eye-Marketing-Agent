@@ -20,6 +20,36 @@ router = APIRouter()
 logger = logging.getLogger(__name__)
 
 
+@router.get("/health")
+async def google_photos_health_check():
+    """Google Photos service health check."""
+    try:
+        from crow_eye_api.core.config import settings
+        
+        # Check if Google Photos is configured
+        if not settings.GOOGLE_PHOTOS_CLIENT_ID or not settings.GOOGLE_PHOTOS_CLIENT_SECRET:
+            return {
+                "status": "error",
+                "service": "google_photos",
+                "error": "Google Photos OAuth2 credentials not configured",
+                "configured": False
+            }
+        
+        return {
+            "status": "ok",
+            "service": "google_photos",
+            "configured": True,
+            "endpoints": ["auth", "albums", "media", "search", "import"]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "service": "google_photos",
+            "error": str(e),
+            "configured": False
+        }
+
+
 @router.get("/auth/url", response_model=schemas.GooglePhotosAuthURL)
 async def get_google_photos_auth_url(
     current_user: User = Depends(get_current_active_user)

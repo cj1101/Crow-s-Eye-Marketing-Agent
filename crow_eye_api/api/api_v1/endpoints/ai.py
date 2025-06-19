@@ -16,6 +16,12 @@ router = APIRouter()
 job_storage = {}
 
 
+@router.get("/health")
+async def ai_health_check():
+    """AI service health check."""
+    return {"status": "ok", "service": "ai", "endpoints": ["captions", "highlights", "tags", "content"]}
+
+
 @router.post("/captions/generate-from-media", response_model=schemas.CaptionGenerateResponse)
 async def generate_caption_from_media(
     caption_params: schemas.CaptionGenerate,

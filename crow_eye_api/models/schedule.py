@@ -32,8 +32,7 @@ class Schedule(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # Foreign key
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
     
     # Relationships
-    user = relationship("User", back_populates="schedules")
-    posts = relationship("Post", back_populates="schedule") 
+    user = relationship("User", back_populates="schedules") 

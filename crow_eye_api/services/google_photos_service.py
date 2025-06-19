@@ -33,6 +33,13 @@ class GooglePhotosService:
         self.client_secret = settings.GOOGLE_PHOTOS_CLIENT_SECRET
         self.redirect_uri = settings.GOOGLE_PHOTOS_REDIRECT_URI
         
+        # Check if credentials are configured
+        if not self.client_id or not self.client_secret:
+            self.logger.warning("Google Photos OAuth2 credentials not configured")
+            self.configured = False
+        else:
+            self.configured = True
+        
         # Google Photos API scopes
         self.scopes = [
             'https://www.googleapis.com/auth/photoslibrary.readonly',
@@ -54,6 +61,9 @@ class GooglePhotosService:
         Returns:
             Authorization URL
         """
+        if not self.configured:
+            raise Exception("Google Photos OAuth2 credentials not configured. Please set GOOGLE_PHOTOS_CLIENT_ID and GOOGLE_PHOTOS_CLIENT_SECRET.")
+        
         try:
             flow = Flow.from_client_config(
                 {
@@ -92,6 +102,9 @@ class GooglePhotosService:
         Returns:
             Dictionary containing tokens and user info
         """
+        if not self.configured:
+            raise Exception("Google Photos OAuth2 credentials not configured. Please set GOOGLE_PHOTOS_CLIENT_ID and GOOGLE_PHOTOS_CLIENT_SECRET.")
+        
         try:
             flow = Flow.from_client_config(
                 {

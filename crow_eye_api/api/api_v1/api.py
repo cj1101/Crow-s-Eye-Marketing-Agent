@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from crow_eye_api import models, schemas
-from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks, bulk, previews, platform_compliance, enhanced_compliance, google_photos
+from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks, bulk, previews, platform_compliance, enhanced_compliance, google_photos, subscription, youtube, google_services, google_business
 from crow_eye_api.api.api_v1.dependencies import get_current_active_user
 
 api_router = APIRouter()
@@ -24,6 +24,10 @@ api_router.include_router(previews.router, prefix="/previews", tags=["Platform P
 api_router.include_router(platform_compliance.router, tags=["Platform Compliance"])
 api_router.include_router(enhanced_compliance.router, prefix="/compliance", tags=["Enhanced Platform Compliance"])
 api_router.include_router(google_photos.router, prefix="/google-photos", tags=["Google Photos"])
+api_router.include_router(subscription.router, tags=["Subscription"])
+api_router.include_router(youtube.router, prefix="/youtube", tags=["YouTube"])
+api_router.include_router(google_services.router, prefix="/google", tags=["Google Services"])
+api_router.include_router(google_business.router, prefix="/google-business", tags=["Google My Business"])
 
 # Test Endpoint for Authenticated Users
 @api_router.get("/users/me", response_model=schemas.User)
@@ -32,6 +36,22 @@ async def read_users_me(
 ):
     """Fetch the current logged in user."""
     return current_user
+
+# Auth endpoint for frontend compatibility
+@api_router.get("/auth/me")
+async def get_auth_me(
+    current_user: models.User = Depends(get_current_active_user),
+):
+    """Get current user data for frontend - includes subscription_tier."""
+    return {
+        "id": current_user.id,
+        "email": current_user.email,
+        "full_name": current_user.full_name,
+        "is_active": current_user.is_active,
+        "subscription_tier": getattr(current_user, 'subscription_tier', 'pro'),
+        "created_at": current_user.created_at.isoformat() if current_user.created_at else None,
+        "updated_at": current_user.updated_at.isoformat() if current_user.updated_at else None
+    }
 
 # Health check endpoint
 @api_router.get("/health", tags=["Health"])

@@ -8,7 +8,7 @@ class Analytics(Base):
     __tablename__ = "analytics"
 
     id = Column(String, primary_key=True, index=True)
-    post_id = Column(String, ForeignKey("posts.id"))
+    post_id = Column(Integer, ForeignKey("posts.id"))
     platform = Column(String, index=True)
     
     # Metrics
@@ -32,7 +32,7 @@ class AnalyticsSummary(Base):
     __tablename__ = "analytics_summaries"
 
     id = Column(String, primary_key=True, index=True)
-    user_id = Column(String, ForeignKey("users.id"))
+    user_id = Column(Integer, ForeignKey("users.id"))
     platform = Column(String, index=True)
     
     # Date range

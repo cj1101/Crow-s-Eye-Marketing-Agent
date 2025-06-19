@@ -94,6 +94,28 @@ async def get_platform_requirements():
                 "formats": ["MP4", "MOV"],
                 "caption_limit": 3000
             }
+        },
+        "youtube": {
+            "video": {
+                "aspect_ratios": ["16:9", "4:3", "1:1"],
+                "max_file_size": "256GB",
+                "max_duration": "12h",
+                "min_duration": "33s",
+                "formats": ["MP4", "MOV", "AVI", "WMV", "FLV"],
+                "caption_limit": 5000,
+                "title_limit": 100
+            }
+        },
+        "youtube_shorts": {
+            "video": {
+                "aspect_ratios": ["9:16"],
+                "max_file_size": "15GB",
+                "max_duration": "60s",
+                "min_duration": "15s",
+                "formats": ["MP4", "MOV"],
+                "caption_limit": 5000,
+                "title_limit": 100
+            }
         }
     }
     

@@ -1,5 +1,8 @@
 runtime: python39
 
+# Deploy to the specific service that the subdomain points to
+service: crow-eye-api
+
 # Production-grade resource allocation
 instance_class: F2
 automatic_scaling:
@@ -23,7 +26,7 @@ env_variables:
   DATABASE_URL: "postgresql+asyncpg://postgres:crowseye2024@/crowseye_db?host=/cloudsql/crows-eye-website:us-central1:crowseye-postgres"
   
   # JWT Configuration
-  JWT_SECRET_KEY: "crow-eye-production-secret-key-change-this-in-production-2024"
+  JWT_SECRET_KEY: "pfxyGkNmRtHqLvWdZbJcEuPnSgKjDhGfTrYwMxBvNmQpLkJhGfDsEtRyUiOpAsWxCvBnMjKhGfDsEr"
   ALGORITHM: "HS256"
   ACCESS_TOKEN_EXPIRE_MINUTES: "10080"  # 7 days
   
@@ -36,8 +39,13 @@ env_variables:
   GEMINI_API_KEY: "your-gemini-api-key"
   OPENAI_API_KEY: "your-openai-api-key"
   
+  # Google Photos OAuth2 Configuration
+  GOOGLE_PHOTOS_CLIENT_ID: "your-google-photos-client-id"
+  GOOGLE_PHOTOS_CLIENT_SECRET: "your-google-photos-client-secret"
+  GOOGLE_PHOTOS_REDIRECT_URI: "https://crows-eye-website.uc.r.appspot.com/auth/google-photos/callback"
+  
   # Database initialization flag
-  INITIALIZE_DB: "true"
+  INITIALIZE_DB: "false"
   
   # Security settings
   RATE_LIMIT_ENABLED: "true"
@@ -70,8 +78,8 @@ network:
   forwarded_ports:
     - 8080
 
-# Security settings
-entrypoint: gunicorn -k uvicorn.workers.UvicornWorker crow_eye_api.main:app
+# Use the correct FastAPI main application explicitly
+entrypoint: gunicorn -k uvicorn.workers.UvicornWorker crow_eye_api.main:application --bind 0.0.0.0:$PORT --workers 1 --timeout 0
 
 # Error handling
 error_handlers:
@@ -93,5 +101,5 @@ beta_settings:
 
 handlers:
 - url: /.*
-  script: crow_eye_api.main.application
+  script: auto
   secure: always 
