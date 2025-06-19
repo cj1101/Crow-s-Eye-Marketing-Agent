@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends
 
 from crow_eye_api import models, schemas
-from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks, bulk, previews, platform_compliance, enhanced_compliance, google_photos, subscription, youtube, google_services, google_business
+from crow_eye_api.api.api_v1.endpoints import login, users, media, galleries, ai, posts, platforms, context_files, schedules, analytics, templates, webhooks, bulk, previews, platform_compliance, enhanced_compliance, google_photos, subscription, youtube, google_business
 from crow_eye_api.api.api_v1.dependencies import get_current_active_user
 
 api_router = APIRouter()
@@ -26,7 +26,7 @@ api_router.include_router(enhanced_compliance.router, prefix="/compliance", tags
 api_router.include_router(google_photos.router, prefix="/google-photos", tags=["Google Photos"])
 api_router.include_router(subscription.router, tags=["Subscription"])
 api_router.include_router(youtube.router, prefix="/youtube", tags=["YouTube"])
-api_router.include_router(google_services.router, prefix="/google", tags=["Google Services"])
+# api_router.include_router(google_services.router, prefix="/google", tags=["Google Services"])
 api_router.include_router(google_business.router, prefix="/google-business", tags=["Google My Business"])
 
 # Test Endpoint for Authenticated Users
