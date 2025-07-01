@@ -32,12 +32,19 @@ async def create_user(db: AsyncSession, user: UserCreate) -> User:
     hashed_password = get_password_hash(user.password)
     # Generate username from email if not provided
     username = user.email.split("@")[0]
+    
+    # Special handling for specific email addresses
+    if user.email.lower() == "charlie@suarezhouse.net":
+        subscription_tier = "pro"
+    else:
+        subscription_tier = "free"
+    
     db_user = User(
         email=user.email,
         username=username,
         full_name=user.full_name,
         hashed_password=hashed_password,
-        subscription_tier="free",
+        subscription_tier=subscription_tier,
     )
     db.add(db_user)
     await db.commit()

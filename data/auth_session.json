@@ -1,0 +1,25 @@
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJjaGFybGllQHN1YXJlemhvdXNlLm5ldCIsInVzZXJfaWQiOiIyIiwic3Vic2NyaXB0aW9uX3RpZXIiOiJwcm8iLCJpYXQiOjE3NTA0NjI2MzEsIm5iZiI6MTc1MDQ2MjYzMSwianRpIjoibF9oOTBVTVlDd05tOW1TZDdGMldpQSIsImV4cCI6MTc1MTA2NzQzMX0.4s7g73wSGEYDVj2iOD3_GrZEl72FqRvErrNy24i2N9E",
+  "user": {
+    "id": "2",
+    "email": "charlie@suarezhouse.net",
+    "name": "charlie",
+    "avatar_url": null,
+    "subscription_tier": "pro",
+    "subscription_status": "active",
+    "created_at": "2025-06-20T13:54:38.930470",
+    "usage_limits": {
+      "social_accounts": 10,
+      "ai_credits_per_month": 750,
+      "scheduled_posts_per_month": -1,
+      "storage_gb": 50
+    },
+    "plan_features": {
+      "basic_posting": true,
+      "ai_content": true,
+      "analytics": true,
+      "team_collaboration": true
+    }
+  },
+  "timestamp": "2025-06-20T18:37:10.562975"
+}

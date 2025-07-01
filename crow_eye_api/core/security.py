@@ -256,4 +256,13 @@ security = HTTPBearer(auto_error=False)
 
 def hash_sensitive_data(data: str) -> str:
     """Hash sensitive data for logging purposes."""
-    return hashlib.sha256(data.encode()).hexdigest()[:8] 
+    return hashlib.sha256(data.encode()).hexdigest()[:8]
+
+def has_platform_access(subscription_tier: str) -> bool:
+    """
+    Check if user has platform access based on subscription tier.
+    Only 'free' and 'unenrolled' tiers are blocked from platform features.
+    """
+    # Valid tiers that have platform access
+    VALID_TIERS = {"pro", "growth", "creator", "payg"}
+    return subscription_tier.lower() in VALID_TIERS 
