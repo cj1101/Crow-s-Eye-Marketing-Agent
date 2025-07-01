@@ -43,6 +43,8 @@ class MediaItem(MediaItemBase):
     thumbnail_path: Optional[str] = None
     upload_date: datetime
     user_id: int
+    platforms: List[str] = []
+    url: str  # Public HTTPS URL or protected download endpoint
     
     class Config:
         from_attributes = True
@@ -62,6 +64,8 @@ class MediaItemResponse(BaseModel):
     duration: Optional[float]
     is_post_ready: bool
     upload_date: datetime
+    platforms: List[str] = []
+    url: str  # Public HTTPS URL or protected download endpoint
     thumbnail_url: Optional[str] = None
     download_url: Optional[str] = None
 

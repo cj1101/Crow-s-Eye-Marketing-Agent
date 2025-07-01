@@ -736,4 +736,47 @@ async def generate_thumbnails(
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Thumbnail generation failed: {str(e)}"
-        ) 
+        )
+
+# Helper function to convert ORM object to response schema
+def _build_media_response(item: models.MediaItem) -> schemas.MediaItemResponse:
+    """Builds a MediaItemResponse ensuring `url` and `thumbnail_url` are always populated."""
+    # Determine base URL for original media
+    download_url = f"/api/v1/media/{item.id}/download"
+    # If gcs_path is already a public HTTPS URL use it, otherwise fall back to protected download endpoint
+    if item.gcs_path and str(item.gcs_path).startswith("http"):
+        url = item.gcs_path
+    else:
+        url = download_url
+
+    # Determine thumbnail URL
+    if item.thumbnail_path:
+        thumbnail_url = f"/api/v1/media/{item.id}/thumbnail"
+    else:
+        # Provide placeholder for images & videos so FE never receives null
+        if item.media_type in {"image", "video"}:
+            thumbnail_url = settings.PLACEHOLDER_THUMBNAIL_URL
+        else:
+            thumbnail_url = None
+
+    return schemas.MediaItemResponse(
+        id=item.id,
+        filename=item.filename,
+        original_filename=item.original_filename,
+        caption=item.caption,
+        description=item.description,
+        ai_tags=item.ai_tags or [],
+        media_type=item.media_type,
+        file_size=item.file_size,
+        width=item.width,
+        height=item.height,
+        duration=item.duration,
+        is_post_ready=item.is_post_ready,
+        status=item.status,
+        post_metadata=item.post_metadata or {},
+        upload_date=item.upload_date,
+        platforms=item.platforms or [],
+        url=url,
+        thumbnail_url=thumbnail_url,
+        download_url=download_url,
+    ) 

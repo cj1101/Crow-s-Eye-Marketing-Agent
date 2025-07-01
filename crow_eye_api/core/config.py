@@ -59,6 +59,8 @@ class Settings(BaseSettings):
     TIKTOK_CLIENT_KEY: Optional[str] = None
     PINTEREST_APP_ID: Optional[str] = None
 
+    PLACEHOLDER_THUMBNAIL_URL: str = "/static/img/placeholder-image.jpg"
+
     @validator("JWT_SECRET_KEY")
     def validate_jwt_secret(cls, v):
         """Validate JWT secret key strength and security."""
